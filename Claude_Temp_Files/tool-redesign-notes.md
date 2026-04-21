@@ -1,5 +1,7 @@
 # Base Tools: Current State & Redesign Notes
 
+> **Status**: This document captures the pre-implementation analysis and design sketches. The shipped v1 contract and v2 roadmap live in `base-tools-plan.md`. Diverges from the final design in two notable ways: (1) tools ended up named `batch_read` / `batch_edit` rather than `ReadFiles` / `Patch`, and (2) the v1 Read mode enum is `edit | raw | compact` (info/outline/optimized deferred to v2). Treat this file as the reasoning appendix, not the current spec.
+
 ## Read — current behavior
 
 **Does:**
