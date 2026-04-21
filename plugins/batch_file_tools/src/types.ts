@@ -45,13 +45,13 @@ export type ReadOutput = z.infer<typeof ReadOutput>;
 
 const OpReplace = z.object({
   type: z.literal("replace"),
-  old: z.string(),
+  old: z.string().min(1),
   new: z.string(),
 });
 
 const OpReplaceAll = z.object({
   type: z.literal("replace_all"),
-  old: z.string(),
+  old: z.string().min(1),
   new: z.string(),
 });
 
@@ -75,7 +75,7 @@ const OpAppend = z.object({
 
 const OpDelete = z.object({
   type: z.literal("delete"),
-  old: z.string(),
+  old: z.string().min(1),
 });
 
 const OpCreate = z.object({
