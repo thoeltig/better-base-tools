@@ -1,4 +1,4 @@
-import { createPatch } from "diff";
+import { createPatch, diffLines } from "diff";
 import { loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
 import { joinLines } from "../lib/lines.js";
@@ -123,14 +123,13 @@ async function editOneFile(
       continue;
     }
 
-    const before =
-      opOutput === "diff" ? joinLines(buf.lines, buf.endings) : "";
+    const before = opOutput === "diff" ? joinLines(buf.lines, buf.endings) : "";
     const res = applyOp(buf, op);
     const opResult = toOpResult(inputIndex, res);
 
     if (opOutput === "diff" && res.ok) {
       const after = joinLines(buf.lines, buf.endings);
-      opResult.diff = createPatch(file.path, before, after, "", "");
+      opResult.diff = diffContent(before, after);
     }
     decoratedByIndex.set(inputIndex, {
       res: decorateOp(opResult, op, opOutput),
@@ -171,7 +170,7 @@ async function editOneFile(
     ops: filterOps(decorated),
   };
   if (options.fileOutput === "diff" && changed) {
-    fileResult.diff = createPatch(file.path, originalContent, finalContent, "", "");
+    fileResult.diff = diffContent(originalContent, finalContent);
   }
   return fileResult;
 }
@@ -292,6 +291,10 @@ function anchorLine(op: EditOp): number {
   if (op.type === "insert_at_line") return op.line;
   if (op.type === "replace_range") return op.start;
   return 0;
+}
+
+function diffContent(oldContent: string, newContent: string){
+  return diffLines(oldContent, newContent).map(x => (x.added ? '+' : x.removed ? '-' : '=') + '\t' + x.value).join('');
 }
 
 interface Phase1Range {
