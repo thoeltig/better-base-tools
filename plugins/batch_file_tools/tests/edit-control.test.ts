@@ -37,7 +37,7 @@ describe("continueOnError — op level (file-level flag)", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: false,
-      returnDiff: "none",
+      output: "summary",
       files: [
         {
           path: p,
@@ -62,7 +62,7 @@ describe("continueOnError — op level (file-level flag)", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: false,
-      returnDiff: "none",
+      output: "summary",
       files: [
         {
           path: p,
@@ -84,7 +84,7 @@ describe("continueOnError — op level (file-level flag)", () => {
     const out = await handleBatchEdit({
       continueOnError: true,
       dryRun: false,
-      returnDiff: "none",
+      output: "summary",
       files: [
         {
           path: p,
@@ -107,7 +107,7 @@ describe("continueOnError — file level (top-level flag)", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: false,
-      returnDiff: "none",
+      output: "summary",
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
         { path: b, ops: [{ type: "append", content: "B2\n" }] }, // should be skipped
@@ -124,7 +124,7 @@ describe("continueOnError — file level (top-level flag)", () => {
     const out = await handleBatchEdit({
       continueOnError: true,
       dryRun: false,
-      returnDiff: "none",
+      output: "summary",
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
         { path: b, ops: [{ type: "append", content: "B2\n" }] }, // should run
@@ -142,7 +142,7 @@ describe("dryRun", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: true,
-      returnDiff: "none",
+      output: "summary",
       files: [{ path: p, ops: [{ type: "append", content: "world\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
@@ -154,7 +154,7 @@ describe("dryRun", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: true,
-      returnDiff: "none",
+      output: "summary",
       files: [{ path: p, ops: [{ type: "create", content: "x\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
@@ -163,64 +163,182 @@ describe("dryRun", () => {
   });
 });
 
-describe("returnDiff", () => {
-  it("per_file returns a single unified diff on the FileResult", async () => {
-    const p = await fixture("dpf.txt", "a\nb\nc\n");
-    const out = await handleBatchEdit({
-      continueOnError: false,
-      dryRun: false,
-      returnDiff: "per_file",
-      files: [{ path: p, ops: [{ type: "replace", old: "b", new: "BEE" }] }],
+describe("output modes", () => {
+  describe("minimal (default)", () => {
+    it("all ops ok -> {path,status:'ok'}, no ops array", async () => {
+      const p = await fixture("min-ok.txt", "a\nb\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "minimal",
+        files: [{ path: p, ops: [{ type: "append", content: "c\n" }] }],
+      });
+      const fr = out.results[0]!;
+      expect(fr.status).toBe("ok");
+      expect(fr.ops).toEqual([]);
+      expect(fr.diff).toBeUndefined();
     });
-    expect(out.results[0]!.diff).toBeDefined();
-    expect(out.results[0]!.diff).toContain("-b");
-    expect(out.results[0]!.diff).toContain("+BEE");
-    expect(out.results[0]!.ops[0]!.diff).toBeUndefined();
+
+    it("partial -> status:'partial' with only failed ops carrying type+reason+hint", async () => {
+      const p = await fixture("min-partial.txt", "a\nb\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "minimal",
+        files: [
+          {
+            path: p,
+            continueOnError: true,
+            ops: [
+              { type: "append", content: "c\n" }, // ok
+              { type: "replace", old: "ZZZ", new: "x" }, // error
+            ],
+          },
+        ],
+      });
+      const fr = out.results[0]!;
+      expect(fr.status).toBe("partial");
+      expect(fr.ops).toHaveLength(1);
+      const failed = fr.ops[0]!;
+      expect(failed.index).toBe(1);
+      expect(failed.type).toBe("replace");
+      expect(failed.status).toBe("error");
+      expect(failed.reason).toBe("not_found");
+      expect(failed.summary).toBeUndefined();
+    });
+
+    it("total file-load error -> status:'error' with file.error block", async () => {
+      const out = await handleBatchEdit({
+        continueOnError: true,
+        dryRun: false,
+        output: "minimal",
+        files: [
+          {
+            path: "relative/not-absolute.txt",
+            ops: [{ type: "replace", old: "x", new: "y" }],
+          },
+        ],
+      });
+      const fr = out.results[0]!;
+      expect(fr.status).toBe("error");
+      expect(fr.error?.reason).toBe("io_error");
+    });
   });
 
-  it("per_op returns a diff per successful op", async () => {
-    const p = await fixture("dpo.txt", "a\nb\n");
-    const out = await handleBatchEdit({
-      continueOnError: false,
-      dryRun: false,
-      returnDiff: "per_op",
-      files: [
-        {
-          path: p,
-          ops: [
-            { type: "append", content: "c\n" },
-            { type: "replace", old: "a", new: "A" },
-          ],
-        },
-      ],
+  describe("summary", () => {
+    it("emits all ops with status+summary strings", async () => {
+      const p = await fixture("sum.txt", "a\nb\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "summary",
+        files: [
+          {
+            path: p,
+            ops: [
+              { type: "append", content: "c\n" },
+              { type: "replace", old: "a", new: "A" },
+            ],
+          },
+        ],
+      });
+      const ops = out.results[0]!.ops;
+      expect(ops).toHaveLength(2);
+      expect(ops[0]!.summary).toMatch(/appended 1 line/);
+      expect(ops[1]!.summary).toMatch(/replaced 1 occurrence/);
+      expect(ops[0]!.diff).toBeUndefined();
     });
-    expect(out.results[0]!.diff).toBeUndefined();
-    expect(out.results[0]!.ops[0]!.diff).toContain("+c");
-    expect(out.results[0]!.ops[1]!.diff).toContain("-a");
-    expect(out.results[0]!.ops[1]!.diff).toContain("+A");
   });
 
-  it("none omits all diffs", async () => {
-    const p = await fixture("dn.txt", "x\n");
-    const out = await handleBatchEdit({
-      continueOnError: false,
-      dryRun: false,
-      returnDiff: "none",
-      files: [{ path: p, ops: [{ type: "append", content: "y\n" }] }],
+  describe("diff", () => {
+    it("file-level diff returns a whole-file unified diff", async () => {
+      const p = await fixture("diff-file.txt", "a\nb\nc\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "diff",
+        files: [{ path: p, ops: [{ type: "replace", old: "b", new: "BEE" }] }],
+      });
+      const fr = out.results[0]!;
+      expect(fr.diff).toContain("-b");
+      expect(fr.diff).toContain("+BEE");
+      // diff mode: ops array includes only non-ok ops (there are none here).
+      expect(fr.ops).toEqual([]);
     });
-    expect(out.results[0]!.diff).toBeUndefined();
-    expect(out.results[0]!.ops[0]!.diff).toBeUndefined();
+
+    it("op-level diff returns per-op diffs, summary stripped", async () => {
+      const p = await fixture("diff-op.txt", "a\nb\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "summary",
+        files: [
+          {
+            path: p,
+            ops: [
+              { type: "append", content: "c\n", output: "diff" },
+              { type: "replace", old: "a", new: "A" }, // inherits summary
+            ],
+          },
+        ],
+      });
+      const ops = out.results[0]!.ops;
+      expect(ops[0]!.diff).toContain("+c");
+      expect(ops[0]!.summary).toBeUndefined();
+      expect(ops[1]!.diff).toBeUndefined();
+      expect(ops[1]!.summary).toMatch(/replaced 1 occurrence/);
+    });
+
+    it("dryRun + diff still returns a file diff", async () => {
+      const p = await fixture("diff-dry.txt", "a\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: true,
+        output: "diff",
+        files: [{ path: p, ops: [{ type: "append", content: "b\n" }] }],
+      });
+      expect(out.results[0]!.diff).toContain("+b");
+      expect(await readText(p)).toBe("a\n");
+    });
   });
 
-  it("dryRun + per_file still returns a diff", async () => {
-    const p = await fixture("dryd.txt", "a\n");
-    const out = await handleBatchEdit({
-      continueOnError: false,
-      dryRun: true,
-      returnDiff: "per_file",
-      files: [{ path: p, ops: [{ type: "append", content: "b\n" }] }],
+  describe("precedence", () => {
+    it("op-level output overrides file-level", async () => {
+      const p = await fixture("prec-op.txt", "a\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "minimal",
+        files: [
+          {
+            path: p,
+            output: "minimal",
+            ops: [{ type: "append", content: "b\n", output: "summary" }],
+          },
+        ],
+      });
+      const ops = out.results[0]!.ops;
+      expect(ops).toHaveLength(1);
+      expect(ops[0]!.summary).toMatch(/appended 1 line/);
     });
-    expect(out.results[0]!.diff).toContain("+b");
-    expect(await readText(p)).toBe("a\n"); // still unchanged
+
+    it("file-level output overrides root", async () => {
+      const p = await fixture("prec-file.txt", "a\n");
+      const out = await handleBatchEdit({
+        continueOnError: false,
+        dryRun: false,
+        output: "minimal",
+        files: [
+          {
+            path: p,
+            output: "summary",
+            ops: [{ type: "append", content: "b\n" }],
+          },
+        ],
+      });
+      const ops = out.results[0]!.ops;
+      expect(ops).toHaveLength(1);
+      expect(ops[0]!.summary).toMatch(/appended 1 line/);
+    });
   });
 });

@@ -8,14 +8,16 @@ import type {
   EditOp,
   EditOutput,
   FileResult,
+  FileStatus,
   OpResult,
-  ReturnDiffMode,
+  OutputMode,
 } from "../types.js";
 
 interface FileEditOptions {
   continueOnError: boolean;
   dryRun: boolean;
-  returnDiff: ReturnDiffMode;
+  rootOutput: OutputMode;
+  fileOutput: OutputMode;
 }
 
 interface IndexedOp {
@@ -29,20 +31,20 @@ export async function handleBatchEdit(input: EditInput): Promise<EditOutput> {
 
   for (const file of input.files) {
     if (abortRemaining) {
-      results.push(skipFile(file));
+      results.push(skipFile(file, input.output));
       continue;
     }
 
     const options: FileEditOptions = {
       continueOnError: file.continueOnError ?? input.continueOnError,
       dryRun: input.dryRun,
-      returnDiff: input.returnDiff,
+      rootOutput: input.output,
+      fileOutput: file.output ?? input.output,
     };
     const fileResult = await editOneFile(file, options);
     results.push(fileResult);
 
-    const fileHadError = fileResult.ops.some((o) => o.status === "error");
-    if (fileHadError && !input.continueOnError) {
+    if (fileResult.status !== "ok" && !input.continueOnError) {
       abortRemaining = true;
     }
   }
@@ -50,10 +52,18 @@ export async function handleBatchEdit(input: EditInput): Promise<EditOutput> {
   return { results };
 }
 
-function skipFile(file: EditFile): FileResult {
+function skipFile(file: EditFile, rootOutput: OutputMode): FileResult {
+  const fileOutput = file.output ?? rootOutput;
+  const decorated = file.ops.map((op, index) => {
+    const opOutput = resolveOpOutput(op, fileOutput);
+    const res: OpResult = { index, status: "skipped" };
+    if (opOutput !== "minimal") res.type = op.type;
+    return { res, opOutput };
+  });
   return {
     path: file.path,
-    ops: file.ops.map((_op, index) => ({ index, status: "skipped" as const })),
+    status: "skipped",
+    ops: filterOps(decorated),
   };
 }
 
@@ -65,16 +75,7 @@ async function editOneFile(
   try {
     buf = await loadBuffer(file.path);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return {
-      path: file.path,
-      ops: file.ops.map((_op, index) => ({
-        index,
-        status: "error" as const,
-        reason: "io_error" as const,
-        hint: { next_action: message },
-      })),
-    };
+    return buildFileLoadErrorResult(file, options, err);
   }
 
   const originalContent = joinLines(buf.lines, buf.endings);
@@ -97,43 +98,60 @@ async function editOneFile(
     ...phase2Other,
   ];
 
-  const opResultsByIndex = new Map<number, OpResult>();
-  const opDiffBefore = new Map<number, string>();
+  const decoratedByIndex = new Map<number, DecoratedOp>();
   let abortedOps = false;
 
   for (const { op, inputIndex } of executionOrder) {
+    const opOutput = resolveOpOutput(op, options.fileOutput);
+
     if (abortedOps) {
-      opResultsByIndex.set(inputIndex, { index: inputIndex, status: "skipped" });
+      decoratedByIndex.set(inputIndex, {
+        res: decorateOp({ index: inputIndex, status: "skipped" }, op, opOutput),
+        opOutput,
+      });
       continue;
     }
 
     const overlap = overlapErrors.get(inputIndex);
     if (overlap) {
-      opResultsByIndex.set(inputIndex, toOpResult(inputIndex, overlap));
+      const errRes = toOpResult(inputIndex, overlap);
+      decoratedByIndex.set(inputIndex, {
+        res: decorateOp(errRes, op, opOutput),
+        opOutput,
+      });
       if (!options.continueOnError) abortedOps = true;
       continue;
     }
 
     const before =
-      options.returnDiff === "per_op" ? joinLines(buf.lines, buf.endings) : "";
+      opOutput === "diff" ? joinLines(buf.lines, buf.endings) : "";
     const res = applyOp(buf, op);
     const opResult = toOpResult(inputIndex, res);
 
-    if (options.returnDiff === "per_op" && res.ok) {
-      opDiffBefore.set(inputIndex, before);
+    if (opOutput === "diff" && res.ok) {
       const after = joinLines(buf.lines, buf.endings);
       opResult.diff = createPatch(file.path, before, after, "", "");
     }
-    opResultsByIndex.set(inputIndex, opResult);
+    decoratedByIndex.set(inputIndex, {
+      res: decorateOp(opResult, op, opOutput),
+      opOutput,
+    });
 
     if (!res.ok && !options.continueOnError) {
       abortedOps = true;
     }
   }
 
-  const opResults: OpResult[] = file.ops.map(
-    (_op, i) => opResultsByIndex.get(i) ?? { index: i, status: "skipped" },
-  );
+  const decorated: DecoratedOp[] = file.ops.map((op, i) => {
+    const existing = decoratedByIndex.get(i);
+    if (existing !== undefined) return existing;
+    const opOutput = resolveOpOutput(op, options.fileOutput);
+    return {
+      res: decorateOp({ index: i, status: "skipped" }, op, opOutput),
+      opOutput,
+    };
+  });
+  const opResults: OpResult[] = decorated.map((d) => d.res);
 
   const finalContent = joinLines(buf.lines, buf.endings);
   const changed = finalContent !== originalContent || (buf.exists && !buf.existed);
@@ -142,24 +160,128 @@ async function editOneFile(
     try {
       await writeBuffer(file.path, buf);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        path: file.path,
-        ops: opResults.map((r) => ({
-          ...r,
-          status: "error" as const,
-          reason: "io_error" as const,
-          hint: { next_action: `write failed: ${message}` },
-        })),
-      };
+      return buildWriteErrorResult(file, options, opResults, err);
     }
   }
 
-  const fileResult: FileResult = { path: file.path, ops: opResults };
-  if (options.returnDiff === "per_file") {
+  const status = computeFileStatus(opResults);
+  const fileResult: FileResult = {
+    path: file.path,
+    status,
+    ops: filterOps(decorated),
+  };
+  if (options.fileOutput === "diff" && changed) {
     fileResult.diff = createPatch(file.path, originalContent, finalContent, "", "");
   }
   return fileResult;
+}
+
+interface DecoratedOp {
+  readonly res: OpResult;
+  readonly opOutput: OutputMode;
+}
+
+function buildFileLoadErrorResult(
+  file: EditFile,
+  options: FileEditOptions,
+  err: unknown,
+): FileResult {
+  const message = err instanceof Error ? err.message : String(err);
+  const decorated: DecoratedOp[] = file.ops.map((op, index) => {
+    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const res: OpResult = {
+      index,
+      status: "error",
+      reason: "io_error",
+      hint: { next_action: message },
+    };
+    if (opOutput !== "minimal") res.type = op.type;
+    return { res, opOutput };
+  });
+  return {
+    path: file.path,
+    status: "error",
+    error: { reason: "io_error", message },
+    ops: filterOps(decorated),
+  };
+}
+
+function buildWriteErrorResult(
+  file: EditFile,
+  options: FileEditOptions,
+  opResults: OpResult[],
+  err: unknown,
+): FileResult {
+  const message = err instanceof Error ? err.message : String(err);
+  const decorated: DecoratedOp[] = opResults.map((r, i) => {
+    const op = file.ops[i]!;
+    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const res: OpResult = {
+      index: r.index,
+      status: "error",
+      reason: "io_error",
+      hint: { next_action: `write failed: ${message}` },
+    };
+    if (opOutput !== "minimal") res.type = op.type;
+    return { res, opOutput };
+  });
+  return {
+    path: file.path,
+    status: "error",
+    error: { reason: "io_error", message: `write failed: ${message}` },
+    ops: filterOps(decorated),
+  };
+}
+
+function resolveOpOutput(op: EditOp, fileOutput: OutputMode): OutputMode {
+  if (op.output !== undefined) return op.output;
+  // File-level diff carries the whole-file change already; per-op default
+  // collapses to minimal so successful ops don't duplicate the diff info.
+  if (fileOutput === "diff") return "minimal";
+  return fileOutput;
+}
+
+function decorateOp(
+  result: OpResult,
+  op: EditOp,
+  opOutput: OutputMode,
+): OpResult {
+  const out = { ...result };
+  if (opOutput === "minimal") {
+    // Errored ops keep type so the model can correlate without summaries.
+    if (out.status === "error") {
+      out.type = op.type;
+    } else {
+      delete out.type;
+      delete out.summary;
+      delete out.diff;
+    }
+    return out;
+  }
+  // summary / diff: include type always.
+  out.type = op.type;
+  if (opOutput === "summary") {
+    delete out.diff;
+  } else {
+    // diff mode: drop summary string (diff carries the change info).
+    delete out.summary;
+  }
+  return out;
+}
+
+function filterOps(decorated: readonly DecoratedOp[]): OpResult[] {
+  // Include if the op had any failure OR its effective per-op mode is not minimal.
+  return decorated
+    .filter((d) => d.res.status !== "ok" || d.opOutput !== "minimal")
+    .map((d) => d.res);
+}
+
+function computeFileStatus(ops: readonly OpResult[]): FileStatus {
+  const hasError = ops.some((o) => o.status === "error");
+  const hasOk = ops.some((o) => o.status === "ok");
+  if (hasError && hasOk) return "partial";
+  if (hasError) return "error";
+  return "ok";
 }
 
 function isPhase1(op: EditOp): boolean {
@@ -189,12 +311,9 @@ function rangeOf(op: EditOp): Phase1Range {
 }
 
 function overlaps(a: Phase1Range, b: Phase1Range): boolean {
-  // Two inserts at the same anchor are ambiguous.
   if (a.isInsert && b.isInsert) return a.start === b.start;
-  // Insert at L vs range [s,e]: conflict when s <= L <= e.
   if (a.isInsert) return a.start >= b.start && a.start <= b.end;
   if (b.isInsert) return b.start >= a.start && b.start <= a.end;
-  // Two ranges: standard interval intersection.
   return Math.max(a.start, b.start) <= Math.min(a.end, b.end);
 }
 

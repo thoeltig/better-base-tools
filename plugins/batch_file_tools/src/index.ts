@@ -7,13 +7,14 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { EditInput, ReadInput } from "./types.js";
+import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 
 const READ_TOOL = {
   name: "batch_read",
   description:
-    "Batch-read N files in one call. Mode per file: 'edit' = reading before an edit op (byte-exact + line-numbered so anchors match); 'info_compact' = DEFAULT for reading-to-understand (lossless whitespace collapse, saves tokens, not usable as edit anchor); 'info_verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers). Supports offset/limit per file.",
+    "Batch-read N files in one call. Mode per file: 'edit' = reading before an edit op (byte-exact + line-numbered so anchors match); 'info_compact' = DEFAULT for reading-to-understand (lossless whitespace collapse, saves tokens, not usable as edit anchor); 'info_verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers). Supports offset/limit per file. Line-number format in 'edit' mode: '{line}\\t{content}\\n' (tab-separated). Result format: one text block per file, meta JSON line followed by raw unescaped content.",
   inputSchema: {
     type: "object",
     properties: {
@@ -54,16 +55,18 @@ const READ_TOOL = {
 const EDIT_TOOL = {
   name: "batch_edit",
   description:
-    "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, append, delete, create, overwrite. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted by anchor line DESC — so every line number you provide references the ORIGINAL file, never a post-edit offset. Overlapping phase-1 ranges error both conflicting ops. (2) create. (3) content-addressed + file-wide ops (replace, replace_all, delete, append, overwrite) in the order you provided them. continueOnError + dryRun supported. Returns per-op status with actionable hints on failure.",
+    "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, append, delete, create, overwrite. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted by anchor line DESC — so every line number you provide references the ORIGINAL file, never a post-edit offset. Overlapping phase-1 ranges error both conflicting ops. (2) create. (3) content-addressed + file-wide ops (replace, replace_all, delete, append, overwrite) in the order you provided them. Output verbosity via `output: minimal|summary|diff` at root, file, or op level (op > file > root precedence). Default minimal = emit errored ops only. continueOnError + dryRun supported. Errors include a `nearest_anchor` verbatim window usable directly as the next `old` anchor when the needle isn't found.",
   inputSchema: {
     type: "object",
     properties: {
       continueOnError: { type: "boolean", default: false },
       dryRun: { type: "boolean", default: false },
-      returnDiff: {
+      output: {
         type: "string",
-        enum: ["none", "per_file", "per_op"],
-        default: "none",
+        enum: ["minimal", "summary", "diff"],
+        default: "minimal",
+        description:
+          "Root default. Overridable at file level and op level. minimal = status + failed ops only. summary = per-op summary strings. diff = unified diffs (per-op when set on op, whole-file when set on file).",
       },
       files: {
         type: "array",
@@ -73,13 +76,17 @@ const EDIT_TOOL = {
           properties: {
             path: { type: "string" },
             continueOnError: { type: "boolean" },
+            output: {
+              type: "string",
+              enum: ["minimal", "summary", "diff"],
+            },
             ops: {
               type: "array",
               minItems: 1,
               items: {
                 type: "object",
                 description:
-                  "Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | append {content} | delete {old} | create {content} | overwrite {content}",
+                  "Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | append {content} | delete {old} | create {content} | overwrite {content}. Each op accepts optional `output: minimal|summary|diff`.",
               },
             },
           },
@@ -113,19 +120,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    // structuredContent policy (see Claude_Temp_Files/dogfood-log.md).
+    // - batch_read: DO NOT set. Claude Code's harness surfaces structuredContent
+    //   to the model in place of content[], which collapses the per-file
+    //   TextContent envelope into a single JSON-escaped blob and wipes out the
+    //   unescaped-raw-text win that matters for large file content.
+    // - batch_edit: DO set. Edit responses are structured JSON with no large
+    //   raw-text payload, so the harness's JSON-delivery path is fine and the
+    //   model receives a clean programmatic shape without per-op escaping.
     if (name === "batch_read") {
       const parsed = ReadInput.parse(args);
       const result = await handleBatchRead(parsed);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-      };
+      return { content: formatReadContent(result) };
     }
 
     if (name === "batch_edit") {
       const parsed = EditInput.parse(args);
       const result = await handleBatchEdit(parsed);
       return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
+        content: formatEditContent(result),
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 

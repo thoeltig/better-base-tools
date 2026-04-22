@@ -44,22 +44,28 @@ export const ReadOutput = z.object({
 });
 export type ReadOutput = z.infer<typeof ReadOutput>;
 
+export const OutputMode = z.enum(["minimal", "summary", "diff"]);
+export type OutputMode = z.infer<typeof OutputMode>;
+
 const OpReplace = z.object({
   type: z.literal("replace"),
   old: z.string().min(1),
   new: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpReplaceAll = z.object({
   type: z.literal("replace_all"),
   old: z.string().min(1),
   new: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpInsertAtLine = z.object({
   type: z.literal("insert_at_line"),
   line: z.number().int().positive(),
   content: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpReplaceRange = z.object({
@@ -67,26 +73,31 @@ const OpReplaceRange = z.object({
   start: z.number().int().positive(),
   end: z.number().int().positive(),
   content: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpAppend = z.object({
   type: z.literal("append"),
   content: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpDelete = z.object({
   type: z.literal("delete"),
   old: z.string().min(1),
+  output: OutputMode.optional(),
 });
 
 const OpCreate = z.object({
   type: z.literal("create"),
   content: z.string(),
+  output: OutputMode.optional(),
 });
 
 const OpOverwrite = z.object({
   type: z.literal("overwrite"),
   content: z.string(),
+  output: OutputMode.optional(),
 });
 
 export const EditOp = z.discriminatedUnion("type", [
@@ -104,17 +115,15 @@ export type EditOp = z.infer<typeof EditOp>;
 export const EditFile = z.object({
   path: z.string().min(1),
   continueOnError: z.boolean().optional(),
+  output: OutputMode.optional(),
   ops: z.array(EditOp).min(1),
 });
 export type EditFile = z.infer<typeof EditFile>;
 
-export const ReturnDiffMode = z.enum(["none", "per_file", "per_op"]);
-export type ReturnDiffMode = z.infer<typeof ReturnDiffMode>;
-
 export const EditInput = z.object({
   continueOnError: z.boolean().optional().default(false),
   dryRun: z.boolean().optional().default(false),
-  returnDiff: ReturnDiffMode.optional().default("none"),
+  output: OutputMode.optional().default("minimal"),
   files: z.array(EditFile).min(1),
 });
 export type EditInput = z.infer<typeof EditInput>;
@@ -147,6 +156,7 @@ export type ErrorHint = z.infer<typeof ErrorHint>;
 export const OpResult = z.object({
   index: z.number().int().nonnegative(),
   status: z.enum(["ok", "error", "skipped"]),
+  type: z.string().optional(),
   summary: z.string().optional(),
   diff: z.string().optional(),
   reason: ErrorReason.optional(),
@@ -154,9 +164,19 @@ export const OpResult = z.object({
 });
 export type OpResult = z.infer<typeof OpResult>;
 
+export const FileStatus = z.enum(["ok", "partial", "error", "skipped"]);
+export type FileStatus = z.infer<typeof FileStatus>;
+
 export const FileResult = z.object({
   path: z.string(),
+  status: FileStatus,
   diff: z.string().optional(),
+  error: z
+    .object({
+      reason: z.string(),
+      message: z.string(),
+    })
+    .optional(),
   ops: z.array(OpResult),
 });
 export type FileResult = z.infer<typeof FileResult>;
