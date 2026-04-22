@@ -8,12 +8,68 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-23 | 2 | 7 | 3.5x | description refresh + redundancy cleanup (session 4) |
+| 2026-04-22 | 4 | 14 | 3.5x | diff rewrite + live compound verify (session 3) |
 | 2026-04-22 | 7 | 18 | 2.6x | structuredContent drop + v1.1 smoke (session 2) |
 | 2026-04-22 | 5 | 28 | 5.6x | enum rename (session 1) |
 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
+
+### 2026-04-23 (session 4) — description refresh + redundancy cleanup
+
+**Shipped:** Stale tool descriptions in `src/index.ts` refreshed to match the HTML-comment envelope (batch_read was still advertising "meta JSON line"; batch_edit had no result-shape hint). Schema default `continueOnError: false` → `true` to match runtime. `ErrorHint.nearest_line` removed (duplicated `nearest_anchor.start_line/end_line`). `OpResult.index` made optional and dropped in summary/diff modes (ops array is dense + input-ordered there). Dead internal `OpFailure.nearestLine` field and its assignment in `buildNotFound` also cleaned up. 124/124 tests green.
+
+**Open follow-up — custom model-optimized diff:** `jsdiff`'s `structuredPatch` is human-biased — within each hunk it groups all `-` removals first, then all `+` additions, so a multi-site `replace_all` reads as `-X -X -X +Y +Y +Y` instead of interleaved `-X +Y -X +Y -X +Y`. We own the op execution and have before/after state per op, so we can emit a diff shape tuned for model parsing: interleaved old/new pairs with obvious alignment, tunable context (1-line default?), optional per-op attribution inline. Worth a design pass before v2 — would replace `structuredPatch` entirely and drop the `diff` dependency.
+
+---
+
+### 2026-04-22 (session 3) — diff-format rewrite + envelope symmetry
+
+**Starting state:** Session 2 left two known issues: unified-diff output triplicated the absolute file path in its header, and per-op diffs lived inside op JSON meta lines (re-escaping every `\n`). `batch_edit` also kept `structuredContent` while `batch_read` had dropped it — asymmetric.
+
+**Critical review of user-staged commits, then joint redesign:**
+- `diffContent` had been switched from `createPatch` to hand-rolled `diffLines(old, new).map(x => prefix + '\t' + x.value).join('')`. Problems: (a) `diffLines` does not hunk — unchanged regions emit as full-content chunks, linear in file size; (b) multi-line chunks got one prefix for the whole block, breaking per-line addressability.
+- Edit envelope had been reduced to `JSON.stringify(result)` + `structuredContent`. Every `\n` in a diff re-escaped. Policy depended on the harness preferring `structuredContent`; any client that fell back to `content[]` re-eats the escape regression.
+
+**Changes shipped:**
+- `diffContent` → `structuredPatch` with `context: 3`. Hunked unified diff, no filename noise, per-line `-`/`+`/` ` prefixes.
+- New `formatEditContent`: one `TextContent` per file, single multi-line `<!-- -->` meta comment (file status + per-op status lines), raw body below (file-level diff first, then labeled `<!-- op N diff -->` / `<!-- op N nearest_anchor, lines X-Y -->` sub-blocks). Collapses to single-line comment when meta is 1 line.
+- `structuredContent` dropped on `batch_edit` too — symmetric policy: emit unescaped raw text via `content[]` only.
+- Read hint pluralization fix: `Read 1 of 10 lines` now pluralizes `lines` correctly.
+
+**Live compound verification (after MCP reconnect):**
+- Setup: one `batch_edit` with `create` × 2 built `live-test-a.txt` (7 lines, triplicate `beta`) and `live-test-b.txt` (`one`…`five`).
+- Compound call: `continueOnError: true`, file-level `output: "diff"` per file.
+  - File A: `replace "beta"→"XYZ"` (intentional ambiguous), `replace_all "beta"→"BETA"`, `delete "gamma\n"`
+  - File B: `replace_range 2-3`, `replace_range 3-4` (intentional overlap), `overwrite`
+- Verified:
+  - **Ambiguous**: op 0 header — `ambiguous — 'beta' matches 3 locations; use replace_all or narrow the anchor (matches at lines 2, 4, 6)`. `match_lines` inlined, no anchor body (correct — ambiguous doesn't carry a snippet).
+  - **Phase-1 overlap**: both `replace_range` errored with `invalid_range — overlaps with op at index N (replace_range X-Y)`; explicit cross-reference on each side.
+  - **File-level diff rollup**: single hunked diff per file, raw in the body. File A: `@@ -1,7 +1,6 @@` with 3 `-beta` / 3 `+BETA` + 1 `-gamma`. File B: `@@ -1,5 +1,1 @@` whole-file replacement from `overwrite`.
+  - **Per-file separation**: two distinct `TextContent` blocks, each with its own meta + body.
+  - **No escape regression**: every `\n` reached the model as a real newline.
+- On-disk verify (`batch_read info_verbatim` on both files) matched the diff exactly.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `create` | 2 | yes | fixture setup |
+| `replace` | 1 | yes | ambiguous, `match_lines` hint populated |
+| `replace_all` | 1 | yes | 3 matches, post-ambiguous continuation |
+| `delete` | 1 | yes | single-match removal |
+| `replace_range` | 2 | yes | phase-1 overlap, both conflicting ops errored |
+| `overwrite` | 1 | yes | phase-3 execution after phase-1 errors |
+
+**Still unexercised:** `dryRun` live (unit-tested — low risk).
+
+**Open follow-ups (carry):**
+- Field-redundancy pass from session 2 notes (drop `hint.nearest_line`, `OpResult.index` in non-minimal modes, `OpResult.type` on ok ops) — lower priority now that the prose envelope absorbs most of it.
+- v2: `info` mode + `token_estimate`, mode/strategy split, richer `info_compact` transforms, `optimized` strategy, `SessionStart` hook + refined tool descriptions for plugin release.
+
+---
 
 ### 2026-04-22 (session 2) — structuredContent drop + v1.1 smoke
 
