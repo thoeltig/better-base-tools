@@ -146,7 +146,6 @@ export const NearestAnchor = z.object({
 export type NearestAnchor = z.infer<typeof NearestAnchor>;
 
 export const ErrorHint = z.object({
-  nearest_line: z.number().int().positive().optional(),
   nearest_anchor: NearestAnchor.optional(),
   match_lines: z.array(z.number().int().positive()).optional(),
   next_action: z.string(),
@@ -154,7 +153,7 @@ export const ErrorHint = z.object({
 export type ErrorHint = z.infer<typeof ErrorHint>;
 
 export const OpResult = z.object({
-  index: z.number().int().nonnegative(),
+  index: z.number().int().nonnegative().optional(),
   status: z.enum(["ok", "error", "skipped"]),
   type: z.string().optional(),
   summary: z.string().optional(),

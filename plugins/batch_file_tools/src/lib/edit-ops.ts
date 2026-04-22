@@ -13,7 +13,6 @@ export interface OpFailure {
   ok: false;
   reason: ErrorReason;
   nextAction: string;
-  nearestLine?: number;
   nearestAnchor?: NearestAnchorWindow;
   matchLines?: number[];
 }
@@ -23,7 +22,7 @@ export type OpApplyResult = OpSuccess | OpFailure;
 /**
  * Applies a single op against the buffer IN-PLACE and returns the outcome.
  * Pure-ish: mutates only `buf`. No I/O. No error hints beyond what's locally obvious —
- * richer hints (Levenshtein nearest_line) come in step 6.
+ * richer hints (Levenshtein nearest_anchor) come in step 6.
  */
 export function applyOp(buf: EditBuffer, op: EditOp): OpApplyResult {
   switch (op.type) {
@@ -143,7 +142,6 @@ function buildNotFound(content: string, needle: string): OpFailure {
   const base: OpFailure = {
     ok: false,
     reason: "not_found",
-    nearestLine: nearest,
     nextAction:
       anchor !== undefined
         ? `'${preview(needle)}' not found — nearest similar line is ${nearest}; use nearest_anchor.content as the 'old' anchor`
@@ -331,7 +329,6 @@ export function toOpResult(index: number, res: OpApplyResult): OpResult {
     return { index, status: "ok", summary: res.summary };
   }
   const hint: OpResult["hint"] = { next_action: res.nextAction };
-  if (res.nearestLine !== undefined) hint.nearest_line = res.nearestLine;
   if (res.nearestAnchor !== undefined) {
     hint.nearest_anchor = {
       start_line: res.nearestAnchor.startLine,

@@ -257,7 +257,9 @@ function decorateOp(
     }
     return out;
   }
-  // summary / diff: include type always.
+  // summary / diff: ops array is dense + input-ordered, so positional index
+  // is redundant — drop it. Keep type.
+  delete out.index;
   out.type = op.type;
   if (opOutput === "summary") {
     delete out.diff;

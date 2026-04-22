@@ -359,11 +359,11 @@ describe("replace op", () => {
     const op = out.results[0]!.ops[0]!;
     expect(op.status).toBe("error");
     expect(op.reason).toBe("not_found");
-    expect(op.hint?.nearest_line).toBeUndefined();
+    expect(op.hint?.nearest_anchor).toBeUndefined();
     expect(await readText(p)).toBe("a\nb\n");
   });
 
-  it("not_found populates nearest_line and nearest_anchor when a similar line exists", async () => {
+  it("not_found populates nearest_anchor when a similar line exists", async () => {
     const p = await fixture(
       "rep_near.txt",
       "function alpha() {\n  return 1;\n}\nfunction beta() {\n  return 2;\n}\n",
@@ -375,7 +375,6 @@ describe("replace op", () => {
     });
     const op = out.results[0]!.ops[0]!;
     expect(op.reason).toBe("not_found");
-    expect(op.hint?.nearest_line).toBe(4);
     expect(op.hint?.nearest_anchor).toBeDefined();
     const anchor = op.hint!.nearest_anchor!;
     expect(anchor.start_line).toBeLessThanOrEqual(4);
