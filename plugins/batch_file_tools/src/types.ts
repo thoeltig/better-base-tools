@@ -129,8 +129,16 @@ export const ErrorReason = z.enum([
 ]);
 export type ErrorReason = z.infer<typeof ErrorReason>;
 
+export const NearestAnchor = z.object({
+  start_line: z.number().int().positive(),
+  end_line: z.number().int().positive(),
+  content: z.string(),
+});
+export type NearestAnchor = z.infer<typeof NearestAnchor>;
+
 export const ErrorHint = z.object({
   nearest_line: z.number().int().positive().optional(),
+  nearest_anchor: NearestAnchor.optional(),
   match_lines: z.array(z.number().int().positive()).optional(),
   next_action: z.string(),
 });

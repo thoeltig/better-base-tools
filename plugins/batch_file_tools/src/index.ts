@@ -54,7 +54,7 @@ const READ_TOOL = {
 const EDIT_TOOL = {
   name: "batch_edit",
   description:
-    "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, append, delete, create, overwrite. continueOnError + dryRun supported. Returns per-op status with actionable hints on failure.",
+    "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, append, delete, create, overwrite. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted by anchor line DESC — so every line number you provide references the ORIGINAL file, never a post-edit offset. Overlapping phase-1 ranges error both conflicting ops. (2) create. (3) content-addressed + file-wide ops (replace, replace_all, delete, append, overwrite) in the order you provided them. continueOnError + dryRun supported. Returns per-op status with actionable hints on failure.",
   inputSchema: {
     type: "object",
     properties: {

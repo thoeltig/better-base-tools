@@ -1,5 +1,6 @@
 import { joinLines, splitLines } from "./lines.js";
-import { findNearestLine } from "./similarity.js";
+import { buildNearestAnchor, findNearestLine } from "./similarity.js";
+import type { NearestAnchorWindow } from "./similarity.js";
 import type { EditBuffer } from "./buffer.js";
 import type { EditOp, ErrorReason, OpResult } from "../types.js";
 
@@ -13,6 +14,7 @@ export interface OpFailure {
   reason: ErrorReason;
   nextAction: string;
   nearestLine?: number;
+  nearestAnchor?: NearestAnchorWindow;
   matchLines?: number[];
 }
 
@@ -130,15 +132,24 @@ function applyReplaceAll(
 
 function buildNotFound(content: string, needle: string): OpFailure {
   const nearest = findNearestLine(content, needle);
+  if (nearest === undefined) {
+    return {
+      ok: false,
+      reason: "not_found",
+      nextAction: `'${preview(needle)}' not found in file`,
+    };
+  }
+  const anchor = buildNearestAnchor(content, nearest);
   const base: OpFailure = {
     ok: false,
     reason: "not_found",
+    nearestLine: nearest,
     nextAction:
-      nearest !== undefined
-        ? `'${preview(needle)}' not found — nearest similar line is ${nearest}; re-read a window there`
-        : `'${preview(needle)}' not found in file`,
+      anchor !== undefined
+        ? `'${preview(needle)}' not found — nearest similar line is ${nearest}; use nearest_anchor.content as the 'old' anchor`
+        : `'${preview(needle)}' not found — nearest similar line is ${nearest}; re-read a window there`,
   };
-  if (nearest !== undefined) base.nearestLine = nearest;
+  if (anchor !== undefined) base.nearestAnchor = anchor;
   return base;
 }
 
@@ -321,6 +332,13 @@ export function toOpResult(index: number, res: OpApplyResult): OpResult {
   }
   const hint: OpResult["hint"] = { next_action: res.nextAction };
   if (res.nearestLine !== undefined) hint.nearest_line = res.nearestLine;
+  if (res.nearestAnchor !== undefined) {
+    hint.nearest_anchor = {
+      start_line: res.nearestAnchor.startLine,
+      end_line: res.nearestAnchor.endLine,
+      content: res.nearestAnchor.content,
+    };
+  }
   if (res.matchLines !== undefined) hint.match_lines = res.matchLines;
   return { index, status: "error", reason: res.reason, hint };
 }

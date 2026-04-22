@@ -203,32 +203,137 @@ describe("replace_range op", () => {
   });
 });
 
-describe("sequential op execution", () => {
-  it("ops within a file apply in order against post-previous state", async () => {
-    const p = await fixture("seq.txt", "A\nB\nC\n");
+describe("phased execution order", () => {
+  it("phase-1 line-addressed ops reference original-file line numbers regardless of input order", async () => {
+    // Buffer has 5 lines. Multiple line-addressed ops all reference original lines —
+    // without desc ordering, the second op would see a shifted buffer.
+    const p = await fixture("phase1.txt", "1\n2\n3\n4\n5\n");
     const ops: EditOp[] = [
-      { type: "insert_at_line", line: 1, content: "HEAD\n" }, // -> HEAD,A,B,C
-      { type: "append", content: "TAIL\n" }, // -> HEAD,A,B,C,TAIL
-      { type: "replace_range", start: 2, end: 4, content: "X\n" }, // -> HEAD,X,TAIL
+      { type: "insert_at_line", line: 2, content: "INS2\n" }, // before original line 2
+      { type: "replace_range", start: 4, end: 5, content: "REPL\n" }, // original lines 4-5
     ];
     const out = await runEdit({ path: p, ops });
     expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
-    expect(await readText(p)).toBe("HEAD\nX\nTAIL\n");
+    expect(await readText(p)).toBe("1\nINS2\n2\n3\nREPL\n");
   });
 
-  it("failing op aborts the file; subsequent ops marked skipped; no write", async () => {
+  it("phase-2 content ops see post-phase-1 buffer and run in input order", async () => {
+    const p = await fixture("phase2.txt", "A\nB\nC\n");
+    const ops: EditOp[] = [
+      { type: "append", content: "TAIL\n" },
+      { type: "insert_at_line", line: 1, content: "HEAD\n" }, // phase 1
+      { type: "replace", old: "B", new: "BEE" },
+    ];
+    const out = await runEdit({ path: p, ops });
+    expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
+    expect(await readText(p)).toBe("HEAD\nA\nBEE\nC\nTAIL\n");
+  });
+
+  it("create runs before overwrite even when input order puts overwrite first", async () => {
+    const p = tmpPath("create-overwrite.txt");
+    const out = await runEdit({
+      path: p,
+      continueOnError: true,
+      ops: [
+        { type: "overwrite", content: "from-overwrite\n" },
+        { type: "create", content: "from-create\n" },
+      ],
+    });
+    // create runs first on non-existing file (ok), then overwrite replaces content (ok).
+    expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
+    expect(await readText(p)).toBe("from-overwrite\n");
+  });
+
+  it("overlapping replace_range ops: both error with invalid_range", async () => {
+    const p = await fixture("overlap-rr.txt", "1\n2\n3\n4\n5\n6\n7\n8\n");
+    const out = await runEdit({
+      path: p,
+      continueOnError: true,
+      ops: [
+        { type: "replace_range", start: 2, end: 5, content: "X\n" },
+        { type: "replace_range", start: 4, end: 7, content: "Y\n" },
+      ],
+    });
+    const ops = out.results[0]!.ops;
+    expect(ops[0]!.status).toBe("error");
+    expect(ops[0]!.reason).toBe("invalid_range");
+    expect(ops[0]!.hint?.next_action).toMatch(/overlaps with op at index 1/);
+    expect(ops[1]!.status).toBe("error");
+    expect(ops[1]!.hint?.next_action).toMatch(/overlaps with op at index 0/);
+    expect(await readText(p)).toBe("1\n2\n3\n4\n5\n6\n7\n8\n"); // unchanged
+  });
+
+  it("insert_at_line inside a replace_range: both error", async () => {
+    const p = await fixture("overlap-ins.txt", "1\n2\n3\n4\n5\n");
+    const out = await runEdit({
+      path: p,
+      continueOnError: true,
+      ops: [
+        { type: "replace_range", start: 2, end: 4, content: "X\n" },
+        { type: "insert_at_line", line: 3, content: "Y\n" },
+      ],
+    });
+    const ops = out.results[0]!.ops;
+    expect(ops[0]!.reason).toBe("invalid_range");
+    expect(ops[1]!.reason).toBe("invalid_range");
+    expect(await readText(p)).toBe("1\n2\n3\n4\n5\n");
+  });
+
+  it("insert_at_line at replace_range end+1 does NOT overlap", async () => {
+    const p = await fixture("boundary.txt", "1\n2\n3\n4\n5\n");
+    const out = await runEdit({
+      path: p,
+      ops: [
+        { type: "replace_range", start: 2, end: 3, content: "X\n" },
+        { type: "insert_at_line", line: 4, content: "Y\n" },
+      ],
+    });
+    expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
+    expect(await readText(p)).toBe("1\nX\nY\n4\n5\n");
+  });
+
+  it("two inserts at same line error (ambiguous order)", async () => {
+    const p = await fixture("dup-ins.txt", "A\nB\n");
+    const out = await runEdit({
+      path: p,
+      continueOnError: true,
+      ops: [
+        { type: "insert_at_line", line: 2, content: "X\n" },
+        { type: "insert_at_line", line: 2, content: "Y\n" },
+      ],
+    });
+    expect(out.results[0]!.ops[0]!.reason).toBe("invalid_range");
+    expect(out.results[0]!.ops[1]!.reason).toBe("invalid_range");
+    expect(await readText(p)).toBe("A\nB\n");
+  });
+
+  it("failing phase-1 op aborts remaining phase-1 and phase-2 ops (input order preserved in result)", async () => {
     const p = await fixture("abort.txt", "A\nB\n");
     const ops: EditOp[] = [
-      { type: "insert_at_line", line: 1, content: "X\n" }, // ok
-      { type: "insert_at_line", line: 99, content: "Y\n" }, // invalid_range
-      { type: "append", content: "Z\n" }, // skipped
+      { type: "insert_at_line", line: 1, content: "X\n" }, // phase 1, line 1
+      { type: "insert_at_line", line: 99, content: "Y\n" }, // phase 1, line 99 — fails first (desc sort)
+      { type: "append", content: "Z\n" }, // phase 2, skipped
     ];
     const out = await runEdit({ path: p, ops });
     const ops_out = out.results[0]!.ops;
-    expect(ops_out[0]!.status).toBe("ok");
+    // Execution order: line 99 first (error) → line 1 skipped → append skipped.
+    // Result maps back to input order: [skipped, error, skipped].
+    expect(ops_out[0]!.status).toBe("skipped");
     expect(ops_out[1]!.status).toBe("error");
+    expect(ops_out[1]!.reason).toBe("invalid_range");
     expect(ops_out[2]!.status).toBe("skipped");
     expect(await readText(p)).toBe("A\nB\n"); // unchanged
+  });
+
+  it("phase-2 ops apply in input order against post-previous state", async () => {
+    const p = await fixture("p2-seq.txt", "hello\n");
+    const ops: EditOp[] = [
+      { type: "append", content: "world\n" },
+      { type: "replace", old: "world", new: "WORLD" },
+    ];
+    const out = await runEdit({ path: p, ops });
+    expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
+    expect(await readText(p)).toBe("hello\nWORLD\n");
   });
 });
 
@@ -258,7 +363,7 @@ describe("replace op", () => {
     expect(await readText(p)).toBe("a\nb\n");
   });
 
-  it("not_found populates nearest_line when a similar line exists", async () => {
+  it("not_found populates nearest_line and nearest_anchor when a similar line exists", async () => {
     const p = await fixture(
       "rep_near.txt",
       "function alpha() {\n  return 1;\n}\nfunction beta() {\n  return 2;\n}\n",
@@ -271,6 +376,15 @@ describe("replace op", () => {
     const op = out.results[0]!.ops[0]!;
     expect(op.reason).toBe("not_found");
     expect(op.hint?.nearest_line).toBe(4);
+    expect(op.hint?.nearest_anchor).toBeDefined();
+    const anchor = op.hint!.nearest_anchor!;
+    expect(anchor.start_line).toBeLessThanOrEqual(4);
+    expect(anchor.end_line).toBeGreaterThanOrEqual(4);
+    // The anchor content must appear verbatim in the file (usable as edit anchor).
+    const fileContent = await readText(p);
+    expect(fileContent.includes(anchor.content)).toBe(true);
+    // And be unique.
+    expect(fileContent.indexOf(anchor.content, fileContent.indexOf(anchor.content) + 1)).toBe(-1);
     expect(op.hint?.next_action).toMatch(/nearest similar line is 4/);
   });
 

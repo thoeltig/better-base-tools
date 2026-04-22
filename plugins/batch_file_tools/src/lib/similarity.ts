@@ -1,3 +1,5 @@
+import { joinLines, splitLines } from "./lines.js";
+
 const SIMILARITY_THRESHOLD = 0.3;
 const MAX_FILE_LINES_FOR_HINT = 5000;
 
@@ -76,4 +78,79 @@ function firstNonEmptyLine(s: string): string | undefined {
     if (line.trim().length > 0) return line;
   }
   return undefined;
+}
+
+export interface NearestAnchorWindow {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly content: string;
+}
+
+/**
+ * Builds a verbatim window around `nearestLine` bounded by the next non-empty
+ * line on each side. Content is byte-exact (original line endings preserved)
+ * so it can be used directly as a `replace`/`delete` anchor.
+ *
+ * Returns undefined if the window isn't unique after one widening attempt —
+ * better no hint than a misleading non-unique anchor.
+ */
+export function buildNearestAnchor(
+  content: string,
+  nearestLine: number,
+): NearestAnchorWindow | undefined {
+  const split = splitLines(content);
+  const lines = split.lines;
+  const endings = split.endings;
+  const center = nearestLine - 1;
+  if (center < 0 || center >= lines.length) return undefined;
+
+  let startIdx = prevNonEmpty(lines, center - 1) ?? center;
+  let endIdx = nextNonEmpty(lines, center + 1) ?? center;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const windowContent = joinLines(
+      lines.slice(startIdx, endIdx + 1),
+      endings.slice(startIdx, endIdx + 1),
+    );
+    if (isUnique(content, windowContent)) {
+      return {
+        startLine: startIdx + 1,
+        endLine: endIdx + 1,
+        content: windowContent,
+      };
+    }
+    const newStart = prevNonEmpty(lines, startIdx - 1);
+    const newEnd = nextNonEmpty(lines, endIdx + 1);
+    if (newStart === undefined && newEnd === undefined) break;
+    if (newStart !== undefined) startIdx = newStart;
+    if (newEnd !== undefined) endIdx = newEnd;
+  }
+  return undefined;
+}
+
+function prevNonEmpty(
+  lines: readonly string[],
+  from: number,
+): number | undefined {
+  for (let i = from; i >= 0; i--) {
+    if (lines[i]!.trim().length > 0) return i;
+  }
+  return undefined;
+}
+
+function nextNonEmpty(
+  lines: readonly string[],
+  from: number,
+): number | undefined {
+  for (let i = from; i < lines.length; i++) {
+    if (lines[i]!.trim().length > 0) return i;
+  }
+  return undefined;
+}
+
+function isUnique(haystack: string, needle: string): boolean {
+  if (needle.length === 0) return false;
+  const first = haystack.indexOf(needle);
+  if (first < 0) return false;
+  return haystack.indexOf(needle, first + 1) < 0;
 }
