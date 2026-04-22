@@ -6,7 +6,7 @@ Companion to `tool-redesign-notes.md`. That file holds the reasoning; this file 
 
 ## Status — v1 MVP shipped
 
-Built as an MCP server at `plugins/batch_file_tools/`, exposing two tools: `batch_read` and `batch_edit`. Registered via project-scope `.mcp.json`. 93 tests pass, 0 npm vulnerabilities, strict TypeScript.
+Built as an MCP server at `plugins/batch_file_tools/`, exposing two tools: `batch_read` and `batch_edit`. Registered via project-scope `.mcp.json`. 119 tests pass, 0 npm vulnerabilities, strict TypeScript.
 
 **Delivered (v1):**
 
@@ -21,11 +21,13 @@ Built as an MCP server at `plugins/batch_file_tools/`, exposing two tools: `batc
 | `batch_edit` content-addressed ops: `replace`, `replace_all`, `delete` | ✅ |
 | Per-op `summary` string (always emitted) | ✅ |
 | Error contract: `not_found` / `ambiguous` / `file_missing` / `file_exists` / `invalid_range` / `io_error` | ✅ |
-| `nearest_line` hint via Levenshtein (threshold 0.30) | ✅ |
+| `nearest_anchor` peek window on `not_found` — verbatim bounded snippet, pasteable as next `old`; includes `nearest_line` + `next_action` fallback fields (Levenshtein threshold 0.30) | ✅ |
 | `match_lines` hint for ambiguous anchors | ✅ |
 | `continueOnError` — top-level (inter-file) + file-level (intra-file, wins over top) | ✅ |
 | `dryRun` — full execution, no writes, diffs still returned | ✅ |
-| `returnDiff` — `none` / `per_file` / `per_op` (unified diff via `diff` package) | ✅ |
+| Output verbosity — `output: minimal \| summary \| diff` at root / file / op (op > file > root precedence). Replaces `returnDiff`. | ✅ |
+| Two-phase execution per file — line-addressed ops (`insert_at_line`, `replace_range`) run first, sorted by anchor line DESC (line anchors always reference the original buffer); `create` next; content-addressed + file-wide ops last in input order. Overlapping phase-1 ranges error both conflicting ops. | ✅ |
+| Per-file `TextContent` envelope — one content block per file: minified JSON meta (`{path, lines[, returned_lines]}`) on line 1 + raw unescaped content from line 2. `structuredContent` deliberately unset (harness surfaces it and re-wraps envelope; see `src/index.ts:117-122` comment). | ✅ |
 | Project-scope MCP registration via `.mcp.json` | ✅ |
 | Dev-environment `CLAUDE.md` directive (interim, pre-SessionStart-hook) | ✅ |
 
@@ -104,7 +106,7 @@ Multi-file, multi-op edit.
 {
   "continueOnError": "bool, default false",
   "dryRun": "bool, default false",
-  "returnDiff": "none | per_file | per_op, default none",
+  "output": "minimal | summary | diff, default minimal. Overridable at file level and op level (op > file > root).",
   "files": [
     {
       "path": "absolute path",
@@ -146,19 +148,36 @@ Ops within a file execute sequentially; each sees post-previous-op state. Line-b
   "results": [
     {
       "path": "...",
-      "diff": "unified diff (whole file), present only if returnDiff == 'per_file'",
+      "status": "ok | partial | error | skipped",
+      "error": { "reason": "io_error", "message": "..." },
+      "diff": "unified diff (whole file), present only when file-level output == 'diff' AND file changed",
       "ops": [
         { "index": 0, "status": "ok",
+          "type": "replace",
           "summary": "replaced 1 occurrence at line 42 (3 chars → 5 chars)",
-          "diff": "unified diff, present only if returnDiff == 'per_op'" },
+          "diff": "unified diff, present only when op-level output == 'diff'" },
         { "index": 1, "status": "error", "reason": "not_found",
-          "hint": { "nearest_line": 42, "next_action": "..." } },
+          "type": "replace",
+          "hint": {
+            "next_action": "...",
+            "nearest_line": 42,
+            "nearest_anchor": { "start_line": 40, "end_line": 44, "content": "...verbatim..." }
+          }
+        },
         { "index": 2, "status": "skipped" }
       ]
     }
   ]
 }
 ```
+
+**Verbosity (`output`) rules:**
+
+- `minimal` (default): successful ops filtered out of the `ops` array; only failed ops emitted. File-level `status` always present (`ok` when empty `ops`, `partial` / `error` otherwise).
+- `summary`: every op emitted with `status` + summary string.
+- `diff`: file-level adds a whole-file unified diff; op-level adds a per-op unified diff. When file-level is `diff`, per-op default collapses to `minimal` (per-op diffs would duplicate the file diff). Op-level override still promotes a single op's verbosity above the file default.
+
+**Precedence:** `op.output` > `file.output` > root `output`.
 
 `status: "skipped"` indicates an op was not attempted because a prior op errored and `continueOnError` is false for this file.
 
@@ -287,8 +306,15 @@ v1 (complete):
 4. ✅ `batch_read` `info_compact` mode (reordered after edit ops; higher-leverage sequence)
 5. ✅ `batch_edit` content-addressed ops — `replace`, `replace_all`, `delete`
 6. ✅ Error contract + `nearest_line` (Levenshtein) + `match_lines` hints
-7. ✅ `continueOnError` (top + file level), `dryRun`, `returnDiff`
+7. ✅ `continueOnError` (top + file level), `dryRun`, output verbosity (`output: minimal|summary|diff`, replacing `returnDiff`)
 8. ✅ End-to-end stdio round-trip verified, project-scope `.mcp.json` registered
+
+v1.1 (shipped inline post-MVP, 2026-04-22):
+
+- ✅ Two-phase execution per file (line-addressed ops desc-sorted; content-addressed + file-wide ops after in input order; phase-1 overlap detection)
+- ✅ `nearest_anchor` peek window on `not_found` (verbatim bounded snippet pasteable as next `old`; uniqueness-checked with one widening retry)
+- ✅ Output verbosity tri-level (`output: minimal|summary|diff` at root/file/op, op-wins precedence; `returnDiff` removed)
+- ✅ Per-file `TextContent` envelope + `structuredContent` removal (harness surfaces `structuredContent` to the model in place of `content[]`; removing it forces the per-file envelope to reach the model unescaped)
 
 v2 (next):
 
@@ -302,3 +328,4 @@ v2 (next):
 ## Changelog
 
 - **2026-04-22** — Renamed read-mode enum from `edit | raw | compact` to `edit | info_compact | info_verbatim`. Flips default bias (reflexive pick lands on `info_compact`, the correct default for reading-to-understand) and prepositions the v1 flat enum for the v2 mode/strategy split. Triggered by a dogfooding mis-pick on turn one: agent picked `raw` over `compact` for a plain read-to-summarize task because "not safe for editing" in the old `compact` description read as a warning rather than a constraint.
+- **2026-04-22** — v1.1 shipped inline: #4 two-phase execution (line-addressed ops desc-sorted, line anchors reference the original buffer; overlap errors both conflicting ops); #1 `nearest_anchor` hint (verbatim window around best-match line, uniqueness-checked, pasteable as next `old`); #3 output verbosity (`output: minimal|summary|diff` at root/file/op, op-wins precedence; `returnDiff` removed); #2 per-file `TextContent` envelope (one block per file: minified JSON meta + raw unescaped content). Dropped `structuredContent` on tool responses after live-test showed Claude Code's harness surfaces it to the model in place of `content[]`, re-JSON-wrapping the envelope and re-introducing `\n → \\n` escaping. Test count 93 → 119; build + typecheck clean. See `Claude_Temp_Files/dogfood-log.md` 2026-04-22 session 2 for the diagnostic + verification detail. Known issue carried to next session: unified-diff output includes the absolute file path 3× in its header and per-op diffs are JSON-escaped inside the op's meta line — both make diff-mode results unusable as returned.

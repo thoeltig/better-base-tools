@@ -8,13 +8,55 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
-| 2026-04-22 | 5 | 28 | 5.6x | enum rename |
+| 2026-04-22 | 7 | 18 | 2.6x | structuredContent drop + v1.1 smoke (session 2) |
+| 2026-04-22 | 5 | 28 | 5.6x | enum rename (session 1) |
 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
 
-### 2026-04-22 — enum rename for default-bias fix
+### 2026-04-22 (session 2) — structuredContent drop + v1.1 smoke
+
+**Starting state:** Previous session (same-day, session 1) shipped but didn't live-test four post-MVP changes: #4 two-phase execution (line-addressed ops desc-sorted, all line anchors reference the original buffer); #1 `nearest_anchor` peek window on `not_found`; #3 output verbosity tri-level (`minimal`/`summary`/`diff` at root/file/op, op-wins precedence); #2 per-file `TextContent` envelope. 119/119 unit tests pass, but the live model-facing output was unverified.
+
+**Finding — envelope regression:** First live `batch_read` returned the full `{"results":[{"path":...,"mode_applied":...,"lines":64,"returned_lines":64,"truncated":false,"content":"...\\n..."}]}` JSON blob — pre-#2 shape, with every `\n` re-escaped to `\\n`. The envelope module (`src/lib/envelope.ts`) was correct in isolation. Cause: `src/index.ts` set both `content: formatReadContent(result)` AND `structuredContent: result` on every `CallToolResult`. Claude Code's harness surfaces `structuredContent` to the model in place of `content[]` when both are set, re-wrapping the per-file envelope in a single escaped JSON.
+
+**Change:** Dropped `structuredContent` on both `batch_read` and `batch_edit` responses (`plugins/batch_file_tools/src/index.ts:117-122`), added a 6-line `DO NOT add back` comment pointing at this log. Rebuilt; 119/119 still green.
+
+**Verification after MCP reconnect:**
+- Re-read `dogfood-log.md` → received as `{"path":"...","lines":64}\n<raw markdown>` — meta line + unescaped content, one `TextContent` block per file. Envelope win realized.
+- Compound smoke test on fresh `smoke-test.txt` (5 lines: `alpha/beta/gamma/delta/epsilon`) with ops `[insert_at_line:1 minimal, replace_range:4-4, replace "gamme", append diff]`, root `output: summary`, `continueOnError: true`:
+  - **#4 two-phase desc-sort:** `replace_range 4-4` resolved to the *original* line 4 (`delta`); `insert_at_line 1` resolved to the *original* top — neither saw the other's mutation. Final file: `START / alpha / beta / gamma / DELTA-changed / epsilon / omega`.
+  - **#1 `nearest_anchor`:** `replace "gamme"` failed with `hint.nearest_anchor = {start_line:3, end_line:5, content:"beta\ngamma\nDELTA-changed\n"}`. Content is verbatim and directly pasteable as next `old`.
+  - **#3 verbosity precedence:** successful `insert_at_line` with op-level `minimal` filtered out of the `ops` array; root `summary` applied to `replace_range` → `{index, type, status, summary}`; failed `replace` always included with `{index, type, status, reason, hint}`; `append` with op-level `diff` returned unified diff inline. File-level `status: "partial"` computed correctly. Op > file > root precedence confirmed.
+
+All four v1.1 capabilities verified live.
+
+**Tool calls:**
+- MCP: 4 × `batch_read` + 3 × `batch_edit` (1 server-code edit, 1 fixture create, 1 compound test) = **7 calls**.
+- Native equiv: ~12 × `Read` + ~6 × `Edit`/`Write` = **~18 calls**.
+- Reduction: **2.6x** — lower than session 1 because 70% of this session was diagnostic reading + server surgery, not bulk rename.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `replace` | 2 | yes | 1 success (`structuredContent` removal in server), 1 intentional typo `gamme` to trigger `nearest_anchor` |
+| `create` | 1 | yes | `smoke-test.txt` fixture |
+| `insert_at_line` | 1 | yes | phase-1 desc-sort verified (line-1 anchor survived a later op on a higher line) |
+| `replace_range` | 1 | yes | phase-1 desc-sort verified (line-4 anchor referenced original buffer) |
+| `append` | 1 | yes | phase-2 content-addressed; diff-mode output shape verified |
+
+**Still unexercised:** `overwrite`, `delete`, `replace_all`, `match_lines` hint (for ambiguous anchors), file-level diff rollup mode, overlapping phase-1 range error path, `dryRun`.
+
+**Open follow-ups (carry to next session):**
+- **Diff output is unusable as returned** — see Developer / User Notes. Needs: strip `Index:`/`---`/`+++` header rows from diff strings; move per-op diff out of the op's JSON meta into an appended raw segment of the content block.
+- Field redundancy audit: drop `hint.nearest_line`, drop `OpResult.index` in summary/diff modes, consider dropping `OpResult.type` on ok ops.
+- Exercise file-level diff, `overwrite`/`delete`/`replace_all`, `match_lines` ambiguous path, phase-1 overlap error, `dryRun`.
+
+---
+
+### 2026-04-22 (session 1) — enum rename for default-bias fix
 
 **Blind test:** "Read these two planning docs and summarize." No mode guidance.
 
@@ -62,3 +104,13 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
     - use: `"files": [{"path": "C:\\Users\\TestUser\\Documents\\test.md", "ops": [{ "type": "replace","old": "| Read mode `raw` — content only, byte-exact (CRLF preserved) | ✅ |\n| Read mode `compact` — strip trailing whitespace + collapse blank-line runs | ✅ |", "new": "| Read mode `info_verbatim` — content only, byte-exact (CRLF preserved) | ✅ |\n| Read mode `info_compact` — strip trailing whitespace + collapse blank-line runs | ✅ |" },{"type": "replace", "old": "- Read modes collapsed from `info | raw | compact | optimized` to `edit | raw | compact` — `info` and `optimized` deferred to v2.\n- `raw` mode no longer carries line numbers; line-numbered reading is now `edit` mode. This matches the actual two use cases (read-to-edit vs read-to-understand) cleaner than the original mode names did.", "new": "- Read modes collapsed from `info | raw | compact | optimized` to `edit | info_compact | info_verbatim` — `info` (metadata) and `optimized` deferred to v2. The `info_` prefix is a stepping stone to the v2 mode/strategy split.\n- `info_verbatim` mode (formerly `raw`) carries no line numbers; line-numbered reading is `edit` mode. The edit/info split matches the actual two use cases (read-to-edit vs read-to-understand) cleaner than the original mode names did." }, { "type": "replace", "old": "\"mode\": \"edit | raw | compact\",", "new": "\"mode\": \"edit | info_compact | info_verbatim\"," }, { "type": "replace", "old": "| Mode | Contract | Line numbers | Use case |\n|---|---|---|---|\n| `edit` | Byte-exact content, each line prefixed `{sourceLineNum}\\t` | Yes | Pre-edit anchor reads (required for `replace` / `replace_all` / `delete`) |\n| `raw` | Byte-exact content, no transformation | No | Verbatim content piping |\n| `compact` | Lossless: strip trailing whitespace on each line, collapse runs of 2+ blank lines to 1 blank line. Leading indent preserved. | No | Scanning / reading to understand |\n\n`offset` + `limit` slice the source file first; `compact` mode compacts the slice (keeps offsets meaningful in source-line terms).", "new": "| Mode | Contract | Line numbers | Use case |\n|---|---|---|---|\n| `edit` | Byte-exact content, each line prefixed `{sourceLineNum}\\t` | Yes | Pre-edit anchor reads (required for `replace` / `replace_all` / `delete`) |\n| `info_compact` | Lossless: strip trailing whitespace on each line, collapse runs of 2+ blank lines to 1 blank line. Leading indent preserved. | No | **Default for info reads.** Scanning / reading to understand — saves tokens while preserving all information. |\n| `info_verbatim` | Byte-exact content, no transformation | No | Info reads when on-disk formatting matters (style/whitespace audits, exact-indent checks). |\n\n`offset` + `limit` slice the source file first; `info_compact` mode compacts the slice (keeps offsets meaningful in source-line terms)." }, { "type": "replace", "old": "\"mode_applied\": \"edit | raw | compact\",", "new": "\"mode_applied\": \"edit | info_compact | info_verbatim\"," }, { "type": "replace", "old": "| **Mode/strategy split** | Refactor flat `mode: edit\\|raw\\|compact` into `mode: edit\\|info` + `strategy: peek\\|raw\\|compact\\|optimized`. Enforce `mode=edit → strategy=raw`. Keeps current call sites working via migration mapping. |", "new": "| **Mode/strategy split** | Refactor flat `mode: edit\\|info_compact\\|info_verbatim` into `mode: edit\\|info` + `strategy: verbatim\\|compact\\|optimized`. Enforce `mode=edit → strategy=verbatim`. Interim `info_` prefix in v1 makes the split near-mechanical. |" }, { "type": "replace", "old": "| **Richer `compact` transforms** | Currently whitespace-only. Add: code comment stripping (language-aware), markdown HTML-comment stripping, JSON pretty→compact. Kept lossless. |", "new": "| **Richer `info_compact` transforms** | Currently whitespace-only. Add: code comment stripping (language-aware), markdown HTML-comment stripping, JSON pretty→compact. Kept lossless. |" }, { "type": "replace", "old": "2. ✅ `batch_read` — `edit` + `raw` modes, batch input, offset/limit", "new": "2. ✅ `batch_read` — `edit` + `info_verbatim` modes, batch input, offset/limit" }, { "type": "replace", "old": "4. ✅ `batch_read` `compact` mode (reordered after edit ops; higher-leverage sequence)", "new": "4. ✅ `batch_read` `info_compact` mode (reordered after edit ops; higher-leverage sequence)" }, { "type": "append", "content": "\n## Changelog\n\n- **2026-04-22** — Renamed read-mode enum from `edit | raw | compact` to `edit | info_compact | info_verbatim`. Flips default bias (reflexive pick lands on `info_compact`, the correct default for reading-to-understand) and prepositions the v1 flat enum for the v2 mode/strategy split. Triggered by a dogfooding mis-pick on turn one: agent picked `raw` over `compact` for a plain read-to-summarize task because \"not safe for editing\" in the old `compact` description read as a warning rather than a constraint.\n"}]}]`
     - result: `{\"results\":[{\"path\":\"C:\\Users\\TestUser\\Documents\\test.md\",\"ops\":[{\"index\":0,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 17 (150 chars → 165 chars)\"},{\"index\":1,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 35 (333 chars → 460 chars)\"},{\"index\":2,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 60 (37 chars → 52 chars)\"},{\"index\":3,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 70 (611 chars → 775 chars)\"},{\"index\":4,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 83 (41 chars → 56 chars)\"},{\"index\":5,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 217 (231 chars → 256 chars)\"},{\"index\":6,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 221 (179 chars → 184 chars)\"},{\"index\":7,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 285 (67 chars → 77 chars)\"},{\"index\":8,\"status\":\"ok\",\"summary\":\"replaced 1 occurrence at line 287 (85 chars → 90 chars)\"},{\"index\":9,\"status\":\"ok\",\"summary\":\"appended 4 lines (EOF was line 300)\"}]}]}`
 - if read as compact then the edit might need to search for the old string in a formatted and compacted version to find the correct location. Same for read with line numbers and the edit old string includes the line number, might need to search the old string also with line number stripped. currently the tool will output the nearest match exception which might be okay if we implement the peak read with a range around the to peak loaction. then error closest match at line x would trigger to use peak line X with margin of Y characters / lines which would result in a text snipped with a starting line index and a line count as a short hand note plus the verbatim content. then the model might re-run the edit call with verbatim old string.
+
+---
+
+**Appended 2026-04-22 (session 2) — noticed during live smoke test:**
+
+- **Diff output is unusable as returned.** Per-op diff received this session: `"diff":"Index: <full absolute path>\n===...\n--- \"<full absolute path>\"\n+++ \"<full absolute path>\"\n@@ ..."`. Three copies of the absolute file path before the first hunk = pure noise on small edits. Additionally, per-op diffs live inside the op's JSON meta line (as a `diff` string value), so every `\n` re-escapes to `\\n` and every `\` doubles. File-level diff gets the unescaped-in-content-block treatment but still carries the three-path header. Fix: (a) strip the `Index:`/`---`/`+++` header rows in the formatter — keep only `@@` hunks and changed lines; (b) move per-op diff content out of the JSON meta into an appended raw segment of the content block (multiple text segments per file), so per-op diffs flow through unescaped the same way read content does. Prefer (a)+(b) combined.
+- `hint.nearest_line` duplicates information already in `hint.nearest_anchor`. The anchor window carries `start_line`/`end_line` and its content locates the match visually. Drop `nearest_line`; `nearest_anchor` alone is enough.
+- `OpResult.index` is positionally redundant in `summary`/`diff` output modes where every op appears in input order. Keep it only in `minimal`-partial responses where the `ops` array is a sparse failure-only subset (index is needed to map back to input).
+- `OpResult.type` echoes the input op type on every summary-mode op. The input is ordered and the caller already has the op list. Consider dropping `type` on `status: "ok"` ops; keep only on failures (where the model benefits from immediate correlation without cross-referencing the request).
+- `batch_read` envelope `{"path","lines"[,"returned_lines"]}\n<content>` is working well — unescaped content per block, `\n` stays a single character. Meta is minimal. Leave as-is.
