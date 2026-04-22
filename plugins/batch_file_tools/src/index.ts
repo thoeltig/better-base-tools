@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { EditInput, ReadInput } from "./types.js";
-import { formatEditContent, formatReadContent } from "./lib/envelope.js";
+import { formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 
@@ -138,7 +138,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const parsed = EditInput.parse(args);
       const result = await handleBatchEdit(parsed);
       return {
-        content: formatEditContent(result),
+        content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result as unknown as Record<string, unknown>,
       };
     }
