@@ -260,8 +260,8 @@ describe("output modes", () => {
         files: [{ path: p, ops: [{ type: "replace", old: "b", new: "BEE" }] }],
       });
       const fr = out.results[0]!;
-      expect(fr.diff).toContain("-b");
-      expect(fr.diff).toContain("+BEE");
+      expect(fr.diff).toContain("-\tb");
+      expect(fr.diff).toContain("+\tBEE");
       // diff mode: ops array includes only non-ok ops (there are none here).
       expect(fr.ops).toEqual([]);
     });
@@ -283,7 +283,7 @@ describe("output modes", () => {
         ],
       });
       const ops = out.results[0]!.ops;
-      expect(ops[0]!.diff).toContain("+c");
+      expect(ops[0]!.diff).toContain("+\tc");
       expect(ops[0]!.summary).toBeUndefined();
       expect(ops[1]!.diff).toBeUndefined();
       expect(ops[1]!.summary).toMatch(/replaced 1 occurrence/);
@@ -297,7 +297,7 @@ describe("output modes", () => {
         output: "diff",
         files: [{ path: p, ops: [{ type: "append", content: "b\n" }] }],
       });
-      expect(out.results[0]!.diff).toContain("+b");
+      expect(out.results[0]!.diff).toContain("+\tb");
       expect(await readText(p)).toBe("a\n");
     });
   });
