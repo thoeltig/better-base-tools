@@ -52,11 +52,11 @@ describe("formatForRead — edit mode", () => {
   });
 });
 
-describe("formatForRead — compact mode", () => {
+describe("formatForRead — info_compact mode", () => {
   it("strips trailing whitespace on each line", () => {
     const r = formatForRead({
       content: "foo   \nbar\t\nbaz  \t  \n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("foo\nbar\nbaz\n");
   });
@@ -64,7 +64,7 @@ describe("formatForRead — compact mode", () => {
   it("collapses runs of 2+ blank lines to a single blank line", () => {
     const r = formatForRead({
       content: "alpha\n\n\n\nbeta\n\n\ngamma\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("alpha\n\nbeta\n\ngamma\n");
   });
@@ -72,7 +72,7 @@ describe("formatForRead — compact mode", () => {
   it("preserves leading indent (does not damage code)", () => {
     const r = formatForRead({
       content: "def foo():\n    return 1\n    return 2\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("def foo():\n    return 1\n    return 2\n");
   });
@@ -80,7 +80,7 @@ describe("formatForRead — compact mode", () => {
   it("preserves single blank lines between content", () => {
     const r = formatForRead({
       content: "a\n\nb\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("a\n\nb\n");
   });
@@ -88,7 +88,7 @@ describe("formatForRead — compact mode", () => {
   it("preserves CRLF endings", () => {
     const r = formatForRead({
       content: "a   \r\nb\r\n\r\n\r\nc\r\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("a\r\nb\r\n\r\nc\r\n");
   });
@@ -96,7 +96,7 @@ describe("formatForRead — compact mode", () => {
   it("returned_lines reflects post-compact line count", () => {
     const r = formatForRead({
       content: "a\n\n\n\nb\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.total_lines).toBe(5); // source has 5 lines (a, 3 blanks, b)
     expect(r.returned_lines).toBe(3); // compacted: a, 1 blank, b
@@ -108,7 +108,7 @@ describe("formatForRead — compact mode", () => {
     // After compact: "b", "" (one blank preserved, trailing blank collapsed)
     const r = formatForRead({
       content: "a\nb\n\n\n\nc\nd\n",
-      mode: "compact",
+      mode: "info_compact",
       offset: 2,
       limit: 4,
     });
@@ -120,33 +120,33 @@ describe("formatForRead — compact mode", () => {
   it("collapses trailing blank-line runs that touch EOF", () => {
     const r = formatForRead({
       content: "x\n\n\n\n",
-      mode: "compact",
+      mode: "info_compact",
     });
     expect(r.content).toBe("x\n\n");
   });
 });
 
-describe("formatForRead — raw mode", () => {
+describe("formatForRead — info_verbatim mode", () => {
   it("returns content byte-exact when reading full file", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "raw" });
+    const r = formatForRead({ content: SAMPLE, mode: "info_verbatim" });
     expect(r.content).toBe(SAMPLE);
     expect(r.truncated).toBe(false);
   });
 
   it("preserves CRLF endings byte-exactly", () => {
     const input = "a\r\nb\r\nc\r\n";
-    const r = formatForRead({ content: input, mode: "raw" });
+    const r = formatForRead({ content: input, mode: "info_verbatim" });
     expect(r.content).toBe(input);
   });
 
   it("does not add line numbers", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "raw", limit: 2 });
+    const r = formatForRead({ content: SAMPLE, mode: "info_verbatim", limit: 2 });
     expect(r.content).toBe("alpha\nbeta\n");
     expect(r.truncated).toBe(true);
   });
 
   it("file without trailing newline is preserved", () => {
-    const r = formatForRead({ content: "a\nb", mode: "raw" });
+    const r = formatForRead({ content: "a\nb", mode: "info_verbatim" });
     expect(r.content).toBe("a\nb");
   });
 });

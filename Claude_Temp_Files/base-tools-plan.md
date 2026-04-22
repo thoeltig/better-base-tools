@@ -14,8 +14,8 @@ Built as an MCP server at `plugins/batch_file_tools/`, exposing two tools: `batc
 |---|---|
 | Batch `batch_read` — N files per call, per-file mode | ✅ |
 | Read mode `edit` — line-numbered (`{n}\t{content}\n`, unpadded), byte-exact | ✅ |
-| Read mode `raw` — content only, byte-exact (CRLF preserved) | ✅ |
-| Read mode `compact` — strip trailing whitespace + collapse blank-line runs | ✅ |
+| Read mode `info_verbatim` — content only, byte-exact (CRLF preserved) | ✅ |
+| Read mode `info_compact` — strip trailing whitespace + collapse blank-line runs | ✅ |
 | `offset` / `limit` per file (1-indexed source lines) | ✅ |
 | `batch_edit` line-addressed ops: `create`, `overwrite`, `append`, `insert_at_line`, `replace_range` | ✅ |
 | `batch_edit` content-addressed ops: `replace`, `replace_all`, `delete` | ✅ |
@@ -32,8 +32,8 @@ Built as an MCP server at `plugins/batch_file_tools/`, exposing two tools: `batc
 **Deviations from spec as originally written:**
 
 - Tool names: `batch_read` / `batch_edit` (not `Read` / `Edit`) to avoid collision with built-ins.
-- Read modes collapsed from `info | raw | compact | optimized` to `edit | raw | compact` — `info` and `optimized` deferred to v2.
-- `raw` mode no longer carries line numbers; line-numbered reading is now `edit` mode. This matches the actual two use cases (read-to-edit vs read-to-understand) cleaner than the original mode names did.
+- Read modes collapsed from `info | raw | compact | optimized` to `edit | info_compact | info_verbatim` — `info` (metadata) and `optimized` deferred to v2. The `info_` prefix is a stepping stone to the v2 mode/strategy split.
+- `info_verbatim` mode (formerly `raw`) carries no line numbers; line-numbered reading is `edit` mode. The edit/info split matches the actual two use cases (read-to-edit vs read-to-understand) cleaner than the original mode names did.
 - Line-number format in `edit` mode: unpadded `{n}\t{content}\n` rather than `cat -n`'s fixed-width padding (saves tokens at minor cost to visual alignment).
 - Added `skipped` op status for ops after an aborted op, alongside `ok`/`error`.
 - `delete` kept as explicit op (per spec) but internally delegates to `replace` with `new=""`.
@@ -57,7 +57,7 @@ Batch read of N files, mode required per file.
   "requests": [
     {
       "path": "absolute path",
-      "mode": "edit | raw | compact",
+      "mode": "edit | info_compact | info_verbatim",
       "offset": "int, optional, 1-indexed source line",
       "limit": "int, optional, line count"
     }
@@ -70,17 +70,17 @@ Batch read of N files, mode required per file.
 | Mode | Contract | Line numbers | Use case |
 |---|---|---|---|
 | `edit` | Byte-exact content, each line prefixed `{sourceLineNum}\t` | Yes | Pre-edit anchor reads (required for `replace` / `replace_all` / `delete`) |
-| `raw` | Byte-exact content, no transformation | No | Verbatim content piping |
-| `compact` | Lossless: strip trailing whitespace on each line, collapse runs of 2+ blank lines to 1 blank line. Leading indent preserved. | No | Scanning / reading to understand |
+| `info_compact` | Lossless: strip trailing whitespace on each line, collapse runs of 2+ blank lines to 1 blank line. Leading indent preserved. | No | **Default for info reads.** Scanning / reading to understand — saves tokens while preserving all information. |
+| `info_verbatim` | Byte-exact content, no transformation | No | Info reads when on-disk formatting matters (style/whitespace audits, exact-indent checks). |
 
-`offset` + `limit` slice the source file first; `compact` mode compacts the slice (keeps offsets meaningful in source-line terms).
+`offset` + `limit` slice the source file first; `info_compact` mode compacts the slice (keeps offsets meaningful in source-line terms).
 
 ### Output per file
 
 ```json
 {
   "path": "...",
-  "mode_applied": "edit | raw | compact",
+  "mode_applied": "edit | info_compact | info_verbatim",
   "lines": "int, source file line count",
   "returned_lines": "int, lines in response (post-compact count for compact mode)",
   "truncated": "bool",
@@ -214,11 +214,11 @@ Priority order based on expected impact × implementation cost.
 
 | Item | Spec-driven notes |
 |---|---|
-| **Mode/strategy split** | Refactor flat `mode: edit\|raw\|compact` into `mode: edit\|info` + `strategy: peek\|raw\|compact\|optimized`. Enforce `mode=edit → strategy=raw`. Keeps current call sites working via migration mapping. |
+| **Mode/strategy split** | Refactor flat `mode: edit\|info_compact\|info_verbatim` into `mode: edit\|info` + `strategy: verbatim\|compact\|optimized`. Enforce `mode=edit → strategy=verbatim`. Interim `info_` prefix in v1 makes the split near-mechanical. |
 | **`info` mode (peek)** | Metadata only — no content. Returns: `type`, `bytes`, `lines`, `symbols`, `imports_exports`, `schema.top_level_keys`, `schema.depth`. Needs per-language parser (tree-sitter or regex heuristics). Cheap size/shape probe before committing to full read. |
 | **`optimized` strategy** | Lossy transforms from the original benchmark table: `JSON_PRETTY→JSON_COMPACT` (~60-70% reduction), `XML→JSON_COMPACT` when data-shaped, `YAML→JSON_COMPACT`, code-file comment stripping. Needs `data-shaped` safety heuristic for XML (no mixed content, attrs on leaves only). Informational use ONLY — never for pre-edit reads. |
 | **`token_estimate` in info output** | Per-mode token count estimate (`{raw, compact, optimized}`). Rough — Anthropic's tokenizer isn't public. Document the approximation clearly so agents don't misuse. |
-| **Richer `compact` transforms** | Currently whitespace-only. Add: code comment stripping (language-aware), markdown HTML-comment stripping, JSON pretty→compact. Kept lossless. |
+| **Richer `info_compact` transforms** | Currently whitespace-only. Add: code comment stripping (language-aware), markdown HTML-comment stripping, JSON pretty→compact. Kept lossless. |
 
 ### Medium priority — packaging & UX for release
 
@@ -282,9 +282,9 @@ Measurement happens once the MCP is dogfooded in real sessions for a week+.
 v1 (complete):
 
 1. ✅ MCP server scaffold — stdio transport, both tools registered, strict TypeScript, pinned deps, 0 vulns
-2. ✅ `batch_read` — `edit` + `raw` modes, batch input, offset/limit
+2. ✅ `batch_read` — `edit` + `info_verbatim` modes, batch input, offset/limit
 3. ✅ `batch_edit` line-addressed ops — `create`, `overwrite`, `append`, `insert_at_line`, `replace_range`
-4. ✅ `batch_read` `compact` mode (reordered after edit ops; higher-leverage sequence)
+4. ✅ `batch_read` `info_compact` mode (reordered after edit ops; higher-leverage sequence)
 5. ✅ `batch_edit` content-addressed ops — `replace`, `replace_all`, `delete`
 6. ✅ Error contract + `nearest_line` (Levenshtein) + `match_lines` hints
 7. ✅ `continueOnError` (top + file level), `dryRun`, `returnDiff`
@@ -298,3 +298,7 @@ v2 (next):
 12. `optimized` strategy (JSON/XML/YAML transforms with safety heuristics)
 13. Richer `compact` (comment stripping, JSON minification)
 14. `SessionStart` hook + refined tool descriptions for plugin release
+
+## Changelog
+
+- **2026-04-22** — Renamed read-mode enum from `edit | raw | compact` to `edit | info_compact | info_verbatim`. Flips default bias (reflexive pick lands on `info_compact`, the correct default for reading-to-understand) and prepositions the v1 flat enum for the v2 mode/strategy split. Triggered by a dogfooding mis-pick on turn one: agent picked `raw` over `compact` for a plain read-to-summarize task because "not safe for editing" in the old `compact` description read as a warning rather than a constraint.

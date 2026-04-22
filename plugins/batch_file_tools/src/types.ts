@@ -1,12 +1,13 @@
 import { z } from "zod";
 
 /**
- * v1 uses a flat `mode` enum. v2 refactor path: split into
+ * v1 uses a flat `mode` enum with an `info_` prefix as a stepping stone to v2.
+ * v2 refactor path: formally split into
  *   mode: "edit" | "info"
- *   strategy: "peek" | "raw" | "compact" | "optimized"
- * where mode=edit forces strategy=raw.
+ *   strategy: "verbatim" | "compact" | "optimized"
+ * where mode=edit forces strategy=verbatim.
  */
-export const ReadMode = z.enum(["edit", "raw", "compact"]);
+export const ReadMode = z.enum(["edit", "info_compact", "info_verbatim"]);
 export type ReadMode = z.infer<typeof ReadMode>;
 
 export const ReadRequest = z.object({

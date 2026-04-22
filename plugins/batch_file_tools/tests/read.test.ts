@@ -40,7 +40,7 @@ describe("handleBatchRead", () => {
     const b = await fixture("multi_b.txt", "B1\n");
     const out = await handleBatchRead({
       requests: [
-        { path: a, mode: "raw" },
+        { path: a, mode: "info_verbatim" },
         { path: b, mode: "edit" },
       ],
     });
@@ -51,7 +51,7 @@ describe("handleBatchRead", () => {
 
   it("raw mode preserves CRLF byte-exactly", async () => {
     const p = await fixture("crlf.txt", "x\r\ny\r\n");
-    const out = await handleBatchRead({ requests: [{ path: p, mode: "raw" }] });
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "info_verbatim" }] });
     expect(out.results[0]!.content).toBe("x\r\ny\r\n");
   });
 
@@ -95,10 +95,10 @@ describe("handleBatchRead", () => {
   it("compact mode collapses blank-line runs and strips trailing whitespace", async () => {
     const p = await fixture("compact.txt", "a   \n\n\n\nb\n");
     const out = await handleBatchRead({
-      requests: [{ path: p, mode: "compact" }],
+      requests: [{ path: p, mode: "info_compact" }],
     });
     const r = out.results[0]!;
-    expect(r.mode_applied).toBe("compact");
+    expect(r.mode_applied).toBe("info_compact");
     expect(r.content).toBe("a\n\nb\n");
     expect(r.lines).toBe(5);
     expect(r.returned_lines).toBe(3);

@@ -13,7 +13,7 @@ import { handleBatchEdit } from "./tools/edit.js";
 const READ_TOOL = {
   name: "batch_read",
   description:
-    "Batch-read N files in one call. Per-file mode: 'edit' (line-numbered, byte-exact - use before edit ops that need anchors), 'raw' (content only), 'compact' (raw with collapsed whitespace - not safe for editing). Supports offset/limit per file.",
+    "Batch-read N files in one call. Mode per file: 'edit' = reading before an edit op (byte-exact + line-numbered so anchors match); 'info_compact' = DEFAULT for reading-to-understand (lossless whitespace collapse, saves tokens, not usable as edit anchor); 'info_verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers). Supports offset/limit per file.",
   inputSchema: {
     type: "object",
     properties: {
@@ -26,9 +26,9 @@ const READ_TOOL = {
             path: { type: "string", description: "Absolute path" },
             mode: {
               type: "string",
-              enum: ["edit", "raw", "compact"],
+              enum: ["edit", "info_compact", "info_verbatim"],
               description:
-                "edit=line-numbered for edit anchoring, raw=content only, compact=raw + collapsed whitespace",
+                "edit=pre-edit reads (line-numbered, byte-exact). info_compact=default for info reads (lossless compact, saves tokens). info_verbatim=info reads when on-disk formatting matters (byte-exact, no line numbers).",
             },
             offset: {
               type: "integer",

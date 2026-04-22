@@ -41,7 +41,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
   let emittedLines = returnedLines;
   if (input.mode === "edit") {
     content = formatEdit(split.lines, clampedStart, clampedEnd);
-  } else if (input.mode === "compact") {
+  } else if (input.mode === "info_compact") {
     const compact = formatCompact(split.lines, split.endings, clampedStart, clampedEnd);
     content = compact.content;
     emittedLines = compact.line_count;
