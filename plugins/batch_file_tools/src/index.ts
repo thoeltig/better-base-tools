@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { EditInput, ReadInput } from "./types.js";
-import { formatReadContent } from "./lib/envelope.js";
+import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 
@@ -120,14 +120,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    // structuredContent policy (see Claude_Temp_Files/dogfood-log.md).
-    // - batch_read: DO NOT set. Claude Code's harness surfaces structuredContent
-    //   to the model in place of content[], which collapses the per-file
-    //   TextContent envelope into a single JSON-escaped blob and wipes out the
-    //   unescaped-raw-text win that matters for large file content.
-    // - batch_edit: DO set. Edit responses are structured JSON with no large
-    //   raw-text payload, so the harness's JSON-delivery path is fine and the
-    //   model receives a clean programmatic shape without per-op escaping.
+    // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
+    // DO NOT set on either tool. Claude Code's harness surfaces
+    // structuredContent to the model in place of content[], which re-wraps
+    // the per-file TextContent envelope in JSON and re-escapes every `\n` to
+    // `\\n`. Emit unescaped raw text via content[] only.
     if (name === "batch_read") {
       const parsed = ReadInput.parse(args);
       const result = await handleBatchRead(parsed);
@@ -137,10 +134,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "batch_edit") {
       const parsed = EditInput.parse(args);
       const result = await handleBatchEdit(parsed);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-        structuredContent: result as unknown as Record<string, unknown>,
-      };
+      return { content: formatEditContent(result) };
     }
 
     return {
