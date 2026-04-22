@@ -1,4 +1,4 @@
-import { createPatch, diffLines } from "diff";
+import { structuredPatch } from "diff";
 import { loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
 import { joinLines } from "../lib/lines.js";
@@ -293,8 +293,16 @@ function anchorLine(op: EditOp): number {
   return 0;
 }
 
-function diffContent(oldContent: string, newContent: string){
-  return diffLines(oldContent, newContent).map(x => (x.added ? '+' : x.removed ? '-' : '=') + '\t' + x.value).join('');
+function diffContent(oldContent: string, newContent: string): string {
+  const { hunks } = structuredPatch("", "", oldContent, newContent, "", "", { context: 3 });
+  if (hunks.length === 0) return "";
+  const body = hunks
+    .map((h) => {
+      const header = `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`;
+      return [header, ...h.lines].join("\n");
+    })
+    .join("\n");
+  return body + "\n";
 }
 
 interface Phase1Range {
