@@ -1,7 +1,16 @@
 {
   "name": "batch-tools-mcp-server",
   "version": "0.1.0",
+  "license": "MIT",
+  "author": "Thore Höltig",
   "description": "Batch-capable Read/Edit MCP server: fewer round-trips, explicit error hints.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thoeltig/better-base-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thoeltig/better-base-tools/issues"
+  },
   "type": "module",
   "bin": {
     "batch-tools-mcp-server": "dist/index.js"
@@ -25,7 +34,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "22.19.17",
+    "@types/node": "25.0.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.1.5"
