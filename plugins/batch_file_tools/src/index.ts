@@ -29,7 +29,14 @@ server.registerTool(
     title: "Improved read tool which supports batching and different read modes",
     description: "Batch-read N files in one call. Mode per file: 'edit' = reading before an edit op (byte-exact + line-numbered so anchors match); 'info_compact' = DEFAULT for reading-to-understand (lossless whitespace collapse, saves tokens, not usable as edit anchor); 'info_verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers). Supports offset/limit per file. Line-number format in 'edit' mode: '{line}\\t{content}\\n' (tab-separated). Result: one text block per file — `<!-- Read N lines in file /path as 'mode' -->` hint on line 1, raw unescaped content below.",
     inputSchema: { param: ReadInput },
-    outputSchema: { result: ReadOutput }
+    outputSchema: { result: ReadOutput },
+    annotations: {
+      title: 'Improved read tool which supports batching and different read modes',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
   },
   async ({ param }) => {
   try {
@@ -37,7 +44,7 @@ server.registerTool(
       const result = await handleBatchRead(parsed);
       return { 
         content: formatReadContent(result),
-        //structuredContent: result
+        structuredContent: result
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -55,7 +62,14 @@ server.registerTool(
     title: "Improved edit tool which supports batching and different output modes",
     description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, append, delete, create, overwrite. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted by anchor line DESC — so every line number you provide references the ORIGINAL file, never a post-edit offset. Overlapping phase-1 ranges error both conflicting ops. (2) create. (3) content-addressed + file-wide ops (replace, replace_all, delete, append, overwrite) in the order you provided them. Output verbosity via `output: minimal|summary|diff` at root, file, or op level (op > file > root precedence). Default minimal = emit errored ops only. continueOnError + dryRun supported. Errors include a `nearest_anchor` verbatim window usable directly as the next `old` anchor when the needle isn't found. Result: one text block per file — multi-line `<!-- meta -->` header (file status + per-op status lines) followed by raw unescaped body (file-level diff, labeled per-op diff / `nearest_anchor` sub-blocks).",
     inputSchema: { param: EditInput },
-    outputSchema: { result: EditOutput }
+    outputSchema: { result: EditOutput },
+    annotations: {
+      title: 'Improved edit tool which supports batching and different output modes',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true
+    }
   },
   async ({ param }) => {
   try {
@@ -63,7 +77,7 @@ server.registerTool(
       const result = await handleBatchEdit(parsed);
       return { 
         content: formatEditContent(result),
-        //structuredContent: result
+        structuredContent: result
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

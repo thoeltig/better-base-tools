@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { FileErrorReason } from "../types.js";
 
 export interface ReadFileResult {
   readonly ok: true;
@@ -8,7 +9,7 @@ export interface ReadFileResult {
 
 export interface ReadFileError {
   readonly ok: false;
-  readonly reason: "not_absolute" | "not_found" | "is_directory" | "io_error";
+  readonly reason: FileErrorReason;
   readonly message: string;
 }
 
