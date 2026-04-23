@@ -102,7 +102,7 @@ const EDIT_TOOL = {
 
 const server = new Server(
   {
-    name: "batch-file-tools",
+    name: "batch-tools-mcp-server",
     version: "0.1.0",
   },
   {
@@ -157,6 +157,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`batch-file-tools fatal: ${message}\n`);
+  process.stderr.write(`batch-tools-mcp-server fatal: ${message}\n`);
   process.exit(1);
 });

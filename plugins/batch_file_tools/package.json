@@ -1,10 +1,10 @@
 {
-  "name": "batch-file-tools",
+  "name": "batch-tools-mcp-server",
   "version": "0.1.0",
   "description": "Batch-capable Read/Edit MCP server: fewer round-trips, explicit error hints.",
   "type": "module",
   "bin": {
-    "batch-file-tools": "dist/index.js"
+    "batch-tools-mcp-server": "dist/index.js"
   },
   "main": "dist/index.js",
   "files": [
