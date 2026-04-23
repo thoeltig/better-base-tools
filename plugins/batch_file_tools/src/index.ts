@@ -3,7 +3,7 @@ import { EditInput, EditOutput, ReadInput, ReadOutput } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
 // DO NOT set on either tool. Claude Code's harness surfaces
