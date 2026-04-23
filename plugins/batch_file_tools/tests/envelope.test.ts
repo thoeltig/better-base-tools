@@ -59,6 +59,7 @@ describe("formatReadContent", () => {
           lines: 0,
           returned_lines: 0,
           truncated: false,
+          content: '',
           error: { reason: "not_found", message: "no such file" },
         },
       ],

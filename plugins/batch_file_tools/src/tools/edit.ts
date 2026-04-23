@@ -15,7 +15,7 @@ import type {
 
 interface FileEditOptions {
   continueOnError: boolean;
-  dryRun: boolean;
+  dryRun: boolean | undefined;
   rootOutput: OutputMode;
   fileOutput: OutputMode;
 }

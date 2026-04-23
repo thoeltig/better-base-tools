@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { readFileUtf8 } from "./fs.js";
 import { joinLines, splitLines } from "./lines.js";
+import { FileErrorReason } from "../types.js";
 
 export interface EditBuffer {
   existed: boolean;
@@ -52,7 +53,7 @@ function detectDominantEnding(endings: readonly string[]): "\n" | "\r\n" {
 
 export class BufferLoadError extends Error {
   constructor(
-    public readonly reason: "is_directory" | "io_error" | "not_absolute",
+    public readonly reason: FileErrorReason,
     message: string,
   ) {
     super(message);

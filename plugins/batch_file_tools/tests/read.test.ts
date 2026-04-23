@@ -73,7 +73,7 @@ describe("handleBatchRead", () => {
       requests: [{ path: missing, mode: "edit" }],
     });
     const r = out.results[0]!;
-    expect(r.content).toBeUndefined();
+    expect(r.content).toBeDefined();
     expect(r.error?.reason).toBe("not_found");
     expect(r.lines).toBe(0);
   });

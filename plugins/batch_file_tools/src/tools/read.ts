@@ -7,7 +7,7 @@ export async function handleBatchRead(input: ReadInput): Promise<ReadOutput> {
   return { results };
 }
 
-async function readOne(req: ReadRequest): Promise<ReadResult> {
+async function readOne(req: ReadRequest): Promise<ReadResult> {  
   const file = await readFileUtf8(req.path);
   if (!file.ok) {
     return {
@@ -16,6 +16,7 @@ async function readOne(req: ReadRequest): Promise<ReadResult> {
       lines: 0,
       returned_lines: 0,
       truncated: false,
+      content: '',
       error: { reason: file.reason, message: file.message },
     };
   }

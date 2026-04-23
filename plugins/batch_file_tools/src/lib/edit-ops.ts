@@ -2,7 +2,7 @@ import { joinLines, splitLines } from "./lines.js";
 import { buildNearestAnchor, findNearestLine } from "./similarity.js";
 import type { NearestAnchorWindow } from "./similarity.js";
 import type { EditBuffer } from "./buffer.js";
-import type { EditOp, ErrorReason, OpResult } from "../types.js";
+import type { EditOp, EditErrorReason, OpResult } from "../types.js";
 
 export interface OpSuccess {
   ok: true;
@@ -11,7 +11,7 @@ export interface OpSuccess {
 
 export interface OpFailure {
   ok: false;
-  reason: ErrorReason;
+  reason: EditErrorReason;
   nextAction: string;
   nearestAnchor?: NearestAnchorWindow;
   matchLines?: number[];
