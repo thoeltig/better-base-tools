@@ -496,3 +496,96 @@ describe("batch across multiple files", () => {
     expect(await readText(b)).toBe("B\nB2\n");
   });
 });
+
+describe("line-ending auto-match", () => {
+  it("replace: LF needle matches CRLF file and preserves CRLF on splice", async () => {
+    const p = await fixture("crlf-replace.txt", "alpha\r\nbeta\r\ngamma\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "replace", old: "beta", new: "BETA" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("alpha\r\nBETA\r\ngamma\r\n");
+  });
+
+  it("replace: multi-line LF needle matches CRLF file", async () => {
+    const p = await fixture("crlf-multi.txt", "a\r\nb\r\nc\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "replace", old: "a\nb", new: "X\nY" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    // Replacement \n converts to file dominant CRLF.
+    expect(await readText(p)).toBe("X\r\nY\r\nc\r\n");
+  });
+
+  it("replace: CRLF needle matches LF file and preserves LF on splice", async () => {
+    const p = await fixture("lf-crlfneedle.txt", "a\nb\nc\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "replace", old: "a\r\nb", new: "X\r\nY" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("X\nY\nc\n");
+  });
+
+  it("replace_all: LF needle finds every CRLF occurrence", async () => {
+    const p = await fixture("crlf-all.txt", "x\r\nx\r\nx\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "replace_all", old: "x", new: "Y" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("Y\r\nY\r\nY\r\n");
+  });
+
+  it("delete: LF needle removes the matched CRLF segment", async () => {
+    const p = await fixture("crlf-del.txt", "keep\r\ndrop\r\nkeep\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "delete", old: "drop\n" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("keep\r\nkeep\r\n");
+  });
+
+  it("append: multi-line LF content into CRLF file converts to CRLF", async () => {
+    const p = await fixture("crlf-append.txt", "head\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "append", content: "x\ny\n" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("head\r\nx\r\ny\r\n");
+  });
+
+  it("insert_at_line: LF content into CRLF file converts to CRLF", async () => {
+    const p = await fixture("crlf-insert.txt", "A\r\nB\r\nC\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "insert_at_line", line: 2, content: "X\nY\n" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("A\r\nX\r\nY\r\nB\r\nC\r\n");
+  });
+
+  it("replace_range: LF content into CRLF file converts to CRLF", async () => {
+    const p = await fixture("crlf-range.txt", "1\r\n2\r\n3\r\n");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "replace_range", start: 2, end: 2, content: "X\nY\n" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("1\r\nX\r\nY\r\n3\r\n");
+  });
+
+  it("create: preserves whatever endings the model supplied (no auto-conversion)", async () => {
+    const p = tmpPath("create-mixed.txt");
+    const out = await runEdit({
+      path: p,
+      ops: [{ type: "create", content: "a\r\nb\nc\r\n" }],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(await readText(p)).toBe("a\r\nb\nc\r\n");
+  });
+});

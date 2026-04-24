@@ -1,4 +1,4 @@
-import { joinLines, splitLines } from "./lines.js";
+import { convertNewlines, findAllNormalized, joinLines, splitLines } from "./lines.js";
 import { buildNearestAnchor, findNearestLine } from "./similarity.js";
 import type { NearestAnchorWindow } from "./similarity.js";
 import type { EditBuffer } from "./buffer.js";
@@ -59,13 +59,13 @@ function applyReplace(
     };
   }
   const content = joinLines(buf.lines, buf.endings);
-  const matches = findAll(content, oldStr);
+  const matches = findAllNormalized(content, oldStr);
 
   if (matches.length === 0) {
     return buildNotFound(content, oldStr);
   }
   if (matches.length > 1) {
-    const matchLines = matches.map((off) => lineOfOffset(content, off));
+    const matchLines = matches.map((m) => lineOfOffset(content, m.start));
     return {
       ok: false,
       reason: "ambiguous",
@@ -74,10 +74,10 @@ function applyReplace(
     };
   }
 
-  const offset = matches[0]!;
-  const matchLine = lineOfOffset(content, offset);
-  const newContent =
-    content.slice(0, offset) + newStr + content.slice(offset + oldStr.length);
+  const { start, end } = matches[0]!;
+  const matchLine = lineOfOffset(content, start);
+  const newConverted = convertNewlines(newStr, buf.defaultEnding);
+  const newContent = content.slice(0, start) + newConverted + content.slice(end);
   rewriteBuffer(buf, newContent);
 
   const verb = opts.summaryVerb ?? "replaced";
@@ -90,7 +90,7 @@ function applyReplace(
   }
   return {
     ok: true,
-    summary: `replaced 1 occurrence at line ${matchLine} (${oldStr.length} chars → ${newStr.length} chars)`,
+    summary: `replaced 1 occurrence at line ${matchLine} (${end - start} chars → ${newConverted.length} chars)`,
   };
 }
 
@@ -107,19 +107,19 @@ function applyReplaceAll(
     };
   }
   const content = joinLines(buf.lines, buf.endings);
-  const matches = findAll(content, oldStr);
+  const matches = findAllNormalized(content, oldStr);
 
   if (matches.length === 0) {
     return buildNotFound(content, oldStr);
   }
 
-  const matchLines = matches.map((off) => lineOfOffset(content, off));
-  // Build new content by splicing each match with newStr, in reverse so offsets stay valid.
+  const matchLines = matches.map((m) => lineOfOffset(content, m.start));
+  const newConverted = convertNewlines(newStr, buf.defaultEnding);
+  // Splice each match in reverse so earlier offsets stay valid.
   let newContent = content;
   for (let i = matches.length - 1; i >= 0; i--) {
-    const off = matches[i]!;
-    newContent =
-      newContent.slice(0, off) + newStr + newContent.slice(off + oldStr.length);
+    const { start, end } = matches[i]!;
+    newContent = newContent.slice(0, start) + newConverted + newContent.slice(end);
   }
   rewriteBuffer(buf, newContent);
 
@@ -155,18 +155,6 @@ function rewriteBuffer(buf: EditBuffer, content: string): void {
   const split = splitLines(content);
   buf.lines = [...split.lines];
   buf.endings = [...split.endings];
-}
-
-function findAll(haystack: string, needle: string): number[] {
-  const out: number[] = [];
-  let idx = 0;
-  while (true) {
-    const found = haystack.indexOf(needle, idx);
-    if (found === -1) break;
-    out.push(found);
-    idx = found + needle.length;
-  }
-  return out;
 }
 
 function lineOfOffset(content: string, offset: number): number {
@@ -315,7 +303,11 @@ function parseInsertContent(
   buf: EditBuffer,
   content: string,
 ): { lines: string[]; endings: string[] } {
-  const split = splitLines(content);
+  // Auto-match: convert all line endings in the inserted block to the file's
+  // dominant ending so a file's CRLF/LF convention is preserved regardless of
+  // what the model supplied.
+  const normalized = convertNewlines(content, buf.defaultEnding);
+  const split = splitLines(normalized);
   const lines = [...split.lines];
   const endings = [...split.endings];
   if (lines.length > 0 && endings[endings.length - 1] === "") {
