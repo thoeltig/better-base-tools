@@ -45,14 +45,14 @@ describe("auth — read", () => {
 });
 
 describe("auth — edit", () => {
-  it("rejects create at a path outside allowed directories and does not write to disk", async () => {
+  it("rejects write at a path outside allowed directories and does not write to disk", async () => {
     const p = join(outsideDir, "pwn.txt");
     const out = await handleBatchEdit(
       {
         continueOnError: true,
         dryRun: false,
         output: "summary",
-        files: [{ path: p, ops: [{ type: "create", content: "owned\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
       [allowedDir],
     );
@@ -62,14 +62,14 @@ describe("auth — edit", () => {
     expect(await exists(p)).toBe(false);
   });
 
-  it("rejects create in a non-existent nested path outside allowed directories", async () => {
+  it("rejects write in a non-existent nested path outside allowed directories", async () => {
     const p = join(outsideDir, "missing", "nested", "pwn.txt");
     const out = await handleBatchEdit(
       {
         continueOnError: true,
         dryRun: false,
         output: "summary",
-        files: [{ path: p, ops: [{ type: "create", content: "owned\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
       [allowedDir],
     );
@@ -77,14 +77,14 @@ describe("auth — edit", () => {
     expect(await exists(p)).toBe(false);
   });
 
-  it("allows create in a non-existent nested path inside allowed directories", async () => {
+  it("allows write in a non-existent nested path inside allowed directories", async () => {
     const p = join(allowedDir, "deep", "nested", "ok.txt");
     const out = await handleBatchEdit(
       {
         continueOnError: true,
         dryRun: false,
         output: "summary",
-        files: [{ path: p, ops: [{ type: "create", content: "fine\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "fine\n" }] }],
       },
       [allowedDir],
     );
@@ -100,7 +100,7 @@ describe("auth — edit", () => {
         continueOnError: true,
         dryRun: false,
         output: "summary",
-        files: [{ path: p, ops: [{ type: "append", content: "y\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "append", content: "y\n" }] }],
       },
       [],
     );

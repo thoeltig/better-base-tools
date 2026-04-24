@@ -103,7 +103,7 @@ describe("formatEditContent", () => {
           path: "/a.ts",
           status: "ok",
           ops: [
-            { index: 0, status: "ok", type: "append", summary: "appended 1 line" },
+            { index: 0, status: "ok", type: "write", summary: "appended 1 line" },
             {
               index: 1,
               status: "ok",
@@ -115,7 +115,7 @@ describe("formatEditContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 0 (append): appended 1 line\n- op 1 (replace): replaced 1 occurrence at line 4\n-->`,
+      `<!--\nEdited '/a.ts'\n- op 0 (write): appended 1 line\n- op 1 (replace): replaced 1 occurrence at line 4\n-->`,
     );
   });
 
@@ -203,7 +203,7 @@ describe("formatEditContent", () => {
             {
               index: 0,
               status: "ok",
-              type: "append",
+              type: "write",
               diff: "@@ -2,0 +3,1 @@\n+c\n",
             },
           ],
@@ -211,7 +211,7 @@ describe("formatEditContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 0 (append)\n-->\n<!-- op 0 diff -->\n@@ -2,0 +3,1 @@\n+c`,
+      `<!--\nEdited '/a.ts'\n- op 0 (write)\n-->\n<!-- op 0 diff -->\n@@ -2,0 +3,1 @@\n+c`,
     );
   });
 

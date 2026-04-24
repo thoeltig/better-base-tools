@@ -26,12 +26,10 @@ export type OpApplyResult = OpSuccess | OpFailure;
  */
 export function applyOp(buf: EditBuffer, op: EditOp): OpApplyResult {
   switch (op.type) {
-    case "create":
-      return applyCreate(buf, op.content);
-    case "overwrite":
-      return applyOverwrite(buf, op.content);
-    case "append":
-      return applyAppend(buf, op.content);
+    case "write":
+      return op.mode === "append"
+        ? applyAppend(buf, op.content)
+        : applyOverwrite(buf, op.content);
     case "insert_at_line":
       return applyInsertAtLine(buf, op.line, op.content);
     case "replace_range":
@@ -40,8 +38,6 @@ export function applyOp(buf: EditBuffer, op: EditOp): OpApplyResult {
       return applyReplace(buf, op.old, op.new);
     case "replace_all":
       return applyReplaceAll(buf, op.old, op.new);
-    case "delete":
-      return applyReplace(buf, op.old, "", { summaryVerb: "deleted" });
   }
 }
 
@@ -49,7 +45,6 @@ function applyReplace(
   buf: EditBuffer,
   oldStr: string,
   newStr: string,
-  opts: { summaryVerb?: "replaced" | "deleted" } = {},
 ): OpApplyResult {
   if (!buf.exists) {
     return {
@@ -80,14 +75,6 @@ function applyReplace(
   const newContent = content.slice(0, start) + newConverted + content.slice(end);
   rewriteBuffer(buf, newContent);
 
-  const verb = opts.summaryVerb ?? "replaced";
-  if (verb === "deleted") {
-    const deletedLines = countNewlines(oldStr) + 1;
-    return {
-      ok: true,
-      summary: `deleted ${deletedLines} line${deletedLines === 1 ? "" : "s"} at line ${matchLine}`,
-    };
-  }
   return {
     ok: true,
     summary: `replaced 1 occurrence at line ${matchLine} (${end - start} chars → ${newConverted.length} chars)`,
@@ -165,12 +152,6 @@ function lineOfOffset(content: string, offset: number): number {
   return line;
 }
 
-function countNewlines(s: string): number {
-  let n = 0;
-  for (let i = 0; i < s.length; i++) if (s[i] === "\n") n++;
-  return n;
-}
-
 function preview(s: string): string {
   const oneLine = s.replace(/\r?\n/g, "\\n");
   if (oneLine.length <= 40) return oneLine;
@@ -186,20 +167,6 @@ function summarizeReplaceAll(matchLines: readonly number[]): string {
   return `replaced ${n} ${noun} (first: line ${matchLines[0]}, last: line ${matchLines[n - 1]})`;
 }
 
-function applyCreate(buf: EditBuffer, content: string): OpApplyResult {
-  if (buf.exists) {
-    return {
-      ok: false,
-      reason: "file_exists",
-      nextAction: "use 'overwrite' to replace an existing file",
-    };
-  }
-  replaceAllContent(buf, content);
-  buf.exists = true;
-  const bytes = Buffer.byteLength(content, "utf8");
-  return { ok: true, summary: `created file (${buf.lines.length} lines, ${bytes} bytes)` };
-}
-
 function applyOverwrite(buf: EditBuffer, content: string): OpApplyResult {
   const prevLines = buf.lines.length;
   const prevExisted = buf.exists;
@@ -207,7 +174,7 @@ function applyOverwrite(buf: EditBuffer, content: string): OpApplyResult {
   buf.exists = true;
   const summary = prevExisted
     ? `overwrote file (was ${prevLines} lines, now ${buf.lines.length} lines)`
-    : `created file via overwrite (${buf.lines.length} lines)`;
+    : `created file (${buf.lines.length} lines)`;
   return { ok: true, summary };
 }
 

@@ -42,44 +42,35 @@ async function readText(path: string): Promise<string> {
   return readFile(path, { encoding: "utf8" });
 }
 
-describe("create op", () => {
+describe("write op — create new file", () => {
   it("creates a new file with content", async () => {
     const p = tmpPath("new.txt");
-    const out = await runEdit({ path: p, ops: [{ type: "create", content: "hello\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "hello\n" }] });
     const op = out.results[0]!.ops[0]!;
     expect(op.status).toBe("ok");
     expect(op.summary).toMatch(/^created file/);
     expect(await readText(p)).toBe("hello\n");
   });
 
-  it("fails with file_exists when target exists", async () => {
-    const p = await fixture("exists.txt", "old\n");
-    const out = await runEdit({ path: p, ops: [{ type: "create", content: "new\n" }] });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("error");
-    expect(op.reason).toBe("file_exists");
-    expect(await readText(p)).toBe("old\n"); // unchanged
-  });
-
   it("auto-creates missing parent directories", async () => {
     const p = join(workDir, `${counter}-nested/sub/dir/file.txt`);
-    const out = await runEdit({ path: p, ops: [{ type: "create", content: "x\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(existsSync(p)).toBe(true);
   });
 
   it("empty content produces empty file", async () => {
     const p = tmpPath("empty.txt");
-    const out = await runEdit({ path: p, ops: [{ type: "create", content: "" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("");
   });
 });
 
-describe("overwrite op", () => {
+describe("write op — overwrite existing", () => {
   it("replaces existing content", async () => {
     const p = await fixture("ow.txt", "line1\nline2\nline3\n");
-    const out = await runEdit({ path: p, ops: [{ type: "overwrite", content: "only\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "only\n" }] });
     const op = out.results[0]!.ops[0]!;
     expect(op.status).toBe("ok");
     expect(op.summary).toMatch(/was 3 lines, now 1 line/);
@@ -88,30 +79,30 @@ describe("overwrite op", () => {
 
   it("creates file if missing", async () => {
     const p = tmpPath("ow_new.txt");
-    const out = await runEdit({ path: p, ops: [{ type: "overwrite", content: "x\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("x\n");
   });
 });
 
-describe("append op", () => {
+describe("write op — append", () => {
   it("appends to EOF of existing file", async () => {
     const p = await fixture("app.txt", "a\nb\n");
-    const out = await runEdit({ path: p, ops: [{ type: "append", content: "c\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "c\n" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\nb\nc\n");
   });
 
   it("creates file if missing", async () => {
     const p = tmpPath("app_new.txt");
-    const out = await runEdit({ path: p, ops: [{ type: "append", content: "hi\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "hi\n" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("hi\n");
   });
 
   it("appends literally — no implicit newline when file has no trailing newline", async () => {
     const p = await fixture("no_nl.txt", "abc");
-    const out = await runEdit({ path: p, ops: [{ type: "append", content: "def\n" }] });
+    const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "def\n" }] });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("abcdef\n");
   });
@@ -220,28 +211,13 @@ describe("phased execution order", () => {
   it("phase-2 content ops see post-phase-1 buffer and run in input order", async () => {
     const p = await fixture("phase2.txt", "A\nB\nC\n");
     const ops: EditOp[] = [
-      { type: "append", content: "TAIL\n" },
+      { type: "write", mode: "append", content: "TAIL\n" },
       { type: "insert_at_line", line: 1, content: "HEAD\n" }, // phase 1
       { type: "replace", old: "B", new: "BEE" },
     ];
     const out = await runEdit({ path: p, ops });
     expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
     expect(await readText(p)).toBe("HEAD\nA\nBEE\nC\nTAIL\n");
-  });
-
-  it("create runs before overwrite even when input order puts overwrite first", async () => {
-    const p = tmpPath("create-overwrite.txt");
-    const out = await runEdit({
-      path: p,
-      continueOnError: true,
-      ops: [
-        { type: "overwrite", content: "from-overwrite\n" },
-        { type: "create", content: "from-create\n" },
-      ],
-    });
-    // create runs first on non-existing file (ok), then overwrite replaces content (ok).
-    expect(out.results[0]!.ops.every((o) => o.status === "ok")).toBe(true);
-    expect(await readText(p)).toBe("from-overwrite\n");
   });
 
   it("overlapping replace_range ops: both error with invalid_range", async () => {
@@ -312,7 +288,7 @@ describe("phased execution order", () => {
     const ops: EditOp[] = [
       { type: "insert_at_line", line: 1, content: "X\n" }, // phase 1, line 1
       { type: "insert_at_line", line: 99, content: "Y\n" }, // phase 1, line 99 — fails first (desc sort)
-      { type: "append", content: "Z\n" }, // phase 2, skipped
+      { type: "write", mode: "append", content: "Z\n" }, // phase 2, skipped
     ];
     const out = await runEdit({ path: p, ops });
     const ops_out = out.results[0]!.ops;
@@ -328,7 +304,7 @@ describe("phased execution order", () => {
   it("phase-2 ops apply in input order against post-previous state", async () => {
     const p = await fixture("p2-seq.txt", "hello\n");
     const ops: EditOp[] = [
-      { type: "append", content: "world\n" },
+      { type: "write", mode: "append", content: "world\n" },
       { type: "replace", old: "world", new: "WORLD" },
     ];
     const out = await runEdit({ path: p, ops });
@@ -454,16 +430,16 @@ describe("replace_all op", () => {
   });
 });
 
-describe("delete op", () => {
+describe("delete via replace(new='')", () => {
   it("deletes a unique anchor", async () => {
     const p = await fixture("del.txt", "keep\nDROP\nkeep\n");
     const out = await runEdit({
       path: p,
-      ops: [{ type: "delete", old: "DROP\n" }],
+      ops: [{ type: "replace", old: "DROP\n", new: "" }],
     });
     const op = out.results[0]!.ops[0]!;
     expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/deleted/);
+    expect(op.summary).toMatch(/replaced 1 occurrence/);
     expect(await readText(p)).toBe("keep\nkeep\n");
   });
 
@@ -471,7 +447,7 @@ describe("delete op", () => {
     const p = await fixture("del_amb.txt", "X\nY\nX\n");
     const out = await runEdit({
       path: p,
-      ops: [{ type: "delete", old: "X" }],
+      ops: [{ type: "replace", old: "X", new: "" }],
     });
     expect(out.results[0]!.ops[0]!.reason).toBe("ambiguous");
     expect(await readText(p)).toBe("X\nY\nX\n");
@@ -487,8 +463,8 @@ describe("batch across multiple files", () => {
       dryRun: false,
       output: "summary",
       files: [
-        { path: a, ops: [{ type: "append", content: "A2\n" }] },
-        { path: b, ops: [{ type: "append", content: "B2\n" }] },
+        { path: a, ops: [{ type: "write", mode: "append", content: "A2\n" }] },
+        { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] },
       ],
     }, [workDir]);
     expect(out.results).toHaveLength(2);
@@ -539,11 +515,11 @@ describe("line-ending auto-match", () => {
     expect(await readText(p)).toBe("Y\r\nY\r\nY\r\n");
   });
 
-  it("delete: LF needle removes the matched CRLF segment", async () => {
+  it("delete via replace: LF needle removes the matched CRLF segment", async () => {
     const p = await fixture("crlf-del.txt", "keep\r\ndrop\r\nkeep\r\n");
     const out = await runEdit({
       path: p,
-      ops: [{ type: "delete", old: "drop\n" }],
+      ops: [{ type: "replace", old: "drop\n", new: "" }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("keep\r\nkeep\r\n");
@@ -553,7 +529,7 @@ describe("line-ending auto-match", () => {
     const p = await fixture("crlf-append.txt", "head\r\n");
     const out = await runEdit({
       path: p,
-      ops: [{ type: "append", content: "x\ny\n" }],
+      ops: [{ type: "write", mode: "append", content: "x\ny\n" }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("head\r\nx\r\ny\r\n");
@@ -579,11 +555,11 @@ describe("line-ending auto-match", () => {
     expect(await readText(p)).toBe("1\r\nX\r\nY\r\n3\r\n");
   });
 
-  it("create: preserves whatever endings the model supplied (no auto-conversion)", async () => {
+  it("write(overwrite) new file: preserves whatever endings the model supplied (no auto-conversion)", async () => {
     const p = tmpPath("create-mixed.txt");
     const out = await runEdit({
       path: p,
-      ops: [{ type: "create", content: "a\r\nb\nc\r\n" }],
+      ops: [{ type: "write", mode: "overwrite", content: "a\r\nb\nc\r\n" }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\r\nb\nc\r\n");

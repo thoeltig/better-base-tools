@@ -78,10 +78,7 @@ export const OpType = z.enum([
     "replace_all",
     "insert_at_line",
     "replace_range",
-    "append",
-    "delete",
-    "create",
-    "overwrite"
+    "write"
   ]);
 export type OpType = z.infer<typeof OpType>;
 
@@ -137,35 +134,12 @@ const OpReplaceRange = z
   })
   .strict();
 
-// TODO: Maybe merge append, create and overwrite into one. File level op => Content + enum 'Append' or 'Overwrite'; folder and fiel create happens automatically
-const OpAppend = z.object({
-    type: z.literal("append"),
-    content: z.string().min(1)
-        .describe("Text to append"),
-    output: OutputMode.optional(),
-  })
-  .strict();
-
-// TODO: Maybe remove replace and replace_all with empty content handle this
-const OpDelete = z.object({
-    type: z.literal("delete"),
-    old: z.string().min(1)
-      .describe("Text to find and delete"),
-    output: OutputMode.optional(),
-  })
-  .strict();
-
-const OpCreate = z.object({
-    type: z.literal("create"),
+const OpWrite = z.object({
+    type: z.literal("write"),
+    mode: z.enum(["append", "overwrite"])
+      .describe("'append' adds content to EOF; 'overwrite' replaces full file content. Both auto-create the file and any missing parent directories."),
     content: z.string()
-      .describe("Text to create file with"),
-    output: OutputMode.optional(),
-  }).strict();
-
-const OpOverwrite = z.object({
-    type: z.literal("overwrite"),
-    content: z.string()
-      .describe("Text to overwrite file with; use empty to delete all text"),
+      .describe("Text to write; empty allowed only in overwrite mode (truncates to empty file)"),
     output: OutputMode.optional(),
   })
   .strict();
@@ -175,10 +149,7 @@ export const EditOp = z.discriminatedUnion("type", [
     OpReplaceAll,
     OpInsertAtLine,
     OpReplaceRange,
-    OpAppend,
-    OpDelete,
-    OpCreate,
-    OpOverwrite,
+    OpWrite,
   ]);
 export type EditOp = z.infer<typeof EditOp>;
 
@@ -188,7 +159,7 @@ export const EditFile = z.object({
     continueOnError: z.boolean().optional(),
     output: OutputMode.optional(),
     ops: z.array(EditOp).min(1)
-      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | append {content} | delete {old} | create {content} | overwrite {content}. Each op accepts optional `output: minimal|summary|diff`."),
+      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts optional `output: minimal|summary|diff`."),
   })
   .strict();
 export type EditFile = z.infer<typeof EditFile>;
@@ -209,7 +180,6 @@ export const EditErrorReason = z.enum([
     "not_found",
     "ambiguous",
     "file_missing",
-    "file_exists",
     "invalid_range",
     "io_error",
   ]);

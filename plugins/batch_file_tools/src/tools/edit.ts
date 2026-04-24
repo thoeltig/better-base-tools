@@ -87,21 +87,14 @@ async function editOneFile(
 
   const indexed: IndexedOp[] = file.ops.map((op, inputIndex) => ({ op, inputIndex }));
   const phase1 = indexed.filter((x) => isPhase1(x.op));
-  const phase2Create = indexed.filter((x) => x.op.type === "create");
-  const phase2Other = indexed.filter(
-    (x) => !isPhase1(x.op) && x.op.type !== "create",
-  );
+  const phase2 = indexed.filter((x) => !isPhase1(x.op));
 
   const overlapErrors = detectPhase1Overlaps(phase1);
 
   const sortedPhase1 = [...phase1].sort(
     (a, b) => anchorLine(b.op) - anchorLine(a.op),
   );
-  const executionOrder: IndexedOp[] = [
-    ...sortedPhase1,
-    ...phase2Create,
-    ...phase2Other,
-  ];
+  const executionOrder: IndexedOp[] = [...sortedPhase1, ...phase2];
 
   const decoratedByIndex = new Map<number, DecoratedOp>();
   let abortedOps = false;

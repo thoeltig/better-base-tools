@@ -48,9 +48,9 @@ describe("continueOnError — op level (file-level flag)", () => {
           path: p,
           continueOnError: true,
           ops: [
-            { type: "append", content: "D\n" }, // ok
+            { type: "write", mode: "append", content: "D\n" }, // ok
             { type: "replace", old: "ZZZ_no_match", new: "x" }, // error
-            { type: "append", content: "E\n" }, // ok — should still run
+            { type: "write", mode: "append", content: "E\n" }, // ok — should still run
           ],
         },
       ],
@@ -74,7 +74,7 @@ describe("continueOnError — op level (file-level flag)", () => {
           continueOnError: false,
           ops: [
             { type: "replace", old: "ZZZ", new: "x" }, // error
-            { type: "append", content: "B\n" }, // skipped
+            { type: "write", mode: "append", content: "B\n" }, // skipped
           ],
         },
       ],
@@ -96,7 +96,7 @@ describe("continueOnError — op level (file-level flag)", () => {
           continueOnError: false, // this wins for op-level
           ops: [
             { type: "replace", old: "ZZ", new: "x" }, // error
-            { type: "append", content: "B\n" }, // should be skipped
+            { type: "write", mode: "append", content: "B\n" }, // should be skipped
           ],
         },
       ],
@@ -115,7 +115,7 @@ describe("continueOnError — file level (top-level flag)", () => {
       output: "summary",
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
-        { path: b, ops: [{ type: "append", content: "B2\n" }] }, // should be skipped
+        { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] }, // should be skipped
       ],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("error");
@@ -132,7 +132,7 @@ describe("continueOnError — file level (top-level flag)", () => {
       output: "summary",
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
-        { path: b, ops: [{ type: "append", content: "B2\n" }] }, // should run
+        { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] }, // should run
       ],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("error");
@@ -148,19 +148,19 @@ describe("dryRun", () => {
       continueOnError: false,
       dryRun: true,
       output: "summary",
-      files: [{ path: p, ops: [{ type: "append", content: "world\n" }] }],
+      files: [{ path: p, ops: [{ type: "write", mode: "append", content: "world\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("hello\n"); // unchanged
   });
 
-  it("dryRun + create does NOT create the file on disk", async () => {
+  it("dryRun + write(overwrite) does NOT create the file on disk", async () => {
     const p = tmpPath("dry_new.txt");
     const out = await edit({
       continueOnError: false,
       dryRun: true,
       output: "summary",
-      files: [{ path: p, ops: [{ type: "create", content: "x\n" }] }],
+      files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
     const exists = await readFile(p).then(() => true).catch(() => false);
@@ -176,7 +176,7 @@ describe("output modes", () => {
         continueOnError: false,
         dryRun: false,
         output: "minimal",
-        files: [{ path: p, ops: [{ type: "append", content: "c\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "append", content: "c\n" }] }],
       });
       const fr = out.results[0]!;
       expect(fr.status).toBe("ok");
@@ -195,7 +195,7 @@ describe("output modes", () => {
             path: p,
             continueOnError: true,
             ops: [
-              { type: "append", content: "c\n" }, // ok
+              { type: "write", mode: "append", content: "c\n" }, // ok
               { type: "replace", old: "ZZZ", new: "x" }, // error
             ],
           },
@@ -241,7 +241,7 @@ describe("output modes", () => {
           {
             path: p,
             ops: [
-              { type: "append", content: "c\n" },
+              { type: "write", mode: "append", content: "c\n" },
               { type: "replace", old: "a", new: "A" },
             ],
           },
@@ -282,7 +282,7 @@ describe("output modes", () => {
           {
             path: p,
             ops: [
-              { type: "append", content: "c\n", output: "diff" },
+              { type: "write", mode: "append", content: "c\n", output: "diff" },
               { type: "replace", old: "a", new: "A" }, // inherits summary
             ],
           },
@@ -301,7 +301,7 @@ describe("output modes", () => {
         continueOnError: false,
         dryRun: true,
         output: "diff",
-        files: [{ path: p, ops: [{ type: "append", content: "b\n" }] }],
+        files: [{ path: p, ops: [{ type: "write", mode: "append", content: "b\n" }] }],
       });
       expect(out.results[0]!.diff).toContain("+b");
       expect(await readText(p)).toBe("a\n");
@@ -319,7 +319,7 @@ describe("output modes", () => {
           {
             path: p,
             output: "minimal",
-            ops: [{ type: "append", content: "b\n", output: "summary" }],
+            ops: [{ type: "write", mode: "append", content: "b\n", output: "summary" }],
           },
         ],
       });
@@ -338,7 +338,7 @@ describe("output modes", () => {
           {
             path: p,
             output: "summary",
-            ops: [{ type: "append", content: "b\n" }],
+            ops: [{ type: "write", mode: "append", content: "b\n" }],
           },
         ],
       });
