@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-24 | 12 | 50 | 4.2x | symlink/allowed-path guard hardening + path-utils simplification (session 5) |
 | 2026-04-23 | 2 | 7 | 3.5x | description refresh + redundancy cleanup (session 4) |
 | 2026-04-22 | 4 | 14 | 3.5x | diff rewrite + live compound verify (session 3) |
 | 2026-04-22 | 7 | 18 | 2.6x | structuredContent drop + v1.1 smoke (session 2) |
@@ -16,6 +17,55 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
+
+### 2026-04-24 (session 5) — symlink/allowed-path guard hardening
+
+**Starting state:** First draft of the staged auth/symlink-normalization work after the rewrite to the `McpServer` class. User observed the MCP still worked without `--args`-supplied roots and suspected a guard hole. Real cause: Claude Code advertises the `roots` capability and returns the workspace from `roots/list`, so `validRootDirectories` was getting populated by the harness — guard was working as designed, just invisible. Confirmed via `claude-code-guide` agent + the existing stderr log line at `index.ts:108-114`.
+
+**Bug found while reviewing the diff:** `loadBuffer` → `readFileUtf8` → `realpath(file)` throws `ENOENT` for non-existent targets, short-circuits the allow-list check, and returns an empty buffer with `existed: false`. `create`/`overwrite` then writes via `writeBuffer(file.path, ...)` *without ever validating the path*. A `create` op at any absolute path outside the allowed roots would land on disk. New auth test (create at `<outsideDir>/missing/nested/pwn.txt` with only `<allowedDir>` allowed) reproduces it cleanly.
+
+**Changes shipped:**
+- **`path-utils.ts` 202 → 47 lines.** Dropped the copy-pasted reference-server `normalizePath`/`convertToWindowsPath` (~150 lines of WSL/UNC/Unix-style-Windows-path logic). Node's `path.resolve` + `fs.realpath` already give canonical Windows paths (drive-letter casing, `/`→`\`, UNC). Path-relative containment check uses `path.win32.relative` which is case-insensitive on the drive letter — sufficient for NTFS. Switched `console.error` → `process.stderr.write` for consistency.
+- **`fs.ts`:** early `isAbsolute` check (so `not_absolute` is reachable — was masked by `realpath` ENOENT), empty `allowedDirectories` rejects everything (defense in depth), extracted `isPathAllowed` + `mapFsError`, removed the dead `isAbsolute(normalizedRealPath)` branch (post-`realpath` is always absolute). New `resolveForWrite` walks up to the nearest existing ancestor with `realpath`, joins missing segments, runs the allow-list check on the synthesized real path — closes the create-bypass.
+- **`buffer.ts`:** `loadBuffer` calls `resolveForWrite` once and stores the real path on the buffer; `writeBuffer(buf)` (no second arg) uses it. Eliminates the unvalidated-path write.
+- **`edit.ts`:** `buildFileLoadErrorResult` surfaces `BufferLoadError.reason` in `file.error.reason` (was hardcoded `io_error`, masking `not_authorized`). Per-op `reason` stays `io_error` — narrower op-level enum.
+- **Tests:** added `tests/auth.test.ts` (read outside, create outside existent, create outside non-existent nested, create inside non-existent nested, empty allowedDirectories). Threaded `[workDir]` through `read.test.ts`/`edit.test.ts`/`edit-control.test.ts` via per-file helpers. `realpath`'d `workDir` in `beforeAll` of all three (see finding below). Updated relative-path test: `io_error` → `not_absolute` (the more accurate reason now propagates).
+
+130/130 tests green. Typecheck + build clean.
+
+**Findings — Windows / harness behavior:**
+- **Claude Code provides MCP roots.** When the client capability includes `roots`, the harness responds to `roots/list` with the current workspace as a `file://` URI. An MCP that gates on `validRootDirectories || allowedDirectoriesFromArgs` will *always* be authorized for the workspace dir even with zero `--args`. Worth a one-liner in the README so the next implementer doesn't suspect a bug.
+- **8.3 short-name vs long-name in `realpath`.** On Windows with non-ASCII in the user dir (`ThoreHöltig`), `mkdtemp` returns the 8.3 short name (`THOREH~1`) and `realpath` of the *directory* preserves it — but `realpath` of a *file* inside that dir expands to the long name. So `allowed=[workDir]` (short) failed containment vs `realpath(file)` (long) and every test silently returned `not_authorized` with empty content. Runtime is unaffected because `getAllowedDirectoriesFromArgs`/`getValidRootDirectories` already realpath everything. Tests must do the same. Repro is sensitive to username (ASCII-only usernames don't trigger). Added `await realpath(...)` to the three test setups.
+- **`path.win32.relative` containment check** is the right primitive — case-insensitive on drive letter, returns `..`-prefixed strings for outside-of paths. No need for explicit lowercase normalization.
+
+**Findings — tool ergonomics (`batch_edit` / `batch_read`):**
+- **CRLF anchor mismatch is invisible.** `replace` op on `edit.ts` (CRLF on disk) with `old` containing `\n` line endings failed three times with `not_found`. The returned `nearest_anchor.content` *displays* identical to the `old` I supplied — no visual indicator the difference is `\r\n` vs `\n` line endings. Spent 1 retry diagnosing. Workaround: line-addressed `replace_range` ignores ending bytes. **Suggestion:** when `nearest_anchor` byte-differs from `old` only by line endings, surface a `line_endings: "crlf-vs-lf"` discriminator in the error hint, or auto-retry with normalized endings, or call it out in the tool description.
+- **`Write` tool can't follow `batch_read`.** Built-in `Write` requires a prior built-in `Read` of the file; it doesn't recognize `batch_read` as satisfying that. Tried to overwrite `path-utils.ts` after `batch_read`-ing it and got an error. Workaround: use `batch_edit` `overwrite` op for full rewrites of existing files, reserve `Write` for new files. **Suggestion:** add a short note to the dev-environment section of `CLAUDE.md` so this doesn't surprise future me.
+- **Per-op vs file-level error-reason enums diverge.** `OpResult.reason` is a narrower set than `FileError.reason` (no `not_absolute`/`not_authorized`/`is_directory`). Hit a `TS2322` when trying to propagate `BufferLoadError.reason` into per-op results. Resolution: per-op stays `io_error`, file-level carries the precise reason. Acceptable, but the type-level narrowness wasn't obvious from the schemas — worth a comment in `types.ts` or a unified enum in v2.
+- **Line-addressed `replace_range` was the right tool for bulk header rewrites.** When the anchor is dozens of lines and shape is well-known (top-of-file imports), `replace_range start..end` with new content is more reliable than `replace`. Maybe nudge the description to recommend it for >5-line replacements.
+
+**Tool calls (rough):**
+- MCP: ~5 × `batch_read` (covering ~16 file reads), ~7 × `batch_edit` (covering ~30 ops across ~10 files), 1 × `Write` (new `auth.test.ts`) = **~12 calls**.
+- Native equiv: ~16 × `Read` + ~30 × `Edit` + 1 × `Write` = **~47 calls**.
+- Reduction: **~4x**. Lower than session 1 because debug iteration on the CRLF mismatch and the realpath gotcha cost extra round-trips.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `overwrite` | 4 | yes | Full-file rewrite of `path-utils.ts`, `fs.ts`, `buffer.ts` (LF), and one helper extraction |
+| `replace` | ~10 | yes | Failed 3 × on CRLF file (see finding); succeeded for LF test files |
+| `replace_range` | ~5 | yes | Recovery path for the CRLF failures + targeted import header rewrite |
+| `replace_all` | 2 | yes | `await handleBatchRead(` → `await read(` and `await handleBatchEdit(` → `await edit(` in test files |
+| `create` | 0 | n/a | Used built-in `Write` for new `auth.test.ts` (no prior `Read` constraint for new files) |
+
+**Open follow-ups:**
+- README/CLAUDE.md note: "Claude Code provides MCP roots — server is authorized for the workspace by default; pass `--args` for explicit narrowing."
+- ~~Tool description: hint that line-ending mismatch can cause `replace` to fail with a visually-identical `nearest_anchor`.~~ → **Fixed same session.** Implemented LF/CRLF auto-match in `lines.ts` (`findAllNormalized` searches in LF space but returns original byte spans, so splices stay surgical in mixed-ending files). `replace`/`replace_all`/`delete` now match `\n` and `\r\n` interchangeably. Replacement content for those ops + `append`/`insert_at_line`/`replace_range` is converted to the file's dominant ending so inserts don't mix endings. `create`/`overwrite` left byte-exact — they define the file. 9 new cross-ending tests in `edit.test.ts`; 139/139 green.
+- Consider unifying `OpResult.reason` and `FileError.reason` enums for v2.
+- Optional: a `batch_write` tool (or extend `Write` doc) covering the `batch_read`-then-rewrite flow without bouncing through `batch_edit overwrite`.
+
+---
 
 ### 2026-04-23 (session 4) — description refresh + redundancy cleanup
 
