@@ -7,7 +7,7 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/a.txt",
-          mode_applied: "info_compact",
+          mode_applied: "compact",
           lines: 3,
           returned_lines: 3,
           truncated: false,
@@ -15,7 +15,7 @@ describe("formatReadContent", () => {
         },
         {
           path: "/b.txt",
-          mode_applied: "edit",
+          mode_applied: "verbatim_numbered",
           lines: 1,
           returned_lines: 1,
           truncated: false,
@@ -25,10 +25,10 @@ describe("formatReadContent", () => {
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read 3 lines in file '/a.txt' as 'info_compact' -->\nline1\nline2\nline3\n`,
+      `<!-- Read 3 lines in file '/a.txt' as 'compact' -->\nline1\nline2\nline3\n`,
     );
     expect(blocks[1]!.text).toBe(
-      `<!-- Read 1 line in file '/b.txt' as 'edit' -->\n1\tonly\n`,
+      `<!-- Read 1 line in file '/b.txt' as 'verbatim_numbered' -->\n1\tonly\n`,
     );
   });
 
@@ -37,7 +37,7 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/a.txt",
-          mode_applied: "edit",
+          mode_applied: "verbatim_numbered",
           lines: 10,
           returned_lines: 2,
           truncated: true,
@@ -46,7 +46,7 @@ describe("formatReadContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!-- Read 2 of 10 lines in file '/a.txt' as 'edit' -->\n3\tc\n4\td\n`,
+      `<!-- Read 2 of 10 lines in file '/a.txt' as 'verbatim_numbered' -->\n3\tc\n4\td\n`,
     );
   });
 
@@ -55,7 +55,7 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/missing.txt",
-          mode_applied: "edit",
+          mode_applied: "verbatim_numbered",
           lines: 0,
           returned_lines: 0,
           truncated: false,
@@ -65,7 +65,7 @@ describe("formatReadContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!-- 'not_found' error reading file '/missing.txt' as 'edit': no such file -->\n`,
+      `<!-- 'not_found' error reading file '/missing.txt' as 'verbatim_numbered': no such file -->\n`,
     );
   });
 
@@ -74,7 +74,7 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/a.txt",
-          mode_applied: "info_verbatim",
+          mode_applied: "verbatim",
           lines: 2,
           returned_lines: 2,
           truncated: false,

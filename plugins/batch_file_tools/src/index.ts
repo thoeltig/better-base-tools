@@ -35,7 +35,7 @@ server.registerTool(
   "batch_read",
   {
     title: "Improved read tool which supports batching and different read modes",
-    description: "Batch-read N files in one call. Mode per file: 'edit' = reading before an edit op (byte-exact + line-numbered so anchors match); 'info_compact' = DEFAULT for reading-to-understand (lossy: collapses multi-whitespace runs, strips leading indent on non-indent-sensitive langs, minifies .json, collapses blank-line runs; not usable as edit anchor); 'info_verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers). Supports offset/limit per file. Line-number format in 'edit' mode: '{line}\\t{content}\\n' (tab-separated). Result: one text block per file — `<!-- Read N lines in file /path as 'mode' -->` hint on line 1, raw unescaped content below.",
+    description: "Batch-read N files in one call. Mode per file: 'compact' = DEFAULT for reading-to-understand (lossy: collapses multi-whitespace runs, strips leading indent on non-indent-sensitive langs, minifies .json, collapses blank-line runs; not usable as edit anchor); 'verbatim' = reading-to-understand when on-disk formatting matters (byte-exact, no line numbers); 'verbatim_numbered' = byte-exact + line-numbered so anchors match — required before edit ops that use line anchors (insert_at_line / replace_range). Supports offset/limit per file. Line-number format in 'verbatim_numbered' mode: '{line}\\t{content}\\n' (tab-separated). Result: one text block per file — `<!-- Read N lines in file /path as 'mode' -->` hint on line 1, raw unescaped content below.",
     inputSchema: { param: ReadInput },
     annotations: {
       title: 'Improved read tool which supports batching and different read modes',

@@ -28,11 +28,11 @@ async function read(input: ReadInput) {
 describe("handleBatchRead", () => {
   it("reads a single file in edit mode with line numbers", async () => {
     const p = await fixture("a.txt", "one\ntwo\nthree\n");
-    const out = await read({ requests: [{ path: p, mode: "edit" }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim_numbered" }] });
     expect(out.results).toHaveLength(1);
     const r = out.results[0]!;
     expect(r.path).toBe(p);
-    expect(r.mode_applied).toBe("edit");
+    expect(r.mode_applied).toBe("verbatim_numbered");
     expect(r.lines).toBe(3);
     expect(r.returned_lines).toBe(3);
     expect(r.truncated).toBe(false);
@@ -45,8 +45,8 @@ describe("handleBatchRead", () => {
     const b = await fixture("multi_b.txt", "B1\n");
     const out = await read({
       requests: [
-        { path: a, mode: "info_verbatim" },
-        { path: b, mode: "edit" },
+        { path: a, mode: "verbatim" },
+        { path: b, mode: "verbatim_numbered" },
       ],
     });
     expect(out.results.map((r) => r.path)).toEqual([a, b]);
@@ -56,14 +56,14 @@ describe("handleBatchRead", () => {
 
   it("raw mode preserves CRLF byte-exactly", async () => {
     const p = await fixture("crlf.txt", "x\r\ny\r\n");
-    const out = await read({ requests: [{ path: p, mode: "info_verbatim" }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim" }] });
     expect(out.results[0]!.content).toBe("x\r\ny\r\n");
   });
 
   it("offset and limit respected; truncated flag set correctly", async () => {
     const p = await fixture("long.txt", "L1\nL2\nL3\nL4\nL5\n");
     const out = await read({
-      requests: [{ path: p, mode: "edit", offset: 2, limit: 2 }],
+      requests: [{ path: p, mode: "verbatim_numbered", offset: 2, limit: 2 }],
     });
     const r = out.results[0]!;
     expect(r.content).toBe("2\tL2\n3\tL3\n");
@@ -75,7 +75,7 @@ describe("handleBatchRead", () => {
   it("missing file returns an error entry, not a throw", async () => {
     const missing = join(workDir, "does_not_exist.txt");
     const out = await read({
-      requests: [{ path: missing, mode: "edit" }],
+      requests: [{ path: missing, mode: "verbatim_numbered" }],
     });
     const r = out.results[0]!;
     expect(r.content).toBeDefined();
@@ -88,8 +88,8 @@ describe("handleBatchRead", () => {
     const missing = join(workDir, "nope.txt");
     const out = await read({
       requests: [
-        { path: missing, mode: "edit" },
-        { path: ok, mode: "edit" },
+        { path: missing, mode: "verbatim_numbered" },
+        { path: ok, mode: "verbatim_numbered" },
       ],
     });
     expect(out.results).toHaveLength(2);
@@ -100,10 +100,10 @@ describe("handleBatchRead", () => {
   it("compact mode collapses blank-line runs and strips trailing whitespace", async () => {
     const p = await fixture("compact.txt", "a   \n\n\n\nb\n");
     const out = await read({
-      requests: [{ path: p, mode: "info_compact" }],
+      requests: [{ path: p, mode: "compact" }],
     });
     const r = out.results[0]!;
-    expect(r.mode_applied).toBe("info_compact");
+    expect(r.mode_applied).toBe("compact");
     expect(r.content).toBe("a\n\nb\n");
     expect(r.lines).toBe(5);
     expect(r.returned_lines).toBe(3);
@@ -111,7 +111,7 @@ describe("handleBatchRead", () => {
 
   it("rejects non-absolute paths", async () => {
     const out = await read({
-      requests: [{ path: "relative/path.txt", mode: "edit" }],
+      requests: [{ path: "relative/path.txt", mode: "verbatim_numbered" }],
     });
     expect(out.results[0]!.error?.reason).toBe("not_absolute");
   });

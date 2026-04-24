@@ -65,9 +65,9 @@ export function formatForRead(input: FormatInput): FormatOutput {
 
   let content: string;
   let emittedLines = returnedLines;
-  if (input.mode === "edit") {
+  if (input.mode === "verbatim_numbered") {
     content = formatEdit(split.lines, clampedStart, clampedEnd);
-  } else if (input.mode === "info_compact") {
+  } else if (input.mode === "compact") {
     const compact = formatCompact(
       split.lines,
       split.endings,
@@ -120,7 +120,7 @@ function formatRaw(
 }
 
 /**
- * Compact for informational reading. Lossy — if byte-exact output matters, use info_verbatim.
+ * Compact for informational reading. Lossy — if byte-exact output matters, use verbatim mode.
  *   1. JSON minify (.json files only, whole-slice): pretty -> compact; falls through on parse error.
  *   2. Strip trailing whitespace on each line.
  *   3. Strip leading whitespace on each line — skipped on indent-sensitive languages (Python, YAML, Haskell, F#, Nim, CoffeeScript, Pug, Sass, Makefile).

@@ -31,7 +31,7 @@ describe("auth — read", () => {
   it("rejects reads of files outside allowed directories", async () => {
     const p = join(outsideDir, "secret.txt");
     await writeFile(p, "secret\n");
-    const out = await handleBatchRead({ requests: [{ path: p, mode: "edit" }] }, [allowedDir]);
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim_numbered" }] }, [allowedDir]);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
     expect(out.results[0]!.content).toBe("");
   });
@@ -39,7 +39,7 @@ describe("auth — read", () => {
   it("rejects everything when allowedDirectories is empty", async () => {
     const p = join(allowedDir, "anything.txt");
     await writeFile(p, "x\n");
-    const out = await handleBatchRead({ requests: [{ path: p, mode: "edit" }] }, []);
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim_numbered" }] }, []);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
 });

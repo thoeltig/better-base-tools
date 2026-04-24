@@ -1,19 +1,11 @@
 import { z } from "zod";
 
-/**
- * v1 uses a flat `mode` enum with an `info_` prefix as a stepping stone to v2.
- * v2 refactor path: formally split into
- *   mode: "edit" | "info"
- *   strategy: "verbatim" | "compact" | "optimized"
- * where mode=edit forces strategy=verbatim.
- */
-
 export const ReadMode = z.enum([
-    "edit",
-    "info_compact",
-    "info_verbatim"
+    "compact",
+    "verbatim",
+    "verbatim_numbered"
   ])
-  .default("info_compact");
+  .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
 
 export const FileErrorReason = z.enum([
@@ -36,7 +28,7 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path"),
     mode: ReadMode
-      .describe("edit=pre-edit reads (line-numbered, byte-exact). info_compact=default for info reads (lossy: multi-ws collapse, leading-indent strip on non-indent-sensitive langs, JSON minify, blank-run collapse). info_verbatim=info reads when byte-exact on-disk formatting matters (no line numbers)."),
+      .describe("compact=DEFAULT for reading-to-understand (lossy: multi-ws collapse, leading-indent strip on non-indent-sensitive langs, JSON minify, blank-run collapse). verbatim=reading when byte-exact on-disk formatting matters (no line numbers). verbatim_numbered=byte-exact + line-numbered; required before edit ops that use line anchors (insert_at_line / replace_range)."),
     offset: z.number().int().min(1).default(1).optional()
       .describe("1-indexed start line"),
     limit: z.number().int().min(1).default(1).optional()
