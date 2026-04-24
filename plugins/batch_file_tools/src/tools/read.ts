@@ -30,6 +30,7 @@ async function readOne(
   const formatted = formatForRead({
     content: file.content,
     mode: req.mode,
+    path: req.path,
     ...(req.offset !== undefined ? { offset: req.offset } : {}),
     ...(req.limit !== undefined ? { limit: req.limit } : {}),
   });

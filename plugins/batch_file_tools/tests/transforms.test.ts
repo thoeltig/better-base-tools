@@ -69,12 +69,84 @@ describe("formatForRead — info_compact mode", () => {
     expect(r.content).toBe("alpha\n\nbeta\n\ngamma\n");
   });
 
-  it("preserves leading indent (does not damage code)", () => {
+  it("preserves leading indent when no path is given (safe default)", () => {
     const r = formatForRead({
       content: "def foo():\n    return 1\n    return 2\n",
       mode: "info_compact",
     });
     expect(r.content).toBe("def foo():\n    return 1\n    return 2\n");
+  });
+
+  it("preserves leading indent on .py files (indent-sensitive)", () => {
+    const r = formatForRead({
+      content: "def foo():\n    return 1\n",
+      mode: "info_compact",
+      path: "/x/script.py",
+    });
+    expect(r.content).toBe("def foo():\n    return 1\n");
+  });
+
+  it("preserves leading indent on .yaml files", () => {
+    const r = formatForRead({
+      content: "root:\n  nested: 1\n  other: 2\n",
+      mode: "info_compact",
+      path: "/x/config.yaml",
+    });
+    expect(r.content).toBe("root:\n  nested: 1\n  other: 2\n");
+  });
+
+  it("preserves leading indent on Makefile (basename match)", () => {
+    const r = formatForRead({
+      content: "build:\n\techo hi\n",
+      mode: "info_compact",
+      path: "/x/Makefile",
+    });
+    expect(r.content).toBe("build:\n\techo hi\n");
+  });
+
+  it("strips leading indent on .ts files (not indent-sensitive)", () => {
+    const r = formatForRead({
+      content: "function foo() {\n    return 1;\n}\n",
+      mode: "info_compact",
+      path: "/x/a.ts",
+    });
+    expect(r.content).toBe("function foo() {\nreturn 1;\n}\n");
+  });
+
+  it("collapses multi-whitespace runs inside a line", () => {
+    const r = formatForRead({
+      content: "foo(a,    b,\t\tc)\n",
+      mode: "info_compact",
+    });
+    expect(r.content).toBe("foo(a, b, c)\n");
+  });
+
+  it("collapses multi-whitespace but preserves leading indent on .py", () => {
+    const r = formatForRead({
+      content: "    foo(a,    b)\n",
+      mode: "info_compact",
+      path: "/x/a.py",
+    });
+    expect(r.content).toBe("    foo(a, b)\n");
+  });
+
+  it("minifies valid JSON on .json files", () => {
+    const r = formatForRead({
+      content: "{\n  \"a\": 1,\n  \"b\": [2, 3]\n}\n",
+      mode: "info_compact",
+      path: "/x/data.json",
+    });
+    expect(r.content).toBe('{"a":1,"b":[2,3]}');
+    expect(r.returned_lines).toBe(1);
+  });
+
+  it("falls back to line-based compact on invalid JSON", () => {
+    const r = formatForRead({
+      content: "{ not valid json   \n",
+      mode: "info_compact",
+      path: "/x/broken.json",
+    });
+    expect(r.content).toBe("{ not valid json\n");
   });
 
   it("preserves single blank lines between content", () => {

@@ -36,7 +36,7 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path"),
     mode: ReadMode
-      .describe("edit=pre-edit reads (line-numbered, byte-exact). info_compact=default for info reads (lossless compact, saves tokens). info_verbatim=info reads when on-disk formatting matters (byte-exact, no line numbers)." ),
+      .describe("edit=pre-edit reads (line-numbered, byte-exact). info_compact=default for info reads (lossy: multi-ws collapse, leading-indent strip on non-indent-sensitive langs, JSON minify, blank-run collapse). info_verbatim=info reads when byte-exact on-disk formatting matters (no line numbers)."),
     offset: z.number().int().min(1).default(1).optional()
       .describe("1-indexed start line"),
     limit: z.number().int().min(1).default(1).optional()
