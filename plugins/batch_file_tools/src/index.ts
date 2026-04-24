@@ -107,14 +107,15 @@ server.server.oninitialized = async () => {
     await updateValidRootDirectories();
   }
 
-  if(validRootDirectories.length > 0){
-    writeLogLine(`Client supports MCP Roots: ${validRootDirectories.join(', ')}`);
-  } else if (allowedDirectoriesFromArgs.length > 0) {
-    writeLogLine(`Client doesn't support MCP Roots. Using allowed directories from args instead: ${allowedDirectoriesFromArgs.join(', ')}`);
-  } else {
-    writeLogLine(`No allowed directories were provided. Neither via args nor via MCP roots protocl. Server will be shut down.`);
+  if (getAllowedDirectoriesToUse().length === 0) {
+    writeLogLine(`No allowed directories provided via args or MCP roots. Server will be shut down.`);
     process.exit(1);
   }
+
+  const parts: string[] = [];
+  if (validRootDirectories.length > 0) parts.push(`roots=[${validRootDirectories.join(', ')}]`);
+  if (allowedDirectoriesFromArgs.length > 0) parts.push(`args=[${allowedDirectoriesFromArgs.join(', ')}]`);
+  writeLogLine(`Allowed directories — ${parts.join(' + ')}`);
 };
 
 async function updateValidRootDirectories() {
@@ -130,7 +131,7 @@ async function updateValidRootDirectories() {
 }
 
 function getAllowedDirectoriesToUse(): string[] {
-  return validRootDirectories.length > 0 ? validRootDirectories : allowedDirectoriesFromArgs;
+  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs])];
 }
 
 async function main(): Promise<void> {
