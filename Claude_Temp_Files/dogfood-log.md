@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-24 | 10 | 40 | 4.0x | write-op merge + info_compact upgrades (session 6) |
 | 2026-04-24 | 12 | 50 | 4.2x | symlink/allowed-path guard hardening + path-utils simplification (session 5) |
 | 2026-04-23 | 2 | 7 | 3.5x | description refresh + redundancy cleanup (session 4) |
 | 2026-04-22 | 4 | 14 | 3.5x | diff rewrite + live compound verify (session 3) |
@@ -17,6 +18,53 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
+
+### 2026-04-24 (session 6) — write-op merge + info_compact upgrades
+
+**Scope:** Two roadmap items shipped in one session after a ~4-round design discussion on the merge shape and transform semantics.
+
+**Write-op merge (task #4):**
+- Collapsed 4 ops (`append`, `create`, `overwrite`, `delete`) → 1 op (`write {mode: 'append'|'overwrite', content}`). `delete` dropped; callers use `replace(new='')`.
+- Dropped `file_exists` from `EditErrorReason` — no more create-fails-if-exists guard. Accepted tradeoff per user framing: "file create should be automatic and not the model's concern" (DB-endpoint analogy).
+- Execution phases simplified 3 → 2: phase-1 line-addressed (desc-sorted), phase-2 everything-else in input order. Old phase-2 `create` stage removed.
+- Summary phrasing: `replace(new='')` now says `replaced 1 occurrence at line X (N chars → 0 chars)` instead of `deleted N lines at line X`. Minor readability loss on pure-delete.
+- Test impact: 139 → 137 (deleted 2 tests whose behavior no longer exists — `file_exists` guard and old 3-phase ordering around `create`).
+
+**`info_compact` upgrades (task #1):**
+- Added: (a) multi-whitespace-run collapse inside lines (`foo(a,    b)` → `foo(a, b)`), (b) leading-indent strip on non-indent-sensitive files (detected by ext/basename), (c) JSON minify for `.json` files (parse + stringify, with fallback on invalid JSON).
+- Indent-sensitive allow-list: `.py`, `.yaml`/`.yml`, `.hs`, `.fs`, `.nim`, `.coffee`, `.pug`, `.sass`, `Makefile`. Safe default when no path given = indent-sensitive (preserve).
+- Transform is now explicitly **lossy** (mode description updated). If byte-exact matters, callers use `info_verbatim`.
+- Known limitations documented in source: multi-line strings / template literals get their internal whitespace collapsed; fenced code blocks in Markdown may get dedented. No parser, so not detected.
+- Plumbed `path` through `FormatInput` → `formatForRead` → `formatCompact` (was unused before).
+- Tests: +8 new (145 total).
+
+**Findings — tool ergonomics:**
+- **Large `batch_edit` with 13 ops on one file worked first try.** The edit.test.ts rewrite mixed 2 `delete`s (for whole test-block removal), 8 `replace`s (for unique test bodies), and 3 `replace_all`s (for op-type swaps across the file). Phase-2 input-order execution was essential — the `delete`s and specific `replace`s had to run before the `replace_all`s, otherwise the replace_all would mutate text the specific replaces expected. Ordering worked as documented.
+- **One-file test restructure via delete+replace+replace_all is viable.** Alternative would be a full `overwrite` of the test file. The diff-surgery approach kept the unchanged 90% stable and surfaced any unexpected matches as op errors rather than silent file replacement. Recommend this as the default pattern for test file migrations.
+
+**Tool calls:**
+- MCP: ~4 × `batch_read` (covering ~8 file reads), ~5 × `batch_edit` (covering ~25 ops across ~7 files) = **~10 calls**.
+- Native equiv: ~8 × `Read` + ~25 × `Edit` + ~7 × `Write` (if full rewrites) = **~40 calls**.
+- Reduction: **~4x**.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `replace` | ~14 | yes | Targeted test-body rewrites, all first-try |
+| `replace_all` | ~7 | yes | Op-type swaps across test files (~25 total replacements) |
+| `delete` | 2 | yes | Whole-test-block removal via trailing-blank-line anchors |
+| `overwrite` | 1 | yes | Full rewrite of `transforms.ts` |
+
+**Open follow-ups:**
+- **Unshipped from this session's 4-task plan (context ran out):**
+  - Task #2: custom diff from op metadata, drop `jsdiff`. Approach agreed: line-level interleaved `-old/+new` pairs, 1-3 line context, direct emission from op metadata (known match lines/ranges). Only `write(overwrite)` still needs LCS alignment. Expected ~1 session.
+  - Task #3: `info` mode with per-mode dry-run counts. First draft = `{type, bytes, lines, mtime}` + per-mode `{lines, chars}` computed by running each transform in dry-run. No parser, no symbols in v1. Expected ~1 session.
+- Dogfood next session: does `info_compact` actually save tokens on a realistic `.ts` read after the indent-strip + multi-ws collapse? Baseline measurement would be useful.
+- `info_optimized` (lossy JSON/XML/YAML transforms) still deferred — only ship if `info_compact` doesn't win enough in practice.
+- `replace(new='')` summary wording — minor but the old `deleted N lines` was more readable. Reconsider if it bites in practice.
+
+---
 
 ### 2026-04-24 (session 5) — symlink/allowed-path guard hardening
 
