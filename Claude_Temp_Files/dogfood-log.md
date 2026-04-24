@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-24 | 4 | 36 | 9.0x | minor cleanups: roots∪args merge + type-on-ok drop + enum rename (session 7) |
 | 2026-04-24 | 10 | 40 | 4.0x | write-op merge + info_compact upgrades (session 6) |
 | 2026-04-24 | 12 | 50 | 4.2x | symlink/allowed-path guard hardening + path-utils simplification (session 5) |
 | 2026-04-23 | 2 | 7 | 3.5x | description refresh + redundancy cleanup (session 4) |
@@ -18,6 +19,59 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
+
+### 2026-04-24 (session 7) — minor cleanups: roots∪args + type-on-ok drop + enum rename
+
+**Scope:** Three small follow-ups from session 6's open-issues list, chosen to clear low-hanging debt before the next large feature (custom diff or `info` mode).
+
+**Changes shipped:**
+- **Roots + args merge (from session 5 follow-up).** `getAllowedDirectoriesToUse()` at `index.ts:132` now returns `[...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs])]` instead of ternary-override. Harness-provided roots and explicit `--args` now compose: user can extend the authorized set with args rather than being locked into whatever the harness reports. `oninitialized` log block rewritten to show both sources when both present; `process.exit(1)` branch gated on the union being empty.
+- **Drop `OpResult.type` on ok ops in summary/diff (session 2 carry).** `edit.ts:259-266` `decorateOp` now keeps `type` only when `status === "error"` in all modes. Summary/diff already had the rule for minimal; aligning them removes a redundant field on every ok op. Envelope renders `- op N: summary` instead of `- op N (type): summary` for successes; errors still carry `- op N (type): reason — ...`. Two envelope tests updated to match.
+- **ReadMode enum rename.** `edit | info_compact | info_verbatim` → `verbatim_numbered | compact | verbatim`. Default stays `compact`. v2 mode/strategy split cancelled, so the `info_` stepping-stone prefix no longer previews anything — names now describe pure output shape. JSDoc block about the v2 split removed from `types.ts`. Tool description + `.describe()` string + `transforms.ts` branch conditions + 4 test files updated (~35 string replacements).
+
+145/145 tests green. Typecheck + build clean.
+
+**Findings — tool ergonomics (self-reflection, user-prompted):**
+- **Multi-grep fan-out during planning.** Ran 5 Grep calls during planning. First two (`files_with_matches`, then `content` with line numbers) could have been one `-C 2` call. The next three were reactive discoveries — each new grep triggered by finding a new variant (`.type` assertions, `describe("... mode")` blocks, single-quoted `'info_compact'` inside template literals). Lesson: front-load discovery with one wide grep covering *all* quoting forms (`"X"`, `'X'`, bare word, describe-block text) before planning replaces. Otherwise you discover missed variants post-execution via test failure.
+- **Reflex drift back to native `Read`.** Used native `Read` twice on test files after a chain of planning. CLAUDE.md's MCP-preference directive is effort-gated, not automatic — long planning chains leak default-bias back in. This is the precise failure mode the `SessionStart` hook is meant to fix at release.
+- **Scoped replaces vs. blast radius.** `"info_compact"` / `"info_verbatim"` were unambiguous — could have been one `replace_all` across all files if wildcard/folder paths existed. `"edit"` was genuinely ambiguous: `auth.test.ts` has `describe("auth — edit")` referring to the *edit tool*, not the read mode. Scoping to `mode: "edit"`, `mode_applied: "edit"`, `.toBe("edit")`, `as 'edit'`, `"formatForRead — edit mode"` was necessary. Mixed blast radius → mixed strategy.
+- **Missed the single-quoted `'info_compact'` variant in one envelope test string.** Caused one post-edit test failure. My `replace_all` targeted `"info_compact"` (double-quoted); the hint-string assertion `<!-- Read N lines ... as 'info_compact' -->` used single quotes inside a template literal. Fixed with a second `batch_edit` call. Pure discovery failure — wildcard paths wouldn't have prevented it; pre-flight quoting-variant grep would have.
+
+**Friction cost in tool-call terms:**
+- Baseline (optimal path): 1 `batch_read` for log + 1 `batch_read` for source files + 1 `batch_edit` for all 31 ops = **3 calls**.
+- Actual: 2 `batch_read` + 2 `batch_edit` (one follow-up to fix single-quoted miss) + 2 unnecessary native `Read` = **6 effective calls** on the read/edit axis (Grep/Bash not counted; they're the same either way).
+- Overhead vs. optimal: +3 calls (the miss-driven follow-up + the two native-Read reflexes).
+
+**How wildcard/folder paths (future `replace_all` feature) would have helped:**
+- Three enum-rename ops (`"info_compact"` → `"compact"`, `"info_verbatim"` → `"verbatim"`, `mode: "edit"` → `mode: "verbatim_numbered"`) were repeated across 4 test files — that's 12 per-file ops collapsing to 3 repo-wide ops.
+- But the `"edit"` scoping problem remains: even with wildcards, `"edit"` needs narrow anchors because of `describe("auth — edit")`. So wildcard helps with *unambiguous* renames, not ambiguous ones.
+- And wildcard wouldn't have caught the single-quoted miss — that's a discovery-phase problem, not an execution-phase problem.
+- **Proposed feature shape (for v2):** `replace_all` accepts `path` as either absolute file path OR glob pattern OR directory (recursive). When glob/dir, a single op touches N files; result is `{files_changed: number, occurrences: number, per_file: [{path, count}]}`. Deterministic safety: if any single file errors, the whole op errors (atomic), or `continueOnError`-style partial. Probably useful for `replace`/`replace_all`/`write(append)` only; line-addressed ops don't make sense across N files.
+
+**Tool calls:**
+- MCP: 2 × `batch_read` (covering 5 file reads) + 2 × `batch_edit` (covering 31 ops across 8 files) = **4 calls**.
+- Native equiv: 5 × `Read` + ~31 × `Edit` = **~36 calls**.
+- Reduction: **~9x**. Higher than session 6 because the workload was batch-friendly (many small string replacements across many files, one ops-per-file schema).
+- Actual session cost (including the 2 reflex native Reads + 1 follow-up `batch_edit`): 6 effective file-I/O calls. Still ~6x.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `replace` | ~14 | yes | Targeted string rewrites (descriptions, decorateOp block, enum definitions, describe-block strings). All first-try |
+| `replace_all` | ~12 | yes | Enum renames across test files; safe double-quoted variants |
+| `replace_range` | 2 | yes | Multi-line block replacement in `index.ts` (root+args merge + log block). Cleaner than `replace` for long blocks |
+| `insert_at_line` | 2 | yes | Inserting new session entry + metrics row in this log (self-dogfood) |
+| `write` | 0 | n/a | No file creation or full rewrite needed |
+
+**Open follow-ups:**
+- **Wildcard / folder-path support for `replace_all`** (and probably `replace` + `write(append)`) — see "How wildcard paths would have helped" above. Highest-leverage addition for bulk renames. Low risk because most renames already land on unique substrings; the hard part is error aggregation across N files.
+- **Session-start hook (release blocker).** Effort-gated CLAUDE.md reminders leak under long planning chains. Moving to a real `SessionStart` hook would close the native-Read-reflex hole.
+- **Unified `OpResult.reason` / `FileError.reason` enum.** Not biting today; deferred from session 5. The user asked whether a unified reason with `path_` / `anchor_` prefix would reduce tokens if schemas are known — probably yes but only marginally. Revisit if the schema-awareness assumption changes.
+- **Custom diff (session 6 task #2)** and ***`info` mode with per-mode dry-run counts** (session 6 task #3)** — still unshipped. Design agreed for both; each ~1 session.
+- **Minor carry:** `\n` vs `\r\n` in-line-ending display for `nearest_anchor` in CRLF files remains an invisible-mismatch risk at the *description* level (the matcher itself was fixed in session 5 via LF/CRLF auto-match).
+
+---
 
 ### 2026-04-24 (session 6) — write-op merge + info_compact upgrades
 
