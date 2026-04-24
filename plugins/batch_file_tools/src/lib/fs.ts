@@ -142,7 +142,7 @@ async function guardPath(
   }
 }
 
-function isPathAllowed(realPath: string, allowedDirectories: readonly string[]): boolean {
+export function isPathAllowed(realPath: string, allowedDirectories: readonly string[]): boolean {
   return allowedDirectories.some((dir) => {
     const rel = relative(dir, realPath);
     return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));

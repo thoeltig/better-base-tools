@@ -1,6 +1,9 @@
+import { isAbsolute } from "node:path";
 import { structuredPatch } from "diff";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
+import { isPathAllowed } from "../lib/fs.js";
+import { expandToFiles, looksLikeGlob, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
 import type {
   EditFile,
@@ -33,19 +36,28 @@ export async function handleBatchEdit(
   const results: FileResult[] = [];
   let abortRemaining = false;
 
-  for (const file of input.files) {
+  const entries = await planEntries(input.files, allowedDirectories);
+
+  for (const entry of entries) {
     if (abortRemaining) {
-      results.push(skipFile(file, input.output));
+      results.push(
+        entry.kind === "error" ? entry.result : skipFile(entry.file, input.output),
+      );
       continue;
     }
 
-    const options: FileEditOptions = {
-      continueOnError: file.continueOnError ?? input.continueOnError,
-      dryRun: input.dryRun,
-      rootOutput: input.output,
-      fileOutput: file.output ?? input.output,
-    };
-    const fileResult = await editOneFile(file, options, allowedDirectories);
+    let fileResult: FileResult;
+    if (entry.kind === "error") {
+      fileResult = entry.result;
+    } else {
+      const options: FileEditOptions = {
+        continueOnError: entry.file.continueOnError ?? input.continueOnError,
+        dryRun: input.dryRun,
+        rootOutput: input.output,
+        fileOutput: entry.file.output ?? input.output,
+      };
+      fileResult = await editOneFile(entry.file, options, allowedDirectories);
+    }
     results.push(fileResult);
 
     if (fileResult.status !== "ok" && !input.continueOnError) {
@@ -54,6 +66,126 @@ export async function handleBatchEdit(
   }
 
   return { results };
+}
+
+type PlannedEntry =
+  | { kind: "process"; file: EditFile }
+  | { kind: "error"; result: FileResult };
+
+async function planEntries(
+  files: readonly EditFile[],
+  allowedDirectories: readonly string[],
+): Promise<PlannedEntry[]> {
+  const entries: PlannedEntry[] = [];
+  const byPath = new Map<string, EditFile>();
+
+  const merge = (file: EditFile): void => {
+    const key = dedupeKey(file.path);
+    const existing = byPath.get(key);
+    if (existing) {
+      existing.ops.push(...file.ops);
+      return;
+    }
+    const fresh: EditFile = { ...file, ops: [...file.ops] };
+    byPath.set(key, fresh);
+    entries.push({ kind: "process", file: fresh });
+  };
+
+  for (const file of files) {
+    if (!(await needsExpansion(file.path))) {
+      merge(file);
+      continue;
+    }
+
+    const incompatible = file.ops.find((op) => !isGlobAllowedOp(op));
+    if (incompatible) {
+      const opLabel =
+        incompatible.type === "write" ? `write(${incompatible.mode})` : incompatible.type;
+      entries.push({
+        kind: "error",
+        result: buildGlobError(
+          file,
+          "not_supported",
+          `op type '${opLabel}' is not allowed with glob/folder paths; allowed: replace, replace_all, write(mode='append')`,
+        ),
+      });
+      continue;
+    }
+
+    if (looksLikeGlob(file.path) && !isAbsolute(file.path)) {
+      entries.push({
+        kind: "error",
+        result: buildGlobError(file, "not_absolute", `Path must be absolute: ${file.path}`),
+      });
+      continue;
+    }
+
+    let candidates: string[];
+    try {
+      candidates = await expandToFiles(file.path);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      entries.push({
+        kind: "error",
+        result: buildGlobError(file, "io_error", `glob expansion failed: ${msg}`),
+      });
+      continue;
+    }
+
+    if (candidates.length === 0) {
+      entries.push({
+        kind: "error",
+        result: buildGlobError(file, "not_found", `no files matched: ${file.path}`),
+      });
+      continue;
+    }
+
+    const allowed = candidates.filter((p) => isPathAllowed(p, allowedDirectories));
+    if (allowed.length === 0) {
+      entries.push({
+        kind: "error",
+        result: buildGlobError(
+          file,
+          "not_authorized",
+          `no matched files are within allowed directories`,
+        ),
+      });
+      continue;
+    }
+
+    for (const resolvedPath of allowed) {
+      merge({ ...file, path: resolvedPath });
+    }
+  }
+
+  return entries;
+}
+
+function isGlobAllowedOp(op: EditOp): boolean {
+  if (op.type === "replace" || op.type === "replace_all") return true;
+  if (op.type === "write" && op.mode === "append") return true;
+  return false;
+}
+
+function dedupeKey(p: string): string {
+  const slashed = p.replace(/\\/g, "/");
+  return process.platform === "win32" ? slashed.toLowerCase() : slashed;
+}
+
+function buildGlobError(file: EditFile, reason: Reason, message: string): FileResult {
+  const ops: OpResult[] = file.ops.map((op, index) => ({
+    index,
+    status: "error",
+    type: op.type,
+    reason,
+    hint: { next_action: message },
+  }));
+  return {
+    path: file.path,
+    status: "error",
+    error: { reason, message },
+    ops,
+  };
 }
 
 function skipFile(file: EditFile, rootOutput: OutputMode): FileResult {

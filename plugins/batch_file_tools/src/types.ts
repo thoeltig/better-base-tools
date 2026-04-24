@@ -150,7 +150,7 @@ export type EditOp = z.infer<typeof EditOp>;
 
 export const EditFile = z.object({
     path: z.string().min(1).max(260)
-      .describe("Absolute path"),
+      .describe("Absolute path. For `replace`/`replace_all`/`write(append)` ops: also accepts a glob pattern (`*` matches within one path segment; `**` recurses across segments — e.g. `C:/proj/**/*.ts`) or a directory path (single level — use an explicit `**` glob for recursive walks). Other ops require a concrete absolute file path."),
     continueOnError: z.boolean().optional(),
     output: OutputMode.optional(),
     ops: z.array(EditOp).min(1)
