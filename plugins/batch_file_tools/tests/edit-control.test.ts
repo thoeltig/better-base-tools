@@ -1,14 +1,15 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { handleBatchEdit } from "../src/tools/edit.js";
+import type { EditInput } from "../src/types.js";
 
 let workDir: string;
 let counter = 0;
 
 beforeAll(async () => {
-  workDir = await mkdtemp(join(tmpdir(), "btf-ctrl-"));
+  workDir = await realpath(await mkdtemp(join(tmpdir(), "btf-ctrl-")));
 });
 afterAll(async () => {
   await rm(workDir, { recursive: true, force: true });
@@ -31,10 +32,14 @@ async function readText(p: string): Promise<string> {
   return readFile(p, { encoding: "utf8" });
 }
 
+async function edit(input: EditInput) {
+  return handleBatchEdit(input, [workDir]);
+}
+
 describe("continueOnError — op level (file-level flag)", () => {
   it("failing op does NOT skip later ops when file.continueOnError=true", async () => {
     const p = await fixture("file.txt", "A\nB\nC\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: false,
       dryRun: false,
       output: "summary",
@@ -59,7 +64,7 @@ describe("continueOnError — op level (file-level flag)", () => {
 
   it("failing op DOES skip later ops when file.continueOnError=false", async () => {
     const p = await fixture("file.txt", "A\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: false,
       dryRun: false,
       output: "summary",
@@ -81,7 +86,7 @@ describe("continueOnError — op level (file-level flag)", () => {
 
   it("file-level flag overrides top-level when both set", async () => {
     const p = await fixture("f.txt", "A\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: true,
       dryRun: false,
       output: "summary",
@@ -104,7 +109,7 @@ describe("continueOnError — file level (top-level flag)", () => {
   it("a file with errors aborts later files when top-level=false", async () => {
     const a = await fixture("a.txt", "A\n");
     const b = await fixture("b.txt", "B\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: false,
       dryRun: false,
       output: "summary",
@@ -121,7 +126,7 @@ describe("continueOnError — file level (top-level flag)", () => {
   it("top-level=true lets later files proceed after an earlier failure", async () => {
     const a = await fixture("a.txt", "A\n");
     const b = await fixture("b.txt", "B\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: true,
       dryRun: false,
       output: "summary",
@@ -139,7 +144,7 @@ describe("continueOnError — file level (top-level flag)", () => {
 describe("dryRun", () => {
   it("reports success but does not modify disk", async () => {
     const p = await fixture("dry.txt", "hello\n");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: false,
       dryRun: true,
       output: "summary",
@@ -151,7 +156,7 @@ describe("dryRun", () => {
 
   it("dryRun + create does NOT create the file on disk", async () => {
     const p = tmpPath("dry_new.txt");
-    const out = await handleBatchEdit({
+    const out = await edit({
       continueOnError: false,
       dryRun: true,
       output: "summary",
@@ -167,7 +172,7 @@ describe("output modes", () => {
   describe("minimal (default)", () => {
     it("all ops ok -> {path,status:'ok'}, no ops array", async () => {
       const p = await fixture("min-ok.txt", "a\nb\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "minimal",
@@ -181,7 +186,7 @@ describe("output modes", () => {
 
     it("partial -> status:'partial' with only failed ops carrying type+reason+hint", async () => {
       const p = await fixture("min-partial.txt", "a\nb\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "minimal",
@@ -208,7 +213,7 @@ describe("output modes", () => {
     });
 
     it("total file-load error -> status:'error' with file.error block", async () => {
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: true,
         dryRun: false,
         output: "minimal",
@@ -221,14 +226,14 @@ describe("output modes", () => {
       });
       const fr = out.results[0]!;
       expect(fr.status).toBe("error");
-      expect(fr.error?.reason).toBe("io_error");
+      expect(fr.error?.reason).toBe("not_absolute");
     });
   });
 
   describe("summary", () => {
     it("emits all ops with status+summary strings", async () => {
       const p = await fixture("sum.txt", "a\nb\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "summary",
@@ -253,7 +258,7 @@ describe("output modes", () => {
   describe("diff", () => {
     it("file-level diff returns a whole-file unified diff", async () => {
       const p = await fixture("diff-file.txt", "a\nb\nc\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "diff",
@@ -269,7 +274,7 @@ describe("output modes", () => {
 
     it("op-level diff returns per-op diffs, summary stripped", async () => {
       const p = await fixture("diff-op.txt", "a\nb\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "summary",
@@ -292,7 +297,7 @@ describe("output modes", () => {
 
     it("dryRun + diff still returns a file diff", async () => {
       const p = await fixture("diff-dry.txt", "a\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: true,
         output: "diff",
@@ -306,7 +311,7 @@ describe("output modes", () => {
   describe("precedence", () => {
     it("op-level output overrides file-level", async () => {
       const p = await fixture("prec-op.txt", "a\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "minimal",
@@ -325,7 +330,7 @@ describe("output modes", () => {
 
     it("file-level output overrides root", async () => {
       const p = await fixture("prec-file.txt", "a\n");
-      const out = await handleBatchEdit({
+      const out = await edit({
         continueOnError: false,
         dryRun: false,
         output: "minimal",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countLines, joinLines, splitLines } from "../src/lib/lines.js";
+import { joinLines, splitLines } from "../src/lib/lines.js";
 
 describe("splitLines", () => {
   it("empty content has zero lines", () => {
@@ -61,9 +61,9 @@ describe("joinLines round-trips", () => {
 
 describe("countLines", () => {
   it("counts all lines regardless of trailing newline", () => {
-    expect(countLines(splitLines("a\nb\n"))).toBe(2);
-    expect(countLines(splitLines("a\nb"))).toBe(2);
-    expect(countLines(splitLines(""))).toBe(0);
-    expect(countLines(splitLines("\n"))).toBe(1);
+    expect(splitLines("a\nb\n").lines.length).toBe(2);
+    expect(splitLines("a\nb").lines.length).toBe(2);
+    expect(splitLines("").lines.length).toBe(0);
+    expect(splitLines("\n").lines.length).toBe(1);
   });
 });

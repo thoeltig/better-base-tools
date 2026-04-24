@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +10,7 @@ let workDir: string;
 let counter = 0;
 
 beforeAll(async () => {
-  workDir = await mkdtemp(join(tmpdir(), "btf-edit-"));
+  workDir = await realpath(await mkdtemp(join(tmpdir(), "btf-edit-")));
 });
 afterAll(async () => {
   await rm(workDir, { recursive: true, force: true });
@@ -35,7 +35,7 @@ async function runEdit(file: EditFile) {
     dryRun: false,
     output: "summary",
     files: [file],
-  });
+  }, [workDir]);
 }
 
 async function readText(path: string): Promise<string> {
@@ -490,7 +490,7 @@ describe("batch across multiple files", () => {
         { path: a, ops: [{ type: "append", content: "A2\n" }] },
         { path: b, ops: [{ type: "append", content: "B2\n" }] },
       ],
-    });
+    }, [workDir]);
     expect(out.results).toHaveLength(2);
     expect(await readText(a)).toBe("A\nA2\n");
     expect(await readText(b)).toBe("B\nB2\n");

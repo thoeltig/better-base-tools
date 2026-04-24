@@ -2,13 +2,19 @@ import { readFileUtf8 } from "../lib/fs.js";
 import { formatForRead } from "../lib/transforms.js";
 import type { ReadInput, ReadOutput, ReadRequest, ReadResult } from "../types.js";
 
-export async function handleBatchRead(input: ReadInput): Promise<ReadOutput> {
-  const results = await Promise.all(input.requests.map(readOne));
+export async function handleBatchRead(
+  input: ReadInput, 
+  allowedDirectories: string[]
+): Promise<ReadOutput> {
+  const results = await Promise.all(input.requests.map(x => readOne(x, allowedDirectories)));
   return { results };
 }
 
-async function readOne(req: ReadRequest): Promise<ReadResult> {  
-  const file = await readFileUtf8(req.path);
+async function readOne(
+  req: ReadRequest, 
+  allowedDirectories: string[]
+): Promise<ReadResult> {  
+  const file = await readFileUtf8(req.path, allowedDirectories);
   if (!file.ok) {
     return {
       path: req.path,

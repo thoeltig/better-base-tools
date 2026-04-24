@@ -4,6 +4,14 @@ import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getAllowedDirectoriesFromArgs } from "./lib/fs.js";
+import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import { getValidRootDirectories } from "./lib/fs.js";
+import { writeLogLine } from "./lib/log.js";
+
+const args = process.argv.slice(2);
+const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
+let validRootDirectories: string[] = [];
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
 // DO NOT set on either tool. Claude Code's harness surfaces
@@ -34,21 +42,24 @@ server.registerTool(
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
-      openWorldHint: true
+      openWorldHint: false
     }
   },
   async ({ param }) => {
   try {
       const parsed = ReadInput.parse(param);
-      const result = await handleBatchRead(parsed);
+      const allowedDirectories = getAllowedDirectoriesToUse();
+      const result = await handleBatchRead(parsed, allowedDirectories);
       return { 
         content: formatReadContent(result)
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      const logLine = `Tool error: ${message}`;
+      writeLogLine(logLine);
       return {
         isError: true,
-        content: [{ type: "text", text: `Tool error: ${message}` }],
+        content: [{ type: "text", text: logLine }],
       };
     }
   }
@@ -65,25 +76,62 @@ server.registerTool(
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
-      openWorldHint: true
+      openWorldHint: false
     }
   },
   async ({ param }) => {
   try {
       const parsed = EditInput.parse(param);
-      const result = await handleBatchEdit(parsed);
+      const allowedDirectories = getAllowedDirectoriesToUse();
+      const result = await handleBatchEdit(parsed, allowedDirectories);
       return { 
         content: formatEditContent(result)
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      const logLine = `Tool error: ${message}`;
+      writeLogLine(logLine);
       return {
         isError: true,
-        content: [{ type: "text", text: `Tool error: ${message}` }],
+        content: [{ type: "text", text: logLine }],
       };
     }
   }
 );
+
+server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => await updateValidRootDirectories());
+
+server.server.oninitialized = async () => {
+  const clientCapabilities = server.server.getClientCapabilities();
+  if (clientCapabilities?.roots) {
+    await updateValidRootDirectories();
+  }
+
+  if(validRootDirectories.length > 0){
+    writeLogLine(`Client supports MCP Roots: ${validRootDirectories.join(', ')}`);
+  } else if (allowedDirectoriesFromArgs.length > 0) {
+    writeLogLine(`Client doesn't support MCP Roots. Using allowed directories from args instead: ${allowedDirectoriesFromArgs.join(', ')}`);
+  } else {
+    writeLogLine(`No allowed directories were provided. Neither via args nor via MCP roots protocl. Server will be shut down.`);
+    process.exit(1);
+  }
+};
+
+async function updateValidRootDirectories() {
+  try {
+    const response = await server.server.listRoots();
+    if (response && 'roots' in response) {
+      validRootDirectories = await getValidRootDirectories(response.roots);
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    writeLogLine(`Failed to request roots from client: ${message}`);
+  }
+}
+
+function getAllowedDirectoriesToUse(): string[] {
+  return validRootDirectories.length > 0 ? validRootDirectories : allowedDirectoriesFromArgs;
+}
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
@@ -92,6 +140,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`batch-tools-mcp-server fatal: ${message}\n`);
+  writeLogLine(`batch-tools-mcp-server fatal: ${message}`);
   process.exit(1);
 });

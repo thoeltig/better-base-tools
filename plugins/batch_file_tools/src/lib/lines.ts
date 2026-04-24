@@ -8,24 +8,37 @@
 export interface SplitResult {
   readonly lines: readonly string[];
   readonly endings: readonly string[];
+  readonly dominantEnding: LineEnding; 
 }
+
+export type LineEnding = "\n" | "\r\n";
 
 export function splitLines(content: string): SplitResult {
   const lines: string[] = [];
   const endings: string[] = [];
-  let start = 0;
+  let start = 0; 
+  let crlf = 0;
+  let lf = 0;
   for (let i = 0; i < content.length; i++) {
     if (content[i] !== "\n") continue;
     const hasCr = i > 0 && content[i - 1] === "\r";
     lines.push(content.slice(start, hasCr ? i - 1 : i));
-    endings.push(hasCr ? "\r\n" : "\n");
+    
+    if (hasCr) {
+      crlf++;
+      endings.push("\r\n");
+    }
+    else {
+      lf++;
+      endings.push("\n");
+    }
     start = i + 1;
   }
   if (start < content.length) {
     lines.push(content.slice(start));
     endings.push("");
   }
-  return { lines, endings };
+  return { lines, endings, dominantEnding: crlf > lf ? "\r\n" : "\n" };
 }
 
 export function joinLines(
@@ -40,6 +53,5 @@ export function joinLines(
   return out;
 }
 
-export function countLines(split: SplitResult): number {
-  return split.lines.length;
 }
+

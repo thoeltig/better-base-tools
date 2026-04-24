@@ -1,5 +1,5 @@
 import { structuredPatch } from "diff";
-import { loadBuffer, writeBuffer } from "../lib/buffer.js";
+import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
 import { joinLines } from "../lib/lines.js";
 import type {
@@ -7,6 +7,7 @@ import type {
   EditInput,
   EditOp,
   EditOutput,
+  FileErrorReason,
   FileResult,
   FileStatus,
   OpResult,
@@ -25,7 +26,10 @@ interface IndexedOp {
   readonly inputIndex: number;
 }
 
-export async function handleBatchEdit(input: EditInput): Promise<EditOutput> {
+export async function handleBatchEdit(
+  input: EditInput,
+  allowedDirectories: string[]
+): Promise<EditOutput> {
   const results: FileResult[] = [];
   let abortRemaining = false;
 
@@ -41,7 +45,7 @@ export async function handleBatchEdit(input: EditInput): Promise<EditOutput> {
       rootOutput: input.output,
       fileOutput: file.output ?? input.output,
     };
-    const fileResult = await editOneFile(file, options);
+    const fileResult = await editOneFile(file, options, allowedDirectories);
     results.push(fileResult);
 
     if (fileResult.status !== "ok" && !input.continueOnError) {
@@ -70,10 +74,11 @@ function skipFile(file: EditFile, rootOutput: OutputMode): FileResult {
 async function editOneFile(
   file: EditFile,
   options: FileEditOptions,
+  allowedDirectories: string[]
 ): Promise<FileResult> {
   let buf;
   try {
-    buf = await loadBuffer(file.path);
+    buf = await loadBuffer(file.path, allowedDirectories);
   } catch (err: unknown) {
     return buildFileLoadErrorResult(file, options, err);
   }
@@ -157,7 +162,7 @@ async function editOneFile(
 
   if (!options.dryRun && changed && buf.exists && !abortedOps) {
     try {
-      await writeBuffer(file.path, buf);
+      await writeBuffer(buf);
     } catch (err: unknown) {
       return buildWriteErrorResult(file, options, opResults, err);
     }
@@ -186,6 +191,7 @@ function buildFileLoadErrorResult(
   err: unknown,
 ): FileResult {
   const message = err instanceof Error ? err.message : String(err);
+  const fileReason: FileErrorReason = err instanceof BufferLoadError ? err.reason : "io_error";
   const decorated: DecoratedOp[] = file.ops.map((op, index) => {
     const opOutput = resolveOpOutput(op, options.fileOutput);
     const res: OpResult = {
@@ -200,7 +206,7 @@ function buildFileLoadErrorResult(
   return {
     path: file.path,
     status: "error",
-    error: { reason: "io_error", message },
+    error: { reason: fileReason, message },
     ops: filterOps(decorated),
   };
 }
