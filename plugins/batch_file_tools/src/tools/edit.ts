@@ -257,9 +257,13 @@ function decorateOp(
     return out;
   }
   // summary / diff: ops array is dense + input-ordered, so positional index
-  // is redundant — drop it. Keep type.
+  // is redundant — drop it. Keep type only on errors where it aids correlation.
   delete out.index;
-  out.type = op.type;
+  if (out.status === "error") {
+    out.type = op.type;
+  } else {
+    delete out.type;
+  }
   if (opOutput === "summary") {
     delete out.diff;
   } else {
