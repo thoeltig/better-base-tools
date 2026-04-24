@@ -2,7 +2,7 @@ import { convertNewlines, findAllNormalized, joinLines, splitLines } from "./lin
 import { buildNearestAnchor, findNearestLine } from "./similarity.js";
 import type { NearestAnchorWindow } from "./similarity.js";
 import type { EditBuffer } from "./buffer.js";
-import type { EditOp, EditErrorReason, OpResult } from "../types.js";
+import type { EditOp, Reason, OpResult } from "../types.js";
 
 export interface OpSuccess {
   ok: true;
@@ -11,7 +11,7 @@ export interface OpSuccess {
 
 export interface OpFailure {
   ok: false;
-  reason: EditErrorReason;
+  reason: Reason;
   nextAction: string;
   nearestAnchor?: NearestAnchorWindow;
   matchLines?: number[];
@@ -47,11 +47,7 @@ function applyReplace(
   newStr: string,
 ): OpApplyResult {
   if (!buf.exists) {
-    return {
-      ok: false,
-      reason: "file_missing",
-      nextAction: "target file does not exist",
-    };
+    return createFileNotFoundResult();
   }
   const content = joinLines(buf.lines, buf.endings);
   const matches = findAllNormalized(content, oldStr);
@@ -87,11 +83,7 @@ function applyReplaceAll(
   newStr: string,
 ): OpApplyResult {
   if (!buf.exists) {
-    return {
-      ok: false,
-      reason: "file_missing",
-      nextAction: "target file does not exist",
-    };
+    return createFileNotFoundResult();
   }
   const content = joinLines(buf.lines, buf.endings);
   const matches = findAllNormalized(content, oldStr);
@@ -207,11 +199,7 @@ function applyInsertAtLine(
     };
   }
   if (!buf.exists) {
-    return {
-      ok: false,
-      reason: "file_missing",
-      nextAction: "use 'create' before inserting into a new file",
-    };
+    return createFileNotFoundResult();
   }
   const { lines: newLines, endings: newEndings } = parseInsertContent(buf, content);
   const idx = line - 1;
@@ -230,11 +218,7 @@ function applyReplaceRange(
   content: string,
 ): OpApplyResult {
   if (!buf.exists) {
-    return {
-      ok: false,
-      reason: "file_missing",
-      nextAction: "target file does not exist",
-    };
+    return createFileNotFoundResult();
   }
   if (start < 1 || end < start || end > buf.lines.length) {
     return {
@@ -257,6 +241,14 @@ function replaceAllContent(buf: EditBuffer, content: string): void {
   const split = splitLines(content);
   buf.lines = [...split.lines];
   buf.endings = [...split.endings];
+}
+
+function createFileNotFoundResult(): OpFailure{
+  return {
+    ok: false,
+    reason: "not_found",
+    nextAction: "target file does not exist; use write(mode: 'overwrite') or write(mode: 'append') first",
+  };
 }
 
 /**

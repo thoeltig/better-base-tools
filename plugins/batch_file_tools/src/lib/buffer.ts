@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { resolveForWrite } from "./fs.js";
 import { joinLines, LineEnding, splitLines } from "./lines.js";
-import { FileErrorReason } from "../types.js";
+import { Reason } from "../types.js";
 
 export interface EditBuffer {
   existed: boolean;
@@ -59,7 +59,7 @@ export async function writeBuffer(buf: EditBuffer): Promise<void> {
 
 export class BufferLoadError extends Error {
   constructor(
-    public readonly reason: FileErrorReason,
+    public readonly reason: Reason,
     message: string,
   ) {
     super(message);

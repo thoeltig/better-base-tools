@@ -8,17 +8,20 @@ export const ReadMode = z.enum([
   .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
 
-export const FileErrorReason = z.enum([
+export const Reason = z.enum([
     "not_absolute",
     "not_found",
     "is_directory",
     "not_authorized",
+    "ambiguous",
+    "invalid_range",
+    "not_supported",
     "io_error"
   ]);
-export type FileErrorReason = z.infer<typeof FileErrorReason>;
+export type Reason = z.infer<typeof Reason>;
 
 export const FileError = z.object({
-    reason: FileErrorReason,
+    reason: Reason,
     message: z.string(),
   })
   .strict();
@@ -168,15 +171,6 @@ export const EditInput = z.object({
   .strict();
 export type EditInput = z.infer<typeof EditInput>;
 
-export const EditErrorReason = z.enum([
-    "not_found",
-    "ambiguous",
-    "file_missing",
-    "invalid_range",
-    "io_error",
-  ]);
-export type EditErrorReason = z.infer<typeof EditErrorReason>;
-
 export const NearestAnchor = z.object({
     start_line: z.number().int().min(1)
       .describe("1-indexed line where anchor starts"),
@@ -209,7 +203,7 @@ export const OpResult = z.object({
     type: OpType.optional(),
     summary: z.string().optional(),
     diff: z.string().optional(),
-    reason: EditErrorReason.optional(),
+    reason: Reason.optional(),
     hint: ErrorHint.optional(),
   })
   .strict();

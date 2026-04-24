@@ -1,7 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, join } from "node:path";
 import { homedir } from "node:os";
-import { FileErrorReason } from "../types.js";
+import { Reason } from "../types.js";
 import { fileURLToPath } from "node:url";
 import type { Root } from "@modelcontextprotocol/sdk/types.js";
 import { writeLogLine } from "./log.js";
@@ -14,7 +14,7 @@ export interface ReadFileResult {
 
 export interface ReadFileError {
   readonly ok: false;
-  readonly reason: FileErrorReason;
+  readonly reason: Reason;
   readonly message: string;
 }
 

@@ -7,7 +7,7 @@ import type {
   EditInput,
   EditOp,
   EditOutput,
-  FileErrorReason,
+  Reason,
   FileResult,
   FileStatus,
   OpResult,
@@ -184,13 +184,13 @@ function buildFileLoadErrorResult(
   err: unknown,
 ): FileResult {
   const message = err instanceof Error ? err.message : String(err);
-  const fileReason: FileErrorReason = err instanceof BufferLoadError ? err.reason : "io_error";
+  const fileReason: Reason = err instanceof BufferLoadError ? err.reason : "io_error";
   const decorated: DecoratedOp[] = file.ops.map((op, index) => {
     const opOutput = resolveOpOutput(op, options.fileOutput);
     const res: OpResult = {
       index,
       status: "error",
-      reason: "io_error",
+      reason: fileReason,
       hint: { next_action: message },
     };
     if (opOutput !== "minimal") res.type = op.type;
