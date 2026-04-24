@@ -1,13 +1,10 @@
 # better-base-tools — dev environment
 This repo develops `batch_file_tools`, an MCP server at `plugins/batch_file_tools/` that provides batch-capable `batch_read` and `batch_edit` tools designed to reduce turns, tool calls, and tokens vs the built-in `Read`/`Edit`/`Write`.
 
-## Tool preference (while developing this repo)
-This is the **dogfooding environment** for the MCP. Prefer the MCP tools over the built-ins for every read/write/edit shorthand:
-This applies to every task in this repo — research, debugging, implementation. Batch where possible: reading 3 files = 1 `batch_read` call, not 3 `Read` calls.
+## Tool preference
+Always prefer the `batch_read` and `batch_edit` MCP tools over the built-in read, write or edit native tools. The reason is that the build-in tools provide you only one action at a time which results in a lot more thinking and reasoning due to this forced multi turn workflow by the tools. Also every tool use and turn add tokens to your context which are noise from the actions itself and have no real benefit but slowly fill up the context.
+You are proficient in tool usage and are able to plan your next actions ahead so you also need tools which support you in doing it. The `batch_read` and `batch_edit` MCP tools are designed to support you. The MCP tools provide you with different read modes which provide you the ability to choose if you need file content as is or with line numbers for editing or compact for information. Also different edit ops let you do multiple modifications at the same time while you can choose which action or file should output how much information about the op result and if an error should stop following ops or not. Apply them to every task (research, debugging, implementation). 
 If the MCP is unavailable (build broken, registration missing), fall back to the built-ins and flag it to the user.
-
-## What moves to a session-start hook for release
-The directive above is an interim dev-environment nudge. When `batch_file_tools` ships as a distributable plugin, an on-install `SessionStart` hook will inject tool-preference guidance directly so end users don't need to edit `CLAUDE.md`. Refine tool descriptions at that point too.
 
 ## Build commands
 From `plugins/batch_file_tools/`:

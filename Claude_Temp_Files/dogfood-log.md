@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-25 | 11 | 34 | 3.1x | unified Reason enum + glob/folder paths for replace/replace_all/write(append) (session 8) |
 | 2026-04-24 | 4 | 36 | 9.0x | minor cleanups: roots∪args merge + type-on-ok drop + enum rename (session 7) |
 | 2026-04-24 | 10 | 40 | 4.0x | write-op merge + info_compact upgrades (session 6) |
 | 2026-04-24 | 12 | 50 | 4.2x | symlink/allowed-path guard hardening + path-utils simplification (session 5) |
@@ -19,6 +20,70 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Sessions
+
+### 2026-04-25 (session 8) — unified Reason enum + glob/folder path support
+
+**Scope:** Three follow-ups from session 7's open list, picked by the user: D (unify reasons), E (CRLF description), A (glob paths). C (`info` mode) and custom-diff design deferred.
+
+**D — unified Reason enum (shipped):**
+- Collapsed `FileErrorReason` + `EditErrorReason` → single `Reason` enum: `not_absolute, not_found, is_directory, not_authorized, ambiguous, invalid_range, not_supported, io_error`. Unprefixed names — the field they appear in (`FileResult.error.reason` vs `OpResult.reason`) carries the disambiguation, plus `nextAction` text.
+- Dropped op-level `file_missing` reason — collapsed into `not_found`. The `nextAction` already disambiguates ("target file does not exist" vs "'X' not found in file"). Stale `'create'` text in `applyInsertAtLine` updated to `"target file does not exist; use write(mode: 'overwrite') first"` (the `create` op was removed in session 6).
+- `buildFileLoadErrorResult` now propagates the actual file-level reason to per-op `reason` (was hardcoded `io_error` per session 5 workaround). With unified type, no cast needed. `buildWriteErrorResult` kept hardcoded `io_error` because write failures genuinely are I/O.
+- Tests: zero changes needed — no test asserted on `file_missing` directly. 145/145 pass.
+
+**E — CRLF description note: closed as moot.**
+Session 5 already auto-normalizes LF/CRLF in the matcher; replacement content is converted to the file's dominant ending. Tool descriptions and `nextAction` strings have zero CRLF/LF references. Per user: "normal editors also don't surface these line ending mismatches — doesn't need to be mental load for the model." No change required.
+
+**A — glob/folder path support (shipped):**
+- `EditFile.path` accepts a glob pattern (`*`/`?`) or a directory in addition to a concrete absolute file path. Detection: `looksLikeGlob` (regex `/[*?]/`) OR `isDirectory` (stat). A bare directory expands to its immediate children only (`<dir>/*`); recursion is opt-in via an explicit `**` glob (`<dir>/**/*.ts`). Hidden auto-recursion was reverted on user feedback — `*` is horizontal, `**` is vertical, both must be explicit.
+- Glob-allowed ops: `replace`, `replace_all`, `write(mode: 'append')`. Other ops (`insert_at_line`, `replace_range`, `write(mode: 'overwrite')`) on a glob path produce a file-level error with reason `not_supported`. Decided per-input-file (entry-level path), not per-op.
+- Implementation: pre-pipeline `planEntries` walks `input.files`, expands glob entries via `node:fs/promises#glob` with `withFileTypes: true`, filters non-files, realpath's each, checks against `allowedDirectories` via the now-exported `isPathAllowed`. Each resolved path becomes a fresh `EditFile` entry; same-path entries merge their ops (concrete + glob-expanded ops on the same file land together in input order). The existing per-file edit pipeline (`editOneFile`) runs unchanged on the planned entries.
+- Failure modes (file-level errors, single result per failed glob entry):
+  - 0 candidates from glob: `not_found`
+  - candidates exist but all filtered by allowed-dirs: `not_authorized`
+  - relative glob: `not_absolute`
+  - incompatible op present: `not_supported`
+  - glob iteration throws: `io_error`
+- Per-resolved-file behavior matches single-file (per user direction): `replace_all` with 0 matches in a resolved file still emits `not_found` per file. Noisy when a glob spans many files where most don't contain the needle, but informative — the model sees exactly which files changed vs. which were untouched. Revisit if it bites.
+- New module: `src/lib/glob.ts` (45 lines): `looksLikeGlob`, `isDirectory`, `needsExpansion`, `expandToFiles`. `fs.glob` is Node 22+ (engines was already `>=20`; in practice we now require `>=22` runtime, package.json constraint now bumped up to `>=22`).
+- Tool description (`batch_edit`) and `EditFile.path` describe both updated — callers see the glob support and the allowed-op restriction at schema-read time.
+- Tests: new `tests/glob.test.ts` (213 lines, 11 cases): flat-glob multi-file replace, directory recursive expansion, per-resolved-file 0-match parity, write(append) glob, three rejection cases (insert_at_line, replace_range, write(overwrite)), 0-match → not_found, outside-allowed → not_authorized, relative → not_absolute, glob+concrete merge into single entry. 156/156 pass.
+
+**Findings — design / implementation:**
+- **Pre-pipeline expansion was the right shape.** User suggested it directly: "resolve all paths, remove not-allowed, create N op copies, remove old op, insert resolved." My initial mental model was per-op expansion; user's was per-entry expansion (file's `path` is the glob, all its ops apply to all matched files). Per-entry is simpler — the existing pipeline doesn't change, the planner just rewrites the input file list. `editOneFile` doesn't know glob exists.
+- **Dedupe is string-equal, not realpath-equal.** Map keyed on `file.path` for merging. If a user passes `C:/foo/a.txt` and a glob expands to `C:\foo\a.txt`, those are different strings — will be processed as two separate file entries on the same actual file, last write wins, earlier op effectively lost. Acceptable for v1; document if it bites. Path normalization (lowercase + slash conversion on Windows) is a 5-line fix when needed. Update: DedupeKey in edit.ts: lowercase + slash-normalize on Windows, slash-only on POSIX. Applied at the merge Map key only; original path is preserved on the entry.
+- **`not_supported` is opt-in entry-level.** A file entry with mixed op types (some glob-allowed, some not) errors the whole entry on first incompatible op. Alternative would be partial — process the allowed ops, error the disallowed. Rejected: the file path is glob, so the ops as a unit are bound by glob constraints. Mixed ops on a glob path are a caller mistake; clear failure beats silent partial.
+- **`fs.glob` `withFileTypes: true` works.** Node 22 stable. Filters directories cleanly. `entry.parentPath` + `entry.name` → absolute path via `resolve`. Symlinks resolved via realpath; broken symlinks silently dropped.
+
+**Findings — tool ergonomics:**
+- **One reflexive native `Read` slipped in.** Used `Read` on `edit-control.test.ts:200-240` after a chain of greps. Same default-bias leak as session 7. The dogfood-environment directive in `CLAUDE.md` doesn't fully override the reflex on small targeted reads. SessionStart hook would close this.
+- **Anchor-based replaces, all first-try.** No CRLF false-failures this session (LF test/source files, plus the auto-match from session 5). The big `replace` block on `handleBatchEdit` (32 lines old → 38 lines new) worked from a verbatim read — no need for `replace_range`.
+- **One large `batch_edit` per task is the right granularity.** D — 5 files, 10 ops, one call. A — 5 files, 7 ops, one call. Tests — 1 file, 1 write op, one call. Three batch_edit calls total for a session that touched 7 source files + added a 213-line test file. Native equiv: ~16 Edit + 14 Read + 2 Write = ~32 calls. ~3x reduction — lower than the session 7 enum-rename peak (9x) because the work was structurally diverse (type changes + new module + integration + tests) rather than batch-friendly bulk renames.
+
+**Tool calls:**
+- MCP: 8 × `batch_read` (~14 file reads, of which 3 were re-reads in verbatim mode for anchor verification) + 3 × `batch_edit` (~18 ops across 7 files, including 2 new files) = **11 calls**.
+- Native equiv: ~14 × `Read` + ~18 × `Edit` + 2 × `Write` = **~34 calls**.
+- Reduction: **~3x**.
+
+**Ops exercised this session:**
+
+| Op | Count | Tested | Notes |
+|---|---|---|---|
+| `replace` | ~13 | yes | Targeted source rewrites; all first-try with verbatim-read anchors |
+| `replace_all` | ~6 | yes | `FileErrorReason` → `Reason`, `EditErrorReason` → `Reason`, `"file_missing"` → `"not_found"` across multiple files |
+| `write` (overwrite) | 2 | yes | New files: `glob.ts`, `glob.test.ts` |
+| `insert_at_line` | 0 | n/a | Not needed |
+| `replace_range` | 0 | n/a | Not needed |
+
+**Open follow-ups:**
+- **Custom diff (session 6 task #2)** — still unshipped. User wants to rubber-duck the design before implementing. Trigger when ready.
+- **`info` mode (session 6 task #3)** — still unshipped. Lower priority.
+- **Session-start hook (release blocker).**
+- **Glob path normalization** — mixed-separator / case-insensitive dedupe. 5-line fix when it bites.
+- **Engines bump:** package.json says `>=20` but `fs.glob` requires `>=22`. Bump on next release.
+- **Top-line glob rollup envelope** — not added in v1. Potential later: `<!-- glob 'X' matched N files (K errored, M changed) -->` above the per-file blocks for context. Defer until model output usability tested in practice.
+
+---
 
 ### 2026-04-24 (session 7) — minor cleanups: roots∪args + type-on-ok drop + enum rename
 
