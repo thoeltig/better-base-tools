@@ -16,7 +16,7 @@ import type {
 } from "../types.js";
 
 interface FileEditOptions {
-  continueOnError: boolean;
+  stopOnError: boolean;
   dryRun: boolean | undefined;
   verbose: boolean;
 }
@@ -32,6 +32,7 @@ export async function handleBatchEdit(
 ): Promise<EditOutput> {
   const results: FileResult[] = [];
   let abortRemaining = false;
+  const rootStop = input.stopOnError ?? false;
   const rootVerbose = input.verbose ?? false;
 
   const entries = await planEntries(input.files, allowedDirectories);
@@ -49,7 +50,7 @@ export async function handleBatchEdit(
       fileResult = entry.result;
     } else {
       const options: FileEditOptions = {
-        continueOnError: entry.file.continueOnError ?? input.continueOnError,
+        stopOnError: entry.file.stopOnError ?? rootStop,
         dryRun: input.dryRun,
         verbose: entry.file.verbose ?? rootVerbose,
       };
@@ -57,7 +58,8 @@ export async function handleBatchEdit(
     }
     results.push(fileResult);
 
-    if (fileResult.status !== "ok" && !input.continueOnError) {
+    // Across-file abort uses root only — file.stopOnError scopes within-file.
+    if (fileResult.status !== "ok" && rootStop) {
       abortRemaining = true;
     }
   }
@@ -246,7 +248,7 @@ async function editOneFile(
         res: decorateOp(errRes, op, opVerbose),
         opVerbose,
       });
-      if (!options.continueOnError) abortedOps = true;
+      if (options.stopOnError) abortedOps = true;
       continue;
     }
 
@@ -258,7 +260,7 @@ async function editOneFile(
       opVerbose,
     });
 
-    if (!res.ok && !options.continueOnError) {
+    if (!res.ok && options.stopOnError) {
       abortedOps = true;
     }
   }

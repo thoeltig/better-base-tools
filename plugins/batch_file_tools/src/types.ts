@@ -143,7 +143,7 @@ export type EditOp = z.infer<typeof EditOp>;
 export const EditFile = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path. For `replace`/`replace_all`/`write(append)` ops: also accepts a glob pattern (`*` matches within one path segment; `**` recurses across segments — e.g. `C:/proj/**/*.ts`) or a directory path (single level — use an explicit `**` glob for recursive walks). Other ops require a concrete absolute file path."),
-    continueOnError: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
     verbose: z.boolean().optional(),
     ops: z.array(EditOp).min(1)
       .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts an optional `verbose` boolean."),
@@ -152,8 +152,8 @@ export const EditFile = z.object({
 export type EditFile = z.infer<typeof EditFile>;
 
 export const EditInput = z.object({
-    continueOnError: z.boolean().default(true)
-      .describe("Continue on error or stop then next ops will be skipped (root default; overridable at file level and op level)"),
+    stopOnError: z.boolean().optional()
+      .describe("Stop on first error. Default false (continue): a failed op or file does not skip remaining work. Set true to abort: in-file ops after a failure get status:'skipped'; subsequent files get status:'skipped' when set at root. Resolution within a file: file.stopOnError ?? root.stopOnError ?? false (first defined wins). Across-file abort uses the root flag only; file-level scopes within-file."),
     dryRun: z.boolean().optional()
       .describe("Use to test changes without actually applying them"),
     verbose: z.boolean().optional()

@@ -40,7 +40,6 @@ async function makeFiles(
 async function runEdit(file: EditFile, allowed: string[] = [allowedDir]) {
   return handleBatchEdit(
     {
-      continueOnError: true,
       dryRun: false,
       verbose: true,
       files: [file],
@@ -210,7 +209,6 @@ describe("glob expansion — merge with concrete entries", () => {
     const altSep = target.replace(/\\/g, "/");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         verbose: true,
         files: [
@@ -232,7 +230,6 @@ describe("glob expansion — merge with concrete entries", () => {
     const target = join(caseDir, "only.txt");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         verbose: true,
         files: [

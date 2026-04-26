@@ -31,7 +31,6 @@ async function fixture(name: string, content: string): Promise<string> {
 
 async function runEdit(file: EditFile) {
   return handleBatchEdit({
-    continueOnError: false,
     dryRun: false,
     verbose: true,
     files: [file],
@@ -224,7 +223,6 @@ describe("phased execution order", () => {
     const p = await fixture("overlap-rr.txt", "1\n2\n3\n4\n5\n6\n7\n8\n");
     const out = await runEdit({
       path: p,
-      continueOnError: true,
       ops: [
         { type: "replace_range", start: 2, end: 5, content: "X\n" },
         { type: "replace_range", start: 4, end: 7, content: "Y\n" },
@@ -243,7 +241,6 @@ describe("phased execution order", () => {
     const p = await fixture("overlap-ins.txt", "1\n2\n3\n4\n5\n");
     const out = await runEdit({
       path: p,
-      continueOnError: true,
       ops: [
         { type: "replace_range", start: 2, end: 4, content: "X\n" },
         { type: "insert_at_line", line: 3, content: "Y\n" },
@@ -272,7 +269,6 @@ describe("phased execution order", () => {
     const p = await fixture("dup-ins.txt", "A\nB\n");
     const out = await runEdit({
       path: p,
-      continueOnError: true,
       ops: [
         { type: "insert_at_line", line: 2, content: "X\n" },
         { type: "insert_at_line", line: 2, content: "Y\n" },
@@ -290,7 +286,7 @@ describe("phased execution order", () => {
       { type: "insert_at_line", line: 99, content: "Y\n" }, // phase 1, line 99 — fails first (desc sort)
       { type: "write", mode: "append", content: "Z\n" }, // phase 2, skipped
     ];
-    const out = await runEdit({ path: p, ops });
+    const out = await runEdit({ path: p, stopOnError: true, ops });
     const ops_out = out.results[0]!.ops;
     // Execution order: line 99 first (error) → line 1 skipped → append skipped.
     // Result maps back to input order: [skipped, error, skipped].
@@ -459,7 +455,6 @@ describe("batch across multiple files", () => {
     const a = await fixture("ba.txt", "A\n");
     const b = await fixture("bb.txt", "B\n");
     const out = await handleBatchEdit({
-      continueOnError: false,
       dryRun: false,
       verbose: true,
       files: [

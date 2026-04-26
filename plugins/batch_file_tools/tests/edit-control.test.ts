@@ -36,17 +36,15 @@ async function edit(input: EditInput) {
   return handleBatchEdit(input, [workDir]);
 }
 
-describe("continueOnError — op level (file-level flag)", () => {
-  it("failing op does NOT skip later ops when file.continueOnError=true", async () => {
+describe("stopOnError — file level", () => {
+  it("default (continue): a failing op does NOT skip later ops", async () => {
     const p = await fixture("file.txt", "A\nB\nC\n");
     const out = await edit({
-      continueOnError: false,
       dryRun: false,
       verbose: true,
       files: [
         {
           path: p,
-          continueOnError: true,
           ops: [
             { type: "write", mode: "append", content: "D\n" }, // ok
             { type: "replace", old: "ZZZ_no_match", new: "x" }, // error
@@ -62,16 +60,15 @@ describe("continueOnError — op level (file-level flag)", () => {
     expect(await readText(p)).toBe("A\nB\nC\nD\nE\n");
   });
 
-  it("failing op DOES skip later ops when file.continueOnError=false", async () => {
+  it("file.stopOnError=true: a failing op DOES skip later ops", async () => {
     const p = await fixture("file.txt", "A\n");
     const out = await edit({
-      continueOnError: false,
       dryRun: false,
       verbose: true,
       files: [
         {
           path: p,
-          continueOnError: false,
+          stopOnError: true,
           ops: [
             { type: "replace", old: "ZZZ", new: "x" }, // error
             { type: "write", mode: "append", content: "B\n" }, // skipped
@@ -85,12 +82,12 @@ describe("continueOnError — op level (file-level flag)", () => {
   });
 });
 
-describe("continueOnError — file level (top-level flag)", () => {
-  it("a file with errors aborts later files when top-level=false", async () => {
+describe("stopOnError — root level", () => {
+  it("a file with errors aborts later files when root.stopOnError=true", async () => {
     const a = await fixture("a.txt", "A\n");
     const b = await fixture("b.txt", "B\n");
     const out = await edit({
-      continueOnError: false,
+      stopOnError: true,
       dryRun: false,
       verbose: true,
       files: [
@@ -103,11 +100,10 @@ describe("continueOnError — file level (top-level flag)", () => {
     expect(await readText(b)).toBe("B\n");
   });
 
-  it("top-level=true lets later files proceed after an earlier failure", async () => {
+  it("default (continue): later files proceed after an earlier failure", async () => {
     const a = await fixture("a.txt", "A\n");
     const b = await fixture("b.txt", "B\n");
     const out = await edit({
-      continueOnError: true,
       dryRun: false,
       verbose: true,
       files: [
@@ -125,7 +121,6 @@ describe("dryRun", () => {
   it("reports success but does not modify disk", async () => {
     const p = await fixture("dry.txt", "hello\n");
     const out = await edit({
-      continueOnError: false,
       dryRun: true,
       verbose: true,
       files: [{ path: p, ops: [{ type: "write", mode: "append", content: "world\n" }] }],
@@ -137,7 +132,6 @@ describe("dryRun", () => {
   it("dryRun + write(overwrite) does NOT create the file on disk", async () => {
     const p = tmpPath("dry_new.txt");
     const out = await edit({
-      continueOnError: false,
       dryRun: true,
       verbose: true,
       files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] }],
@@ -153,7 +147,6 @@ describe("verbose flag", () => {
     it("all ops ok -> {path,status:'ok'}, no ops array", async () => {
       const p = await fixture("min-ok.txt", "a\nb\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
         files: [{ path: p, ops: [{ type: "write", mode: "append", content: "c\n" }] }],
       });
@@ -165,12 +158,10 @@ describe("verbose flag", () => {
     it("partial -> status:'partial' with only failed ops carrying type+reason+hint", async () => {
       const p = await fixture("min-partial.txt", "a\nb\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
         files: [
           {
             path: p,
-            continueOnError: true,
             ops: [
               { type: "write", mode: "append", content: "c\n" }, // ok
               { type: "replace", old: "ZZZ", new: "x" }, // error
@@ -191,7 +182,6 @@ describe("verbose flag", () => {
 
     it("total file-load error -> status:'error' with file.error block", async () => {
       const out = await edit({
-        continueOnError: true,
         dryRun: false,
         files: [
           {
@@ -210,7 +200,6 @@ describe("verbose flag", () => {
     it("emits all ops with status+summary strings", async () => {
       const p = await fixture("sum.txt", "a\nb\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
         verbose: true,
         files: [
@@ -234,7 +223,6 @@ describe("verbose flag", () => {
     it("op.verbose=true enables verbose when root and file are unset", async () => {
       const p = await fixture("prec-op.txt", "a\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
         files: [
           {
@@ -268,7 +256,6 @@ describe("verbose flag", () => {
     it("op.verbose=false overrides file.verbose=true (silence one op)", async () => {
       const p = await fixture("override-op.txt", "a\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
         files: [
           {
@@ -291,7 +278,6 @@ describe("verbose flag", () => {
     it("file.verbose=false overrides root.verbose=true (silence whole file)", async () => {
       const p = await fixture("override-file.txt", "a\n");
       const out = await edit({
-        continueOnError: false,
         verbose: true,
         dryRun: false,
         files: [
@@ -309,7 +295,7 @@ describe("verbose flag", () => {
     it("file.stopOnError=false overrides root.stopOnError=true within the file", async () => {
       const p = await fixture("override-stop.txt", "A\n");
       const out = await edit({
-        continueOnError: false,
+        stopOnError: true,
         dryRun: false,
         verbose: true,
         files: [
@@ -332,7 +318,7 @@ describe("verbose flag", () => {
       const a = await fixture("a.txt", "A\n");
       const b = await fixture("b.txt", "B\n");
       const out = await edit({
-        continueOnError: false,
+        stopOnError: true,
         dryRun: false,
         verbose: true,
         files: [

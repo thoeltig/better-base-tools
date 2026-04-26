@@ -49,7 +49,6 @@ describe("auth — edit", () => {
     const p = join(outsideDir, "pwn.txt");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
@@ -65,7 +64,6 @@ describe("auth — edit", () => {
     const p = join(outsideDir, "missing", "nested", "pwn.txt");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
@@ -79,7 +77,6 @@ describe("auth — edit", () => {
     const p = join(allowedDir, "deep", "nested", "ok.txt");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "fine\n" }] }],
       },
@@ -94,7 +91,6 @@ describe("auth — edit", () => {
     await writeFile(p, "x\n");
     const out = await handleBatchEdit(
       {
-        continueOnError: true,
         dryRun: false,
         files: [{ path: p, ops: [{ type: "write", mode: "append", content: "y\n" }] }],
       },
