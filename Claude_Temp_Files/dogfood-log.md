@@ -8,15 +8,12 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-26 | 19 | ~38 | ~50% | session 10 — diff drop (A) + verbose boolean + stopOnError rename/flip + resolution-semantics fix; 156/156 tests pass |
 | 2026-04-25 | 7 | n/a | n/a | dogfood-only: read-mode token measurement (D) + diff-drop decision (A) (session 9) |
 
 Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` with 1 file or 1 op per call.
 
 ## Open follow-ups
-
-**Queued for session 10 (bundled — all breaking schema changes, one migration round):**
-- **Drop `diff` output entirely.** Removes `formatDiff*` / `diffContent`, drops `diff@9.0.0` dep, replaces `output: minimal|summary|diff` enum with `verbose?: boolean` flag at root/file/op (op > file > root precedence preserved). Default `false` = current `minimal`. `true` = current `summary`.
-- **Rename `continueOnError` → `stopOnError` + flip default semantic.** New shape: `stopOnError?: boolean, default false` (= continue), `true` = stop. Tests using stop-by-default need `stopOnError: true` added explicitly; tests that set `continueOnError: true` drop the field.
 
 **Active (subsequent sessions):**
 - **B — `info` mode (peek):** metadata + per-mode dry-run `{lines, chars}`. Design agreed in session 6.
@@ -25,16 +22,55 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 **Deferred:**
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
 
+**Closed / dropped (session 10):**
+- A (diff drop) — shipped. `diffContent` + `diff@9.0.0` dep + diff envelope paths removed; `OpResult.diff` / `FileResult.diff` dropped from types and tests.
+- `output` enum → `verbose` boolean — shipped at root/file/op level. Resolution: `op.verbose ?? file.verbose ?? root.verbose ?? false` (explicit `false` overrides higher-level `true`).
+- `continueOnError` → `stopOnError` rename + default flip — shipped at root/file level. Default `false` (continue). Op-level intentionally NOT added (no use case observed). Resolution within-file: `file ?? root ?? false`. Across-file abort: root only.
+
 **Closed / dropped (session 9 cleanup):**
 - E (engines bump `>=22`) — already shipped (`package.json:43`).
 - G (glob path normalization) — already shipped (`edit.ts:170` `dedupeKey`).
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
-**Naming questions, decided in session 9:**
-- `output` enum → `verbose` boolean. Implementation in session 10.
-- `continueOnError` → `stopOnError` + default semantic flip. See session 9 Q3 below. Bundled into session 10.
-
 ## Sessions
+
+### 2026-04-26 (session 10) — diff drop, `verbose` boolean, `stopOnError` rename + default flip
+
+**Scope:** Three bundled breaking schema changes from session 9. Source migration + full test migration + dependency drop. One round, no compat shims (clean break, no public release yet).
+
+**Shipped:**
+
+1. **Diff dropped.** Removed `diffContent` (was `edit.ts:433-443`), removed all `output: "diff"` paths in `editOneFile` and envelope formatter, dropped `OpResult.diff` / `FileResult.diff` from `types.ts`, dropped `diff@9.0.0` from `package.json` deps. Lockfile synced via `npm install` (1 package removed).
+2. **`output` enum → `verbose` boolean.** Replaced `OutputMode` enum at root/file/op level. New schema: `verbose?: boolean` at all three levels. Removed `OutputMode` type entirely. Tool description updated to reflect the boolean.
+3. **`continueOnError` → `stopOnError` + default flip.** Renamed at root and file level (kept op-level out — no current use case). Default semantic flipped: `false` (or undefined) = continue; `true` = stop.
+
+**Resolution semantics:**
+- Rule: **first defined value wins** along `op > file > root` (verbose) or `file > root` (stopOnError). Default when nothing is set: `false`.
+- Both `true` and `false` are real overriding values — explicit `false` overrides a higher-level `true`. `undefined` inherits.
+- Code: `op.verbose ?? file.verbose ?? root.verbose ?? false`; `file.stopOnError ?? root.stopOnError ?? false`.
+- **Across-file abort gate uses `root.stopOnError` only.** File-level `stopOnError` scopes within-file. So `root.stopOnError: true` + `file.stopOnError: false` means "this file's ops continue on error, but if it ends with non-ok status, root still aborts subsequent files."
+- First implementation pass (mid-session) used `=== true || parent` (any-true-wins), which made `false` indistinguishable from `undefined`. Reverted to `??` chain after user clarified that `false` should override. Tests added: `op.verbose=false` silences one op under `file.verbose=true`; `file.verbose=false` silences whole file under `root.verbose=true`; `file.stopOnError=false` continues within file under `root.stopOnError=true` (and root abort still triggers next file). 156/156 passing.
+- **Subtle:** verbose controls OUTPUT only, not execution. An op with `verbose: false` under `file.verbose: true` still executes — it's just filtered from the response array. Locked in by an `expect(await readText(p)).toBe(...)` assertion in the override test.
+
+**Implementation notes:**
+- `editOneFile` simplified: removed `before`/`after` diff capture in the op loop, removed `fileResult.diff` write at end. `decorateOp` collapsed from 3 branches (minimal/summary/diff) to 2 (verbose true/false). `resolveOpOutput` → `resolveOpVerbose` (boolean OR).
+- `filterOps` keeps any non-ok op regardless of verbose — errors and skipped ops always surface (matches the rule "errors always surface regardless of this flag" in the field description).
+- `handleBatchEdit` resolves `rootStop` / `rootVerbose` once at entry, then OR's with file-level fields when entering each file. Across-file abort uses **only** `rootStop` (file-level `stopOnError` scopes within a file).
+- Skipped ops in minimal mode: kept in the response (not filtered out) since `status !== "ok"` is the filter rule. This means a partial file with one error + skipped tail still shows the skipped ops. Reasonable: the model needs to know what didn't run.
+
+**Tests migrated:**
+- `edit.test.ts` (567 lines) — helper migrated, 3 file-level `continueOnError: true` flags dropped (default), abort test got explicit `stopOnError: true`, multi-file test migrated.
+- `edit-control.test.ts` — rewrote (350 → 245 lines). Dropped the cross-flag override test (no longer expressible under "any true wins"); dropped diff describe block entirely; renamed describe blocks to match new field names.
+- `auth.test.ts`, `glob.test.ts` — mechanical: `continueOnError: true` + `output: "summary"` blocks dropped or migrated to `verbose: true`.
+- `envelope.test.ts` — dropped 2 diff-mode formatter tests.
+- Final: `npm run build` clean, `npm test` 152/152 passing.
+
+**Tool calls (this session):**
+- ~16 MCP calls (9 `batch_read` + 7 `batch_edit`) handling 5 source files, 5 test files, 1 log file. Plus 3 Bash (typecheck/build+test/install), 1 Grep, 2 Glob.
+- Native equivalent estimate: ~12 reads + ~21 edits = ~33 calls. **Reduction ~52%.**
+- Heaviest single batch_edit: `types.ts` with 6 ops in one call (replace_all of `output: OutputMode.optional()` plus 5 targeted edits). One op (the EditFile `continueOnError` rename) failed because the prior `replace_all` had already changed the anchor's neighboring line; followed up with a 1-op fix call. Lesson noted: when chaining replace_all + targeted replace within one batch, the targeted anchor must not depend on lines the replace_all rewrites.
+
+**Open follow-ups:** see top-of-file Open follow-ups section.
 
 ### 2026-04-25 (session 9) — read-mode token measurement (D) + diff-drop decision (A)
 
