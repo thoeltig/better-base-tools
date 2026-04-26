@@ -42,10 +42,6 @@ function editResultToBlock(r: FileResult): TextBlock {
     if (body !== null) bodyParts.push(body);
   });
 
-  if (r.diff !== undefined) {
-    bodyParts.unshift(r.diff.replace(/\n$/, ""));
-  }
-
   const header =
     headerLines.length === 1
       ? `<!-- ${headerLines[0]} -->`
@@ -80,18 +76,10 @@ function buildOpLine(op: OpResult, idx: number): string {
 }
 
 function buildOpBody(op: OpResult, idx: number): string | null {
-  if (op.status === "error") {
-    const anchor = op.hint?.nearest_anchor;
-    if (anchor) {
-      const label = `<!-- op ${idx} nearest_anchor, lines ${anchor.start_line}-${anchor.end_line} -->`;
-      const content = anchor.content.replace(/\n$/, "");
-      return `${label}\n${content}`;
-    }
-    return null;
-  }
-  if (op.diff !== undefined) {
-    const label = `<!-- op ${idx} diff -->`;
-    return `${label}\n${op.diff.replace(/\n$/, "")}`;
-  }
-  return null;
+  if (op.status !== "error") return null;
+  const anchor = op.hint?.nearest_anchor;
+  if (!anchor) return null;
+  const label = `<!-- op ${idx} nearest_anchor, lines ${anchor.start_line}-${anchor.end_line} -->`;
+  const content = anchor.content.replace(/\n$/, "");
+  return `${label}\n${content}`;
 }

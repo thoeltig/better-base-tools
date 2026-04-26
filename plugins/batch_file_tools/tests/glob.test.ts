@@ -42,7 +42,7 @@ async function runEdit(file: EditFile, allowed: string[] = [allowedDir]) {
     {
       continueOnError: true,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [file],
     },
     allowed,
@@ -212,7 +212,7 @@ describe("glob expansion — merge with concrete entries", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
+        verbose: true,
         files: [
           { path: target, ops: [{ type: "write", mode: "append", content: "A\n" }] },
           { path: altSep, ops: [{ type: "write", mode: "append", content: "B\n" }] },
@@ -234,7 +234,7 @@ describe("glob expansion — merge with concrete entries", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
+        verbose: true,
         files: [
           { path: target, ops: [{ type: "replace", old: "alpha", new: "ALPHA" }] },
           { path: join(caseDir, "*.txt"), ops: [{ type: "replace_all", old: "beta", new: "BETA" }] },

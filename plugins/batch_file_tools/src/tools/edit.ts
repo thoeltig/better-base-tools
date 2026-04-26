@@ -1,5 +1,4 @@
 import { isAbsolute } from "node:path";
-import { structuredPatch } from "diff";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
 import { isPathAllowed } from "../lib/fs.js";
@@ -14,14 +13,12 @@ import type {
   FileResult,
   FileStatus,
   OpResult,
-  OutputMode,
 } from "../types.js";
 
 interface FileEditOptions {
   continueOnError: boolean;
   dryRun: boolean | undefined;
-  rootOutput: OutputMode;
-  fileOutput: OutputMode;
+  verbose: boolean;
 }
 
 interface IndexedOp {
@@ -35,13 +32,14 @@ export async function handleBatchEdit(
 ): Promise<EditOutput> {
   const results: FileResult[] = [];
   let abortRemaining = false;
+  const rootVerbose = input.verbose ?? false;
 
   const entries = await planEntries(input.files, allowedDirectories);
 
   for (const entry of entries) {
     if (abortRemaining) {
       results.push(
-        entry.kind === "error" ? entry.result : skipFile(entry.file, input.output),
+        entry.kind === "error" ? entry.result : skipFile(entry.file, rootVerbose),
       );
       continue;
     }
@@ -53,8 +51,7 @@ export async function handleBatchEdit(
       const options: FileEditOptions = {
         continueOnError: entry.file.continueOnError ?? input.continueOnError,
         dryRun: input.dryRun,
-        rootOutput: input.output,
-        fileOutput: entry.file.output ?? input.output,
+        verbose: entry.file.verbose ?? rootVerbose,
       };
       fileResult = await editOneFile(entry.file, options, allowedDirectories);
     }
@@ -188,13 +185,13 @@ function buildGlobError(file: EditFile, reason: Reason, message: string): FileRe
   };
 }
 
-function skipFile(file: EditFile, rootOutput: OutputMode): FileResult {
-  const fileOutput = file.output ?? rootOutput;
+function skipFile(file: EditFile, rootVerbose: boolean): FileResult {
+  const fileVerbose = file.verbose ?? rootVerbose;
   const decorated = file.ops.map((op, index) => {
-    const opOutput = resolveOpOutput(op, fileOutput);
+    const opVerbose = resolveOpVerbose(op, fileVerbose);
     const res: OpResult = { index, status: "skipped" };
-    if (opOutput !== "minimal") res.type = op.type;
-    return { res, opOutput };
+    if (opVerbose) res.type = op.type;
+    return { res, opVerbose };
   });
   return {
     path: file.path,
@@ -232,12 +229,12 @@ async function editOneFile(
   let abortedOps = false;
 
   for (const { op, inputIndex } of executionOrder) {
-    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const opVerbose = resolveOpVerbose(op, options.verbose);
 
     if (abortedOps) {
       decoratedByIndex.set(inputIndex, {
-        res: decorateOp({ index: inputIndex, status: "skipped" }, op, opOutput),
-        opOutput,
+        res: decorateOp({ index: inputIndex, status: "skipped" }, op, opVerbose),
+        opVerbose,
       });
       continue;
     }
@@ -246,24 +243,19 @@ async function editOneFile(
     if (overlap) {
       const errRes = toOpResult(inputIndex, overlap);
       decoratedByIndex.set(inputIndex, {
-        res: decorateOp(errRes, op, opOutput),
-        opOutput,
+        res: decorateOp(errRes, op, opVerbose),
+        opVerbose,
       });
       if (!options.continueOnError) abortedOps = true;
       continue;
     }
 
-    const before = opOutput === "diff" ? joinLines(buf.lines, buf.endings) : "";
     const res = applyOp(buf, op);
     const opResult = toOpResult(inputIndex, res);
 
-    if (opOutput === "diff" && res.ok) {
-      const after = joinLines(buf.lines, buf.endings);
-      opResult.diff = diffContent(before, after);
-    }
     decoratedByIndex.set(inputIndex, {
-      res: decorateOp(opResult, op, opOutput),
-      opOutput,
+      res: decorateOp(opResult, op, opVerbose),
+      opVerbose,
     });
 
     if (!res.ok && !options.continueOnError) {
@@ -274,10 +266,10 @@ async function editOneFile(
   const decorated: DecoratedOp[] = file.ops.map((op, i) => {
     const existing = decoratedByIndex.get(i);
     if (existing !== undefined) return existing;
-    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const opVerbose = resolveOpVerbose(op, options.verbose);
     return {
-      res: decorateOp({ index: i, status: "skipped" }, op, opOutput),
-      opOutput,
+      res: decorateOp({ index: i, status: "skipped" }, op, opVerbose),
+      opVerbose,
     };
   });
   const opResults: OpResult[] = decorated.map((d) => d.res);
@@ -294,20 +286,16 @@ async function editOneFile(
   }
 
   const status = computeFileStatus(opResults);
-  const fileResult: FileResult = {
+  return {
     path: file.path,
     status,
     ops: filterOps(decorated),
   };
-  if (options.fileOutput === "diff" && changed) {
-    fileResult.diff = diffContent(originalContent, finalContent);
-  }
-  return fileResult;
 }
 
 interface DecoratedOp {
   readonly res: OpResult;
-  readonly opOutput: OutputMode;
+  readonly opVerbose: boolean;
 }
 
 function buildFileLoadErrorResult(
@@ -318,15 +306,15 @@ function buildFileLoadErrorResult(
   const message = err instanceof Error ? err.message : String(err);
   const fileReason: Reason = err instanceof BufferLoadError ? err.reason : "io_error";
   const decorated: DecoratedOp[] = file.ops.map((op, index) => {
-    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const opVerbose = resolveOpVerbose(op, options.verbose);
     const res: OpResult = {
       index,
       status: "error",
       reason: fileReason,
       hint: { next_action: message },
+      type: op.type,
     };
-    if (opOutput !== "minimal") res.type = op.type;
-    return { res, opOutput };
+    return { res, opVerbose };
   });
   return {
     path: file.path,
@@ -345,15 +333,15 @@ function buildWriteErrorResult(
   const message = err instanceof Error ? err.message : String(err);
   const decorated: DecoratedOp[] = opResults.map((r, i) => {
     const op = file.ops[i]!;
-    const opOutput = resolveOpOutput(op, options.fileOutput);
+    const opVerbose = resolveOpVerbose(op, options.verbose);
     const res: OpResult = {
       index: r.index,
       status: "error",
       reason: "io_error",
       hint: { next_action: `write failed: ${message}` },
+      type: op.type,
     };
-    if (opOutput !== "minimal") res.type = op.type;
-    return { res, opOutput };
+    return { res, opVerbose };
   });
   return {
     path: file.path,
@@ -363,52 +351,37 @@ function buildWriteErrorResult(
   };
 }
 
-function resolveOpOutput(op: EditOp, fileOutput: OutputMode): OutputMode {
-  if (op.output !== undefined) return op.output;
-  // File-level diff carries the whole-file change already; per-op default
-  // collapses to minimal so successful ops don't duplicate the diff info.
-  if (fileOutput === "diff") return "minimal";
-  return fileOutput;
+function resolveOpVerbose(op: EditOp, fileVerbose: boolean): boolean {
+  return op.verbose ?? fileVerbose;
 }
 
 function decorateOp(
   result: OpResult,
   op: EditOp,
-  opOutput: OutputMode,
+  opVerbose: boolean,
 ): OpResult {
   const out = { ...result };
-  if (opOutput === "minimal") {
-    // Errored ops keep type so the model can correlate without summaries.
+  if (!opVerbose) {
     if (out.status === "error") {
       out.type = op.type;
     } else {
       delete out.type;
       delete out.summary;
-      delete out.diff;
     }
     return out;
   }
-  // summary / diff: ops array is dense + input-ordered, so positional index
-  // is redundant — drop it. Keep type only on errors where it aids correlation.
   delete out.index;
   if (out.status === "error") {
     out.type = op.type;
   } else {
     delete out.type;
   }
-  if (opOutput === "summary") {
-    delete out.diff;
-  } else {
-    // diff mode: drop summary string (diff carries the change info).
-    delete out.summary;
-  }
   return out;
 }
 
 function filterOps(decorated: readonly DecoratedOp[]): OpResult[] {
-  // Include if the op had any failure OR its effective per-op mode is not minimal.
   return decorated
-    .filter((d) => d.res.status !== "ok" || d.opOutput !== "minimal")
+    .filter((d) => d.res.status !== "ok" || d.opVerbose)
     .map((d) => d.res);
 }
 
@@ -428,18 +401,6 @@ function anchorLine(op: EditOp): number {
   if (op.type === "insert_at_line") return op.line;
   if (op.type === "replace_range") return op.start;
   return 0;
-}
-
-function diffContent(oldContent: string, newContent: string): string {
-  const { hunks } = structuredPatch("", "", oldContent, newContent, "", "", { context: 3 });
-  if (hunks.length === 0) return "";
-  const body = hunks
-    .map((h) => {
-      const header = `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`;
-      return [header, ...h.lines].join("\n");
-    })
-    .join("\n");
-  return body + "\n";
 }
 
 interface Phase1Range {

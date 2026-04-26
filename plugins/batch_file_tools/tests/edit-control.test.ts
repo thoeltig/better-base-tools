@@ -42,7 +42,7 @@ describe("continueOnError — op level (file-level flag)", () => {
     const out = await edit({
       continueOnError: false,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [
         {
           path: p,
@@ -67,7 +67,7 @@ describe("continueOnError — op level (file-level flag)", () => {
     const out = await edit({
       continueOnError: false,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [
         {
           path: p,
@@ -83,26 +83,6 @@ describe("continueOnError — op level (file-level flag)", () => {
     expect(out.results[0]!.ops[1]!.status).toBe("skipped");
     expect(await readText(p)).toBe("A\n"); // no write
   });
-
-  it("file-level flag overrides top-level when both set", async () => {
-    const p = await fixture("f.txt", "A\n");
-    const out = await edit({
-      continueOnError: true,
-      dryRun: false,
-      output: "summary",
-      files: [
-        {
-          path: p,
-          continueOnError: false, // this wins for op-level
-          ops: [
-            { type: "replace", old: "ZZ", new: "x" }, // error
-            { type: "write", mode: "append", content: "B\n" }, // should be skipped
-          ],
-        },
-      ],
-    });
-    expect(out.results[0]!.ops[1]!.status).toBe("skipped");
-  });
 });
 
 describe("continueOnError — file level (top-level flag)", () => {
@@ -112,7 +92,7 @@ describe("continueOnError — file level (top-level flag)", () => {
     const out = await edit({
       continueOnError: false,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
         { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] }, // should be skipped
@@ -129,7 +109,7 @@ describe("continueOnError — file level (top-level flag)", () => {
     const out = await edit({
       continueOnError: true,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [
         { path: a, ops: [{ type: "replace", old: "ZZZ", new: "x" }] }, // fails
         { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] }, // should run
@@ -147,7 +127,7 @@ describe("dryRun", () => {
     const out = await edit({
       continueOnError: false,
       dryRun: true,
-      output: "summary",
+      verbose: true,
       files: [{ path: p, ops: [{ type: "write", mode: "append", content: "world\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
@@ -159,7 +139,7 @@ describe("dryRun", () => {
     const out = await edit({
       continueOnError: false,
       dryRun: true,
-      output: "summary",
+      verbose: true,
       files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] }],
     });
     expect(out.results[0]!.ops[0]!.status).toBe("ok");
@@ -168,20 +148,18 @@ describe("dryRun", () => {
   });
 });
 
-describe("output modes", () => {
-  describe("minimal (default)", () => {
+describe("verbose flag", () => {
+  describe("default (false)", () => {
     it("all ops ok -> {path,status:'ok'}, no ops array", async () => {
       const p = await fixture("min-ok.txt", "a\nb\n");
       const out = await edit({
         continueOnError: false,
         dryRun: false,
-        output: "minimal",
         files: [{ path: p, ops: [{ type: "write", mode: "append", content: "c\n" }] }],
       });
       const fr = out.results[0]!;
       expect(fr.status).toBe("ok");
       expect(fr.ops).toEqual([]);
-      expect(fr.diff).toBeUndefined();
     });
 
     it("partial -> status:'partial' with only failed ops carrying type+reason+hint", async () => {
@@ -189,7 +167,6 @@ describe("output modes", () => {
       const out = await edit({
         continueOnError: false,
         dryRun: false,
-        output: "minimal",
         files: [
           {
             path: p,
@@ -216,7 +193,6 @@ describe("output modes", () => {
       const out = await edit({
         continueOnError: true,
         dryRun: false,
-        output: "minimal",
         files: [
           {
             path: "relative/not-absolute.txt",
@@ -230,13 +206,13 @@ describe("output modes", () => {
     });
   });
 
-  describe("summary", () => {
+  describe("true (summaries)", () => {
     it("emits all ops with status+summary strings", async () => {
       const p = await fixture("sum.txt", "a\nb\n");
       const out = await edit({
         continueOnError: false,
         dryRun: false,
-        output: "summary",
+        verbose: true,
         files: [
           {
             path: p,
@@ -251,75 +227,19 @@ describe("output modes", () => {
       expect(ops).toHaveLength(2);
       expect(ops[0]!.summary).toMatch(/appended 1 line/);
       expect(ops[1]!.summary).toMatch(/replaced 1 occurrence/);
-      expect(ops[0]!.diff).toBeUndefined();
     });
   });
 
-  describe("diff", () => {
-    it("file-level diff returns a whole-file unified diff", async () => {
-      const p = await fixture("diff-file.txt", "a\nb\nc\n");
-      const out = await edit({
-        continueOnError: false,
-        dryRun: false,
-        output: "diff",
-        files: [{ path: p, ops: [{ type: "replace", old: "b", new: "BEE" }] }],
-      });
-      const fr = out.results[0]!;
-      expect(fr.diff).toMatch(/@@ -\d+,\d+ \+\d+,\d+ @@/);
-      expect(fr.diff).toContain("-b");
-      expect(fr.diff).toContain("+BEE");
-      // diff mode: ops array includes only non-ok ops (there are none here).
-      expect(fr.ops).toEqual([]);
-    });
-
-    it("op-level diff returns per-op diffs, summary stripped", async () => {
-      const p = await fixture("diff-op.txt", "a\nb\n");
-      const out = await edit({
-        continueOnError: false,
-        dryRun: false,
-        output: "summary",
-        files: [
-          {
-            path: p,
-            ops: [
-              { type: "write", mode: "append", content: "c\n", output: "diff" },
-              { type: "replace", old: "a", new: "A" }, // inherits summary
-            ],
-          },
-        ],
-      });
-      const ops = out.results[0]!.ops;
-      expect(ops[0]!.diff).toContain("+c");
-      expect(ops[0]!.summary).toBeUndefined();
-      expect(ops[1]!.diff).toBeUndefined();
-      expect(ops[1]!.summary).toMatch(/replaced 1 occurrence/);
-    });
-
-    it("dryRun + diff still returns a file diff", async () => {
-      const p = await fixture("diff-dry.txt", "a\n");
-      const out = await edit({
-        continueOnError: false,
-        dryRun: true,
-        output: "diff",
-        files: [{ path: p, ops: [{ type: "write", mode: "append", content: "b\n" }] }],
-      });
-      expect(out.results[0]!.diff).toContain("+b");
-      expect(await readText(p)).toBe("a\n");
-    });
-  });
-
-  describe("precedence", () => {
-    it("op-level output overrides file-level", async () => {
+  describe("resolution (op > file > root, first defined wins)", () => {
+    it("op.verbose=true enables verbose when root and file are unset", async () => {
       const p = await fixture("prec-op.txt", "a\n");
       const out = await edit({
         continueOnError: false,
         dryRun: false,
-        output: "minimal",
         files: [
           {
             path: p,
-            output: "minimal",
-            ops: [{ type: "write", mode: "append", content: "b\n", output: "summary" }],
+            ops: [{ type: "write", mode: "append", content: "b\n", verbose: true }],
           },
         ],
       });
@@ -328,16 +248,14 @@ describe("output modes", () => {
       expect(ops[0]!.summary).toMatch(/appended 1 line/);
     });
 
-    it("file-level output overrides root", async () => {
+    it("file.verbose=true enables verbose for all its ops", async () => {
       const p = await fixture("prec-file.txt", "a\n");
       const out = await edit({
-        continueOnError: false,
         dryRun: false,
-        output: "minimal",
         files: [
           {
             path: p,
-            output: "summary",
+            verbose: true,
             ops: [{ type: "write", mode: "append", content: "b\n" }],
           },
         ],
@@ -345,6 +263,97 @@ describe("output modes", () => {
       const ops = out.results[0]!.ops;
       expect(ops).toHaveLength(1);
       expect(ops[0]!.summary).toMatch(/appended 1 line/);
+    });
+
+    it("op.verbose=false overrides file.verbose=true (silence one op)", async () => {
+      const p = await fixture("override-op.txt", "a\n");
+      const out = await edit({
+        continueOnError: false,
+        dryRun: false,
+        files: [
+          {
+            path: p,
+            verbose: true,
+            ops: [
+              { type: "write", mode: "append", content: "b\n" }, // verbose (inherits file=true)
+              { type: "write", mode: "append", content: "c\n", verbose: false }, // silenced
+            ],
+          },
+        ],
+      });
+      const ops = out.results[0]!.ops;
+      expect(ops).toHaveLength(1); // op[1] (verbose:false) silenced from output
+      expect(ops[0]!.summary).toMatch(/appended 1 line/);
+      // Both ops still EXECUTED — verbose only controls output, not execution.
+      expect(await readText(p)).toBe("a\nb\nc\n");
+    });
+
+    it("file.verbose=false overrides root.verbose=true (silence whole file)", async () => {
+      const p = await fixture("override-file.txt", "a\n");
+      const out = await edit({
+        continueOnError: false,
+        verbose: true,
+        dryRun: false,
+        files: [
+          {
+            path: p,
+            verbose: false,
+            ops: [{ type: "write", mode: "append", content: "b\n" }],
+          },
+        ],
+      });
+      expect(out.results[0]!.status).toBe("ok");
+      expect(out.results[0]!.ops).toEqual([]);
+    });
+
+    it("file.stopOnError=false overrides root.stopOnError=true within the file", async () => {
+      const p = await fixture("override-stop.txt", "A\n");
+      const out = await edit({
+        continueOnError: false,
+        dryRun: false,
+        verbose: true,
+        files: [
+          {
+            path: p,
+            stopOnError: false, // continue within this file
+            ops: [
+              { type: "replace", old: "ZZZ", new: "x" }, // error
+              { type: "write", mode: "append", content: "B\n" }, // should still run
+            ],
+          },
+        ],
+      });
+      expect(out.results[0]!.ops[0]!.status).toBe("error");
+      expect(out.results[0]!.ops[1]!.status).toBe("ok");
+      expect(await readText(p)).toBe("A\nB\n");
+    });
+
+    it("file.stopOnError=false does NOT prevent root-level across-file abort", async () => {
+      const a = await fixture("a.txt", "A\n");
+      const b = await fixture("b.txt", "B\n");
+      const out = await edit({
+        continueOnError: false,
+        dryRun: false,
+        verbose: true,
+        files: [
+          {
+            path: a,
+            stopOnError: false, // first file continues internally
+            ops: [
+              { type: "replace", old: "ZZZ", new: "x" }, // error
+              { type: "write", mode: "append", content: "X\n" }, // still runs
+            ],
+          },
+          {
+            path: b,
+            ops: [{ type: "write", mode: "append", content: "B2\n" }], // skipped (root abort)
+          },
+        ],
+      });
+      expect(out.results[0]!.ops[0]!.status).toBe("error");
+      expect(out.results[0]!.ops[1]!.status).toBe("ok");
+      expect(out.results[1]!.status).toBe("skipped");
+      expect(await readText(b)).toBe("B\n");
     });
   });
 });

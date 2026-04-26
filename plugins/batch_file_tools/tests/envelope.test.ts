@@ -175,44 +175,6 @@ describe("formatEditContent", () => {
     );
   });
 
-  it("file-level diff: single-line comment, diff unescaped below", () => {
-    const blocks = formatEditContent({
-      results: [
-        {
-          path: "/a.ts",
-          status: "ok",
-          ops: [],
-          diff: "@@ -1,3 +1,3 @@\n a\n-b\n+BEE\n c\n",
-        },
-      ],
-    });
-    expect(blocks[0]!.text).toBe(
-      `<!-- Edited '/a.ts' -->\n@@ -1,3 +1,3 @@\n a\n-b\n+BEE\n c`,
-    );
-    expect(blocks[0]!.text.includes("\\n")).toBe(false);
-  });
-
-  it("op-level diff: labeled per-op diff in body", () => {
-    const blocks = formatEditContent({
-      results: [
-        {
-          path: "/a.ts",
-          status: "ok",
-          ops: [
-            {
-              index: 0,
-              status: "ok",
-              diff: "@@ -2,0 +3,1 @@\n+c\n",
-            },
-          ],
-        },
-      ],
-    });
-    expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 0\n-->\n<!-- op 0 diff -->\n@@ -2,0 +3,1 @@\n+c`,
-    );
-  });
-
   it("file-level error: reason + message surfaced in header", () => {
     const blocks = formatEditContent({
       results: [

@@ -33,7 +33,7 @@ async function runEdit(file: EditFile) {
   return handleBatchEdit({
     continueOnError: false,
     dryRun: false,
-    output: "summary",
+    verbose: true,
     files: [file],
   }, [workDir]);
 }
@@ -461,7 +461,7 @@ describe("batch across multiple files", () => {
     const out = await handleBatchEdit({
       continueOnError: false,
       dryRun: false,
-      output: "summary",
+      verbose: true,
       files: [
         { path: a, ops: [{ type: "write", mode: "append", content: "A2\n" }] },
         { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] },

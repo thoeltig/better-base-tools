@@ -51,7 +51,6 @@ describe("auth — edit", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
       [allowedDir],
@@ -68,7 +67,6 @@ describe("auth — edit", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
       },
       [allowedDir],
@@ -83,7 +81,6 @@ describe("auth — edit", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
         files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "fine\n" }] }],
       },
       [allowedDir],
@@ -99,7 +96,6 @@ describe("auth — edit", () => {
       {
         continueOnError: true,
         dryRun: false,
-        output: "summary",
         files: [{ path: p, ops: [{ type: "write", mode: "append", content: "y\n" }] }],
       },
       [],
