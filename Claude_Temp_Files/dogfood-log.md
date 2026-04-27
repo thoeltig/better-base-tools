@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-27 | 9 | ~26 | ~65% | session 14 (blind dogfood) — `batch_edit` correctly chosen for 18 small ops/4 source files; harness output cap (58.9KB) hit on first `batch_read` (no per-file limits), forced 4 extra reads; `batch_edit` mis-used for test inserts (≥50 lines/op → should have been `batch_edit_text`) |
 | 2026-04-27 | 2 | ~3 | ~33% | session 13 — added workload-shape hints (≤~5 lines → `batch_edit`, ≥~15 lines → `batch_edit_text`) to both tool descriptions; correctly used `batch_edit` for 2 small ops |
 | 2026-04-27 | ~10 | n/a | n/a | session 12 — token-cost A/B (native vs batch_edit vs batch_edit_text); regime split discovered: batch_edit wins on multi-op-count, batch_edit_text wins on content-heavy single ops. Test 1 (3 small ops): batch_edit_text +96% out vs native. Test 2 (1 big op): batch_edit_text −20% out vs native, −25% vs batch_edit. Retracted post-test-1 deprecation recommendation. |
 | 2026-04-27 | 2 | ~6 | ~67% | session 11 — designed + shipped `batch_edit_text` (line-based text-format variant); 208/208 tests pass. **Honest note:** drifted to native `Write`/`Edit`/`Read` ~8 times where `batch_edit`/`batch_read` would have applied (esp. 4 `Write`s for new files vs 1 batched `batch_edit` with `write` ops). With MCP-first discipline, would have been ~6 MCP calls / ~80% reduction. See session retro. |
@@ -19,15 +20,17 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 ## Open follow-ups
 
 **Active (subsequent sessions):**
-- **Blind dogfood test (next session, fresh context).** Prerequisite (description hints) shipped in session 13. Task: implement op-level `stopOnError` (see `Claude_Temp_Files/session-14-prompt.md`). Test whether the model picks the *right* tool for each workload shape (`batch_edit` on multi-op bundles, `batch_edit_text` on content-heavy single ops). Token-cost comparison of tool picks.
 - **Crossover characterization test.** 2 medium ops (~8 lines each) to tighten the decision rule between the two regimes (currently ~5 vs ~15 lines per op as rough boundaries from session 12). Main conclusions don't depend on it; useful as tiebreaker datapoint. Deferred per user.
 - **B — `info` mode (peek):** metadata + per-mode dry-run `{lines, chars}`. Design agreed in session 6.
 - **I — `info_optimized` strategy:** lossy data-notation transforms (JSON pretty→compact, XML→JSON, YAML→JSON). User has reusable code. Now sharper-priority after session 9: compact's whitespace-only transforms leave the bulk of data-file savings on the table.
 
 **Deferred:**
-- **Op-level `stopOnError` on both schemas.** Agreed in session 11 as a future addition to both `batch_edit` (JSON) and `batch_edit_text` together — current resolution chain is `file ?? root ?? false`, would extend to `op ?? file ?? root ?? false`. Not driven by an observed need, parked.
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
+
+**Closed / dropped (session 14):**
+- **Blind dogfood test** — done. Session 14 verdict: `batch_edit` correctly for source changes (18 small ops/4 files); `batch_edit_text` missed for test inserts (≥50 lines/op). Harness output cap documented.
+- **Op-level `stopOnError` on both schemas** — shipped. Resolution `op ?? file ?? root ?? false` on both tools. 4 new tests, 212/212 passing.
 
 **Closed / dropped (session 13):**
 - **Tool description guidance — workload-shape hints** — shipped. Added ≤~5 lines → `batch_edit`, ≥~15 lines → `batch_edit_text` thresholds to both descriptions (`src/index.ts`).
@@ -43,6 +46,36 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-04-27 (session 14) — blind dogfood test: op-level stopOnError
+
+**Scope:** Implement op-level `stopOnError` on both `batch_edit` and `batch_edit_text` (resolution chain `op ?? file ?? root ?? false`). Blind test per session-13 follow-up: fresh context, no prior session memory, judge tool-selection accuracy against the session-12 regime-split rule.
+
+**Shipped:**
+
+1. **`types.ts`** — `stopOnError?: boolean` added to all 5 `EditOp` variants via `replace_all` on the common closing pattern; descriptions updated at `EditFile.ops` and `EditInput.stopOnError`.
+2. **`tools/edit.ts`** — Two abort checks updated: `options.stopOnError` → `op.stopOnError ?? options.stopOnError`. `options.stopOnError` already resolves `file ?? root`, giving the full chain. Overlap-error check updated identically.
+3. **`lib/edit-text-parser.ts`** — `"stopOnError"` added to `ACTION_SCALARS`; parsed in `parseAction` identically to `verbose` (strict boolean, error on invalid); threaded through all 4 parse helpers and spread onto each returned op.
+4. **`index.ts`** — Both tool descriptions updated: `batch_edit` "file ?? root" → "op ?? file ?? root"; `batch_edit_text` drops "op-level not supported", grammar updated to mention `stopOnError` at Action level.
+5. **Tests** — New describe blocks in `edit-control.test.ts` and `edit-text.test.ts`, 2 cases each: op=true under file=false stops; op=false under file=true continues. 212/212 passing (208 prior + 4 new). Build clean.
+
+**Tool-selection verdict (blind test):**
+
+Source changes: 18 ops across 4 files, all small (2–5 lines/op) — regime: `batch_edit`. **Correctly chosen.**
+
+Test additions: two replace ops ~50 lines each — regime: `batch_edit_text` by the ≥~15 lines/op threshold. **Miss: used `batch_edit`.** Same force-of-habit pattern as session 11 — task-focus suppressed cost-reasoning; the threshold rule didn’t fire.
+
+**Harness output-cap (new finding, now fixed):**
+
+First `batch_read` called all 4 source files without per-file `limit`. Claude Code harness intercepted at 58.9KB, saved to temp JSON, returned only a 2KB preview. **Cap is in the harness, not the MCP server** — `batch_read` returned correctly; the harness refused to surface the full payload. The cap was misconfigured too low; user raised it to 3× (~175KB) after this session. Cost before fix: 4 extra reads via follow-up calls with explicit offsets/limits.
+
+**`batch_edit` JSON escape failure (new finding, now documented):**
+
+The log-update `batch_edit` call that bundled the session 14 entry (~1.4KB of markdown) failed with `MCP error -32602: Input validation error: expected object, received string` at the `param` path. Root cause: the markdown text contained unescaped `"` characters inside JSON string values (e.g. `"file ?? root"` written as literal `"` rather than `\"`). This broke the JSON structure mid-parse; the tool-call layer fell back to treating `param` as a raw string. **Not a size issue — a JSON escape bug.** Fixed by adding a note to the `batch_edit` description: all string values must be properly escaped (`\n`, `\"`); for content with many literal newlines or quotes, prefer `batch_edit_text` which accepts unescaped strings.
+
+**Tool calls:** 7 `batch_read` + 2 `batch_edit` = 9 MCP. Native equiv ~26 (~8 reads + ~18 edits). Reduction ~65%. Ideal (no overrun + `batch_edit_text` for tests): ~4 MCP calls, ~85%.
+
+**Open follow-ups:** see top-of-file Open follow-ups section.
 
 ### 2026-04-27 (session 13) — workload-shape hints in tool descriptions
 
