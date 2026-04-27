@@ -85,6 +85,7 @@ const OpReplace = z.object({
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
     verbose: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
   })
   .strict();
 
@@ -95,6 +96,7 @@ const OpReplaceAll = z.object({
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
     verbose: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
   })
   .strict();
 
@@ -106,6 +108,7 @@ const OpInsertAtLine = z
     content: z.string().min(1)
       .describe("Text to insert"),
     verbose: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
   })
   .strict();
 
@@ -119,6 +122,7 @@ const OpReplaceRange = z
     content: z.string()
       .describe("Replacement text"),
     verbose: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
   })
   .strict();
 
@@ -129,6 +133,7 @@ const OpWrite = z.object({
     content: z.string()
       .describe("Text to write; empty allowed only in overwrite mode (truncates to empty file)"),
     verbose: z.boolean().optional(),
+    stopOnError: z.boolean().optional(),
   })
   .strict();
 
@@ -147,14 +152,14 @@ export const EditFile = z.object({
     stopOnError: z.boolean().optional(),
     verbose: z.boolean().optional(),
     ops: z.array(EditOp).min(1)
-      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts an optional `verbose` boolean."),
+      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts optional `verbose` and `stopOnError` booleans."),
   })
   .strict();
 export type EditFile = z.infer<typeof EditFile>;
 
 export const EditInput = z.object({
     stopOnError: z.boolean().optional()
-      .describe("Stop on first error. Default false (continue): a failed op or file does not skip remaining work. Set true to abort: in-file ops after a failure get status:'skipped'; subsequent files get status:'skipped' when set at root. Resolution within a file: file.stopOnError ?? root.stopOnError ?? false (first defined wins). Across-file abort uses the root flag only; file-level scopes within-file."),
+      .describe("Stop on first error. Default false (continue): a failed op or file does not skip remaining work. Set true to abort: in-file ops after a failure get status:'skipped'; subsequent files get status:'skipped' when set at root. Resolution within a file: op.stopOnError ?? file.stopOnError ?? root.stopOnError ?? false (first defined wins). Across-file abort uses the root flag only; file-level scopes within-file."),
     dryRun: z.boolean().optional()
       .describe("Use to test changes without actually applying them"),
     verbose: z.boolean().optional()

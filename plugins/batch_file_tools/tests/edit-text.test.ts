@@ -246,3 +246,59 @@ describe("handleBatchEditText — runtime errors", () => {
     expect(out.results[0]!.ops[0]!.hint).toBeDefined();
   });
 });
+
+describe("handleBatchEditText — stopOnError op level", () => {
+  it("op.stopOnError=true under file.stopOnError=false: stops after that op fails", async () => {
+    const p = await fixture("stop-op-true.txt", "A\n");
+    const text = [
+      `File: ${p}`,
+      "stopOnError: false",
+      "verbose: true",
+      "Action: replace",
+      "stopOnError: true",
+      "<<<OLD",
+      "ZZZ",
+      "OLD>>>",
+      "<<<NEW",
+      "x",
+      "NEW>>>",
+      "Action: write",
+      "mode: append",
+      "<<<NEW",
+      "B",
+      "NEW>>>",
+    ].join("\n");
+    const out = await handleBatchEditText({ content: text }, [workDir]);
+    expect(out.results[0]!.ops[0]!.status).toBe("error");
+    expect(out.results[0]!.ops[1]!.status).toBe("skipped");
+    const disk = await readText(p);
+    expect(disk).toBe("A\n");
+  });
+
+  it("op.stopOnError=false under file.stopOnError=true: lets that op continue on failure", async () => {
+    const p = await fixture("stop-op-false.txt", "A\n");
+    const text = [
+      `File: ${p}`,
+      "stopOnError: true",
+      "verbose: true",
+      "Action: replace",
+      "stopOnError: false",
+      "<<<OLD",
+      "ZZZ",
+      "OLD>>>",
+      "<<<NEW",
+      "x",
+      "NEW>>>",
+      "Action: write",
+      "mode: append",
+      "<<<NEW",
+      "B",
+      "NEW>>>",
+    ].join("\n");
+    const out = await handleBatchEditText({ content: text }, [workDir]);
+    expect(out.results[0]!.ops[0]!.status).toBe("error");
+    expect(out.results[0]!.ops[1]!.status).toBe("ok");
+    const disk = await readText(p);
+    expect(disk).toBe("A\nB\n");
+  });
+});

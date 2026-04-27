@@ -42,7 +42,7 @@ const ACTIONS: ReadonlySet<string> = new Set([
   "replace_range",
   "write",
 ]);
-const ACTION_SCALARS: ReadonlySet<string> = new Set(["line", "start", "end", "mode", "verbose"]);
+const ACTION_SCALARS: ReadonlySet<string> = new Set(["line", "start", "end", "mode", "verbose", "stopOnError"]);
 const ROOT_SCALARS: ReadonlySet<string> = new Set(["stopOnError", "dryRun", "verbose"]);
 const FILE_SCALARS: ReadonlySet<string> = new Set(["stopOnError", "verbose"]);
 
@@ -294,17 +294,25 @@ function parseAction(c: Ctx, actionType: string, actionLineNo: number): ActionRe
     });
   }
 
+  const stopOnError = scalars["stopOnError"] !== undefined ? parseBoolean(scalars["stopOnError"]) : undefined;
+  if (scalars["stopOnError"] !== undefined && stopOnError === undefined) {
+    return collectActionThenError(c, {
+      line: actionLineNo,
+      message: `Action ${actionType}: invalid 'stopOnError' (use 'true' or 'false')`,
+    });
+  }
+
   if (actionType === "replace" || actionType === "replace_all") {
-    return parseReplaceLike(c, actionType, actionLineNo, verbose);
+    return parseReplaceLike(c, actionType, actionLineNo, verbose, stopOnError);
   }
   if (actionType === "insert_at_line") {
-    return parseInsertAtLine(c, actionLineNo, scalars, verbose);
+    return parseInsertAtLine(c, actionLineNo, scalars, verbose, stopOnError);
   }
   if (actionType === "replace_range") {
-    return parseReplaceRange(c, actionLineNo, scalars, verbose);
+    return parseReplaceRange(c, actionLineNo, scalars, verbose, stopOnError);
   }
   if (actionType === "write") {
-    return parseWrite(c, actionLineNo, scalars, verbose);
+    return parseWrite(c, actionLineNo, scalars, verbose, stopOnError);
   }
   return { kind: "unparseable_op", error: { line: actionLineNo, message: `unsupported action: ${actionType}` } };
 }
@@ -314,6 +322,7 @@ function parseReplaceLike(
   actionType: "replace" | "replace_all",
   actionLineNo: number,
   verbose: boolean | undefined,
+  stopOnError: boolean | undefined,
 ): ActionResult {
   const oldFence = parseFence(c, "OLD");
   if (!oldFence.ok) return fenceFailureToActionResult(c, oldFence, actionLineNo);
@@ -330,6 +339,7 @@ function parseReplaceLike(
     old: oldFence.value,
     new: newFence.value,
     ...(verbose !== undefined ? { verbose } : {}),
+    ...(stopOnError !== undefined ? { stopOnError } : {}),
   };
   return { kind: "ok", op };
 }
@@ -339,6 +349,7 @@ function parseInsertAtLine(
   actionLineNo: number,
   scalars: Record<string, string>,
   verbose: boolean | undefined,
+  stopOnError: boolean | undefined,
 ): ActionResult {
   if (scalars["line"] === undefined) {
     return collectActionThenError(c, {
@@ -366,6 +377,7 @@ function parseInsertAtLine(
     line: lineNum,
     content: newFence.value,
     ...(verbose !== undefined ? { verbose } : {}),
+    ...(stopOnError !== undefined ? { stopOnError } : {}),
   };
   return { kind: "ok", op };
 }
@@ -375,6 +387,7 @@ function parseReplaceRange(
   actionLineNo: number,
   scalars: Record<string, string>,
   verbose: boolean | undefined,
+  stopOnError: boolean | undefined,
 ): ActionResult {
   if (scalars["start"] === undefined || scalars["end"] === undefined) {
     return collectActionThenError(c, {
@@ -398,6 +411,7 @@ function parseReplaceRange(
     end,
     content: newFence.value,
     ...(verbose !== undefined ? { verbose } : {}),
+    ...(stopOnError !== undefined ? { stopOnError } : {}),
   };
   return { kind: "ok", op };
 }
@@ -407,6 +421,7 @@ function parseWrite(
   actionLineNo: number,
   scalars: Record<string, string>,
   verbose: boolean | undefined,
+  stopOnError: boolean | undefined,
 ): ActionResult {
   const mode = scalars["mode"];
   if (mode !== "append" && mode !== "overwrite") {
@@ -428,6 +443,7 @@ function parseWrite(
     mode,
     content: newFence.value,
     ...(verbose !== undefined ? { verbose } : {}),
+    ...(stopOnError !== undefined ? { stopOnError } : {}),
   };
   return { kind: "ok", op };
 }

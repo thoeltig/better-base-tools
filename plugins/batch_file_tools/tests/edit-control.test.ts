@@ -82,6 +82,50 @@ describe("stopOnError — file level", () => {
   });
 });
 
+describe("stopOnError — op level", () => {
+  it("op.stopOnError=true under file.stopOnError=false: stops after that op fails", async () => {
+    const p = await fixture("file.txt", "A\n");
+    const out = await edit({
+      dryRun: false,
+      verbose: true,
+      files: [
+        {
+          path: p,
+          stopOnError: false,
+          ops: [
+            { type: "replace", old: "ZZZ", new: "x", stopOnError: true }, // error → stops
+            { type: "write", mode: "append", content: "B\n" }, // skipped
+          ],
+        },
+      ],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("error");
+    expect(out.results[0]!.ops[1]!.status).toBe("skipped");
+    expect(await readText(p)).toBe("A\n");
+  });
+
+  it("op.stopOnError=false under file.stopOnError=true: lets that op continue on failure", async () => {
+    const p = await fixture("file.txt", "A\n");
+    const out = await edit({
+      dryRun: false,
+      verbose: true,
+      files: [
+        {
+          path: p,
+          stopOnError: true,
+          ops: [
+            { type: "replace", old: "ZZZ", new: "x", stopOnError: false }, // error → continues
+            { type: "write", mode: "append", content: "B\n" }, // should run
+          ],
+        },
+      ],
+    });
+    expect(out.results[0]!.ops[0]!.status).toBe("error");
+    expect(out.results[0]!.ops[1]!.status).toBe("ok");
+    expect(await readText(p)).toBe("A\nB\n");
+  });
+});
+
 describe("stopOnError — root level", () => {
   it("a file with errors aborts later files when root.stopOnError=true", async () => {
     const a = await fixture("a.txt", "A\n");

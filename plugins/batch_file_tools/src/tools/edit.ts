@@ -248,7 +248,7 @@ async function editOneFile(
         res: decorateOp(errRes, op, opVerbose),
         opVerbose,
       });
-      if (options.stopOnError) abortedOps = true;
+      if (op.stopOnError ?? options.stopOnError) abortedOps = true;
       continue;
     }
 
@@ -260,7 +260,7 @@ async function editOneFile(
       opVerbose,
     });
 
-    if (!res.ok && options.stopOnError) {
+    if (!res.ok && (op.stopOnError ?? options.stopOnError)) {
       abortedOps = true;
     }
   }
