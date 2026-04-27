@@ -1,8 +1,9 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { EditInput, ReadInput } from "./types.js";
+import { EditInput, EditTextInput, ReadInput } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
+import { handleBatchEditText } from "./tools/edit-text.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs } from "./lib/fs.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -85,6 +86,40 @@ server.registerTool(
       const allowedDirectories = getAllowedDirectoriesToUse();
       const result = await handleBatchEdit(parsed, allowedDirectories);
       return { 
+        content: formatEditContent(result)
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const logLine = `Tool error: ${message}`;
+      writeLogLine(logLine);
+      return {
+        isError: true,
+        content: [{ type: "text", text: logLine }],
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "batch_edit_text",
+  {
+    title: "Line-based text-format variant of batch_edit (no JSON envelope per op)",
+    description: "Same semantics as batch_edit but accepts edits as one line-based text blob — avoids per-op JSON envelopes and `\\n` escaping in multi-line content. Prefer this for medium/large multi-line edits; prefer batch_edit for small surgical replaces. GRAMMAR (line-based, column-0 sensitive): root scalars (optional, before first File:) — `stopOnError: true|false`, `dryRun: true|false`, `verbose: true|false`. Each file block starts with `File: <absolute path or glob>` followed by optional `stopOnError:`/`verbose:` (file-level overrides), then one or more Action blocks. ACTIONS: `replace` (OLD+NEW fences) | `replace_all` (OLD+NEW fences) | `insert_at_line` (`line: N` + NEW fence) | `replace_range` (`start: N` + `end: M` + NEW fence) | `write` (`mode: append|overwrite` + NEW fence). Each Action accepts optional `verbose: true|false`. FENCES: content between `<<<OLD` / `OLD>>>` and `<<<NEW` / `NEW>>>` is verbatim — newlines, quotes, backslashes are literal, no escaping. Sentinels are recognized only at column 0. COLLISION: if content contains `OLD>>>` or `NEW>>>` at column 0, use a unique suffix on both open and close — e.g. `<<<OLD#k1` ... `OLD#k1>>>`. Any indented line is content even if it looks like a header/fence. RESOLUTION: verbose op > file > root > false; stopOnError file > root > false (op-level not supported). EXAMPLE:\n```\nstopOnError: true\nFile: C:/proj/src/foo.ts\nAction: replace\n<<<OLD\nconst x = 1;\nOLD>>>\n<<<NEW\nconst x = 42;\nNEW>>>\nAction: insert_at_line\nline: 1\n<<<NEW\n// top of file\nNEW>>>\nFile: C:/proj/src/bar.ts\nAction: write\nmode: append\n<<<NEW\n// appended\nNEW>>>\n```\nERRORS: parser errors surface as `reason: \"unparseable\"` with line number in `message`. Recovery is per-Action via opening-fence + Action lookback; an unparseable Action does not abort the file unless stopOnError is set. Files with no parseable ops emit as a single `unparseable` file error. Runtime errors (anchor not found, file not writable, etc.) match batch_edit including `nearest_anchor` hints. Output shape matches batch_edit (one text block per file).",
+    inputSchema: { param: EditTextInput },
+    annotations: {
+      title: 'Line-based text-format variant of batch_edit (no JSON envelope per op)',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  async ({ param }) => {
+  try {
+      const parsed = EditTextInput.parse(param);
+      const allowedDirectories = getAllowedDirectoriesToUse();
+      const result = await handleBatchEditText(parsed, allowedDirectories);
+      return {
         content: formatEditContent(result)
       };
     } catch (err: unknown) {

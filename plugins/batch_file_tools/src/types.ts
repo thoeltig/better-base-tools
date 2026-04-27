@@ -16,7 +16,8 @@ export const Reason = z.enum([
     "ambiguous",
     "invalid_range",
     "not_supported",
-    "io_error"
+    "io_error",
+    "unparseable"
   ]);
 export type Reason = z.infer<typeof Reason>;
 
@@ -213,7 +214,7 @@ export const FileResult = z.object({
       .describe("Absolute path"),
     status: FileStatus,
     error: FileError.optional(),
-    ops: z.array(OpResult).min(1),
+    ops: z.array(OpResult),
   })
   .strict();
 export type FileResult = z.infer<typeof FileResult>;
@@ -223,3 +224,10 @@ export const EditOutput = z.object({
   })
   .strict();
 export type EditOutput = z.infer<typeof EditOutput>;
+
+export const EditTextInput = z.object({
+    content: z.string().min(1)
+      .describe("Full text-format edit blob. See tool description for grammar."),
+  })
+  .strict();
+export type EditTextInput = z.infer<typeof EditTextInput>;
