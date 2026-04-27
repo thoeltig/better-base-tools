@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__batch_file_tools__batch_read",
-      "mcp__batch_file_tools__batch_edit"
+      "mcp__batch_file_tools__batch_edit",
+      "mcp__batch_file_tools__batch_edit_text"
     ]
   },
   "enabledMcpjsonServers": [
