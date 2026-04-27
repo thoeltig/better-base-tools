@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-04-27 | 2 | ~3 | ~33% | session 13 — added workload-shape hints (≤~5 lines → `batch_edit`, ≥~15 lines → `batch_edit_text`) to both tool descriptions; correctly used `batch_edit` for 2 small ops |
 | 2026-04-27 | ~10 | n/a | n/a | session 12 — token-cost A/B (native vs batch_edit vs batch_edit_text); regime split discovered: batch_edit wins on multi-op-count, batch_edit_text wins on content-heavy single ops. Test 1 (3 small ops): batch_edit_text +96% out vs native. Test 2 (1 big op): batch_edit_text −20% out vs native, −25% vs batch_edit. Retracted post-test-1 deprecation recommendation. |
 | 2026-04-27 | 2 | ~6 | ~67% | session 11 — designed + shipped `batch_edit_text` (line-based text-format variant); 208/208 tests pass. **Honest note:** drifted to native `Write`/`Edit`/`Read` ~8 times where `batch_edit`/`batch_read` would have applied (esp. 4 `Write`s for new files vs 1 batched `batch_edit` with `write` ops). With MCP-first discipline, would have been ~6 MCP calls / ~80% reduction. See session retro. |
 | 2026-04-26 | 19 | ~38 | ~50% | session 10 — diff drop (A) + verbose boolean + stopOnError rename/flip + resolution-semantics fix; 156/156 tests pass |
@@ -18,8 +19,7 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 ## Open follow-ups
 
 **Active (subsequent sessions):**
-- **Blind dogfood test (next session, fresh context).** Reframed after session 12 regime-split finding: test whether the model picks the *right* tool for each workload shape (`batch_edit` on multi-op bundles, `batch_edit_text` on content-heavy single ops). Also: does the description teach grammar well enough to avoid parse errors? Token-cost comparison of the picks.
-- **Tool description guidance — workload-shape hints.** Add explicit "prefer me when X" guidance to both `batch_edit` and `batch_edit_text` descriptions. Currently both claim broad applicability; without guidance, the model picks by familiarity, not cost. Prerequisite for the blind dogfood test to be informative — otherwise we measure familiarity, not regime-detection.
+- **Blind dogfood test (next session, fresh context).** Prerequisite (description hints) shipped in session 13. Task: implement op-level `stopOnError` (see `Claude_Temp_Files/session-14-prompt.md`). Test whether the model picks the *right* tool for each workload shape (`batch_edit` on multi-op bundles, `batch_edit_text` on content-heavy single ops). Token-cost comparison of tool picks.
 - **Crossover characterization test.** 2 medium ops (~8 lines each) to tighten the decision rule between the two regimes (currently ~5 vs ~15 lines per op as rough boundaries from session 12). Main conclusions don't depend on it; useful as tiebreaker datapoint. Deferred per user.
 - **B — `info` mode (peek):** metadata + per-mode dry-run `{lines, chars}`. Design agreed in session 6.
 - **I — `info_optimized` strategy:** lossy data-notation transforms (JSON pretty→compact, XML→JSON, YAML→JSON). User has reusable code. Now sharper-priority after session 9: compact's whitespace-only transforms leave the bulk of data-file savings on the table.
@@ -28,6 +28,9 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - **Op-level `stopOnError` on both schemas.** Agreed in session 11 as a future addition to both `batch_edit` (JSON) and `batch_edit_text` together — current resolution chain is `file ?? root ?? false`, would extend to `op ?? file ?? root ?? false`. Not driven by an observed need, parked.
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
+
+**Closed / dropped (session 13):**
+- **Tool description guidance — workload-shape hints** — shipped. Added ≤~5 lines → `batch_edit`, ≥~15 lines → `batch_edit_text` thresholds to both descriptions (`src/index.ts`).
 
 **Closed / dropped (session 10):**
 - A (diff drop) — shipped. `diffContent` + `diff@9.0.0` dep + diff envelope paths removed; `OpResult.diff` / `FileResult.diff` dropped from types and tests.
@@ -40,6 +43,14 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-04-27 (session 13) — workload-shape hints in tool descriptions
+
+**Scope:** Description-only change. Added ≤~5 lines per op → `batch_edit`, ≥~15 lines per op → `batch_edit_text` thresholds to both tool descriptions based on session 12 regime-split findings. Prerequisite for the blind dogfood test.
+
+**Shipped:** `src/index.ts` — 2 description replacements. `npm run build` clean.
+
+**Tool calls:** 1 `batch_read` (index.ts), 1 `batch_edit` (2 replace ops), 1 Bash (build). MCP calls: 2. Native equiv: ~3. Regime: correctly used `batch_edit` for 2 small ops (≤~5 lines each) — consistent with the thresholds just added.
 
 ### 2026-04-27 (session 12) — token-cost A/B: regime split between `batch_edit` and `batch_edit_text`
 
