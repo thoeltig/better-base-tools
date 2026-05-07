@@ -104,13 +104,14 @@ describe("formatForRead — compact mode", () => {
     expect(r.content).toBe("build:\n\techo hi\n");
   });
 
-  it("strips leading indent on .ts files (not indent-sensitive)", () => {
+  it("collapses .ts file to single line (not indent-sensitive)", () => {
     const r = formatForRead({
       content: "function foo() {\n    return 1;\n}\n",
       mode: "compact",
       path: "/x/a.ts",
     });
-    expect(r.content).toBe("function foo() {\nreturn 1;\n}\n");
+    expect(r.content).toBe("function foo() { return 1; }");
+    expect(r.returned_lines).toBe(1);
   });
 
   it("collapses multi-whitespace runs inside a line", () => {
@@ -140,13 +141,14 @@ describe("formatForRead — compact mode", () => {
     expect(r.returned_lines).toBe(1);
   });
 
-  it("falls back to line-based compact on invalid JSON", () => {
+  it("falls back to single-line compact on invalid JSON", () => {
     const r = formatForRead({
       content: "{ not valid json   \n",
       mode: "compact",
       path: "/x/broken.json",
     });
-    expect(r.content).toBe("{ not valid json\n");
+    expect(r.content).toBe("{ not valid json");
+    expect(r.returned_lines).toBe(1);
   });
 
   it("preserves single blank lines between content", () => {
@@ -195,6 +197,37 @@ describe("formatForRead — compact mode", () => {
       mode: "compact",
     });
     expect(r.content).toBe("x\n\n");
+  });
+
+  it("non-indent-sensitive: blank lines dropped, tokens joined", () => {
+    const r = formatForRead({
+      content: "const x = 1;\n\nconst y = 2;\n",
+      mode: "compact",
+      path: "/x/a.js",
+    });
+    expect(r.content).toBe("const x = 1; const y = 2;");
+    expect(r.returned_lines).toBe(1);
+  });
+
+  it("non-indent-sensitive: empty file produces empty string", () => {
+    const r = formatForRead({ content: "", mode: "compact", path: "/x/a.ts" });
+    expect(r.content).toBe("");
+    expect(r.returned_lines).toBe(0);
+  });
+
+  it("non-indent-sensitive: all-blank lines produces empty string", () => {
+    const r = formatForRead({ content: "\n\n\n", mode: "compact", path: "/x/a.ts" });
+    expect(r.content).toBe("");
+    expect(r.returned_lines).toBe(0);
+  });
+
+  it("non-indent-sensitive: tabs and mixed indent collapsed", () => {
+    const r = formatForRead({
+      content: "if (x) {\n\treturn 1;\n}\n",
+      mode: "compact",
+      path: "/x/a.ts",
+    });
+    expect(r.content).toBe("if (x) { return 1; }");
   });
 });
 

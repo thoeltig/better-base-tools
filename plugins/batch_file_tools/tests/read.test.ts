@@ -97,16 +97,16 @@ describe("handleBatchRead", () => {
     expect(out.results[1]!.content).toBe("1\thi\n");
   });
 
-  it("compact mode collapses blank-line runs and strips trailing whitespace", async () => {
-    const p = await fixture("compact.txt", "a   \n\n\n\nb\n");
+  it("compact mode on non-indent-sensitive file collapses to single line", async () => {
+    const p = await fixture("compact.ts", "const a = 1;\n\n\nconst b = 2;\n");
     const out = await read({
       requests: [{ path: p, mode: "compact" }],
     });
     const r = out.results[0]!;
     expect(r.mode_applied).toBe("compact");
-    expect(r.content).toBe("a\n\nb\n");
-    expect(r.lines).toBe(5);
-    expect(r.returned_lines).toBe(3);
+    expect(r.content).toBe("const a = 1; const b = 2;");
+    expect(r.lines).toBe(4);
+    expect(r.returned_lines).toBe(1);
   });
 
   it("rejects non-absolute paths", async () => {

@@ -121,14 +121,11 @@ function formatRaw(
 
 /**
  * Compact for informational reading. Lossy — if byte-exact output matters, use verbatim mode.
- *   1. JSON minify (.json files only, whole-slice): pretty -> compact; falls through on parse error.
- *   2. Strip trailing whitespace on each line.
- *   3. Strip leading whitespace on each line — skipped on indent-sensitive languages (Python, YAML, Haskell, F#, Nim, CoffeeScript, Pug, Sass, Makefile).
- *   4. Collapse internal runs of 2+ spaces/tabs to a single space.
- *   5. Collapse runs of 2+ blank lines to a single blank line.
- * Known limitations (no parser, so not detected):
- *   - Multi-line strings / template literals — internal whitespace is content, gets collapsed.
- *   - Fenced code blocks in Markdown may contain indent-sensitive code that gets dedented.
+ * Non-indent-sensitive files (e.g. .ts, .js, .html): collapsed to a single line — all newlines
+ *   removed, whitespace runs → single space. JSON files: minified via JSON.stringify.
+ * Indent-sensitive files (Python, YAML, Makefile, etc.) and unknown paths: multi-line preserved,
+ *   consecutive blank lines collapsed to one, internal whitespace runs collapsed.
+ * Known limitation: string literals / template literals have internal whitespace collapsed too.
  */
 function formatCompact(
   lines: readonly string[],
@@ -147,15 +144,24 @@ function formatCompact(
     }
   }
 
+  if (opts.stripIndent) {
+    // Non-indent-sensitive: collapse all lines to a single line.
+    const tokens: string[] = [];
+    for (let i = start; i < end; i++) {
+      const line = (lines[i] ?? "").replace(/[ \t]+$/, "").replace(/^[ \t]+/, "").replace(/[ \t]{2,}/g, " ");
+      if (line !== "") tokens.push(line);
+    }
+    const out = tokens.join(" ").replace(/ {2,}/g, " ");
+    return { content: out, line_count: out.length > 0 ? 1 : 0 };
+  }
+
+  // Indent-sensitive: preserve newlines, collapse consecutive blank lines.
   let out = "";
   let count = 0;
   let prevBlank = false;
   for (let i = start; i < end; i++) {
     let line = lines[i] ?? "";
     line = line.replace(/[ \t]+$/, "");
-    if (opts.stripIndent) {
-      line = line.replace(/^[ \t]+/, "");
-    }
     const leadMatch = /^[ \t]*/.exec(line);
     const lead = leadMatch ? leadMatch[0] : "";
     const rest = line.slice(lead.length).replace(/[ \t]{2,}/g, " ");
