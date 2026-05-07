@@ -1,9 +1,8 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { EditInput, EditTextInput, ReadInput } from "./types.js";
+import { EditInput, ReadInput } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
-import { handleBatchEditText } from "./tools/edit-text.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs } from "./lib/fs.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
