@@ -60,10 +60,10 @@ describe("handleBatchRead", () => {
     expect(out.results[0]!.content).toBe("x\r\ny\r\n");
   });
 
-  it("offset and limit respected; truncated flag set correctly", async () => {
+  it("offset and count respected; truncated flag set correctly", async () => {
     const p = await fixture("long.txt", "L1\nL2\nL3\nL4\nL5\n");
     const out = await read({
-      requests: [{ path: p, mode: "verbatim_numbered", offset: 2, limit: 2 }],
+      requests: [{ path: p, mode: "verbatim_numbered", offset: 2, count: 2 }],
     });
     const r = out.results[0]!;
     expect(r.content).toBe("2\tL2\n3\tL3\n");
@@ -114,5 +114,123 @@ describe("handleBatchRead", () => {
       requests: [{ path: "relative/path.txt", mode: "verbatim_numbered" }],
     });
     expect(out.results[0]!.error?.reason).toBe("not_absolute");
+  });
+
+  it("fileinfo returns size, line count and timestamps", async () => {
+    const p = await fixture("info.ts", "const x = 1;\nconst y = 2;\n");
+    const out = await read({ requests: [{ path: p, mode: "fileinfo" }] });
+    const r = out.results[0]!;
+    expect(r.mode_applied).toBe("fileinfo");
+    const info = JSON.parse(r.content);
+    expect(typeof info.size).toBe("number");
+    expect(info.lines).toBe(2);
+    expect(r.lines).toBe(2);
+    expect(typeof info.mtimeMs).toBe("number");
+    expect(typeof info.ctimeMs).toBe("number");
+    expect(info.isFile).toBe(true);
+  });
+
+  it("search: single match, no context", async () => {
+    const p = await fixture("search.ts", "const a = 1;\nconst b = 2;\nconst c = 3;\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "const b" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("<!-- Match at line 2 -->");
+    expect(r.content).toContain("const b = 2;");
+  });
+
+  it("search: multiple matches", async () => {
+    const p = await fixture("multi-search.ts", "foo();\nbar();\nfoo();\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(2);
+    expect(r.content).toContain("<!-- Match at line 1 -->");
+    expect(r.content).toContain("<!-- Match at line 3 -->");
+  });
+
+  it("search: no match returns match_count=0 and empty content", async () => {
+    const p = await fixture("no-match.ts", "const x = 1;\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "zzznomatch" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(0);
+    expect(r.content).toBe("");
+  });
+
+  it("search: count controls context lines around match", async () => {
+    const p = await fixture("ctx.ts", "line1\nline2\ntarget\nline4\nline5\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 1 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("line2");
+    expect(r.content).toContain("target");
+    expect(r.content).toContain("line4");
+    expect(r.content).not.toContain("line1");
+  });
+
+  it("glob read: expands to one result per matched file", async () => {
+    const a = await fixture("glob_a.ts", "a\n");
+    const b = await fixture("glob_b.ts", "b\n");
+    await fixture("glob_c.txt", "c\n"); // should not match *.ts
+    const out = await read({ requests: [{ path: `${workDir}/*.ts`, mode: "verbatim" }] });
+    const paths = out.results.map(r => r.path).sort();
+    expect(paths).toContain(a);
+    expect(paths).toContain(b);
+    expect(paths.some(p => p.endsWith(".txt"))).toBe(false);
+  });
+
+  it("glob read: verbatim_numbered + glob returns error", async () => {
+    const out = await read({ requests: [{ path: `${workDir}/*.ts`, mode: "verbatim_numbered" }] });
+    expect(out.results[0]!.error?.reason).toBe("not_supported");
+  });
+
+  it("folder read: expands to immediate children", async () => {
+    const a = await fixture("dir_a.ts", "a\n");
+    const b = await fixture("dir_b.ts", "b\n");
+    const out = await read({ requests: [{ path: workDir, mode: "verbatim" }] });
+    const paths = out.results.map(r => r.path);
+    expect(paths).toContain(a);
+    expect(paths).toContain(b);
+  });
+
+  it("search: verbatim_numbered uses absolute file line numbers in match blocks", async () => {
+    const p = await fixture("search-numbered.ts", "line1\nline2\nline3\nTARGET\nline5\nline6\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim_numbered", searchTerm: "TARGET", count: 1 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("<!-- Match at line 4 -->");
+    // lines should be labeled with absolute file numbers 3, 4, 5
+    expect(r.content).toContain("3\tline3");
+    expect(r.content).toContain("4\tTARGET");
+    expect(r.content).toContain("5\tline5");
+  });
+
+  it("search: compact mode collapses content in match blocks", async () => {
+    const p = await fixture("search-compact.ts", "const   a   =   1;\nconst b = 2;\nconst   c   =   3;\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "const b" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("<!-- Match at line 2 -->");
+    // compact strips extra whitespace
+    expect(r.content).toContain("const b = 2;");
+  });
+
+  it("search + glob: searchTerm applies to each file matched by glob", async () => {
+    const a = await fixture("sg_a.ts", "alpha beta gamma\n");
+    const b = await fixture("sg_b.ts", "delta epsilon\n");
+    const out = await read({ requests: [{ path: `${workDir}/sg_*.ts`, mode: "verbatim", searchTerm: "beta" }] });
+    const byPath = Object.fromEntries(out.results.map(r => [r.path, r]));
+    expect(byPath[a]!.match_count).toBe(1);
+    expect(byPath[b]!.match_count).toBe(0);
+  });
+
+  it("glob + fileinfo: returns metadata for each matched file", async () => {
+    await fixture("fi_a.ts", "x\n");
+    await fixture("fi_b.ts", "y\n");
+    const out = await read({ requests: [{ path: `${workDir}/fi_*.ts`, mode: "fileinfo" }] });
+    expect(out.results.length).toBe(2);
+    for (const r of out.results) {
+      expect(r.mode_applied).toBe("fileinfo");
+      expect(JSON.parse(r.content).isFile).toBe(true);
+    }
   });
 });

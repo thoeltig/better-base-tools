@@ -3,7 +3,8 @@ import { z } from "zod";
 export const ReadMode = z.enum([
     "compact",
     "verbatim",
-    "verbatim_numbered"
+    "verbatim_numbered",
+    "fileinfo"
   ])
   .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
@@ -30,13 +31,15 @@ export type FileError = z.infer<typeof FileError>;
 
 export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
-      .describe("Absolute path"),
+      .describe("Absolute file path, directory, or glob pattern (glob/folder supported for all modes)"),
     mode: ReadMode
-      .describe("compact=DEFAULT for reading-to-understand (lossy: multi-ws collapse, leading-indent strip on non-indent-sensitive langs, JSON minify, blank-run collapse). verbatim=reading when byte-exact on-disk formatting matters (no line numbers). verbatim_numbered=byte-exact + line-numbered; required before edit ops that use line anchors (insert_at_line / replace_range)."),
-    offset: z.number().int().min(1).default(1).optional()
-      .describe("1-indexed start line"),
-    limit: z.number().int().min(1).default(1).optional()
-      .describe("Max lines to return"),
+      .describe("compact=DEFAULT (non-indent-sensitive files: single line; indent-sensitive: collapse blanks). verbatim=byte-exact, no line numbers. verbatim_numbered=byte-exact + line-numbered (required for insert_at_line / replace_range anchors; not supported with glob/folder). fileinfo=file metadata only (size, mtimeMs, ctimeMs, isFile)."),
+    offset: z.number().int().min(1).optional()
+      .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
+    count: z.number().int().min(1).optional()
+      .describe("read: max lines to return; search: context lines around each match (default 0)"),
+    searchTerm: z.string().min(1).optional()
+      .describe("If set: search file(s) for this string (case-insensitive); returns match blocks formatted in the requested mode, each prefixed with <!-- Match at line N -->"),
   })
   .strict();
 export type ReadRequest = z.infer<typeof ReadRequest>;
@@ -52,12 +55,14 @@ export const ReadResult = z.object({
       .describe("Absolute path"),
     mode_applied: ReadMode,
     lines: z.number().int().min(0)
-      .describe("Total line count"),
+      .describe("Total line count (0 for fileinfo or error)"),
     returned_lines: z.number().int().min(0)
-      .describe("Returned line count is either equal to total line count and less for partial reads"),
+      .describe("Returned line count; less than total for partial reads or search results"),
     truncated: z.boolean()
-      .describe("True if offset + limit exceeded the total line count"),
+      .describe("True if count limited the output"),
     content: z.string(),
+    match_count: z.number().int().min(0).optional()
+      .describe("Number of matches found (search mode only)"),
     error: FileError.optional(),
   })
   .strict();

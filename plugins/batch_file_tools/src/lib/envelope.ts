@@ -23,6 +23,10 @@ function readResultToBlock(r: ReadResult): TextBlock {
   let hint = "";
   if (r.error) {
     hint = `<!-- '${r.error.reason}' error reading file '${r.path}' as '${r.mode_applied}': ${r.error.message} -->`;
+  } else if (r.mode_applied === "fileinfo") {
+    hint = `<!-- File info for '${r.path}' -->`;
+  } else if (r.match_count !== undefined) {
+    hint = `<!-- Found ${r.match_count} match(es) in ${r.lines} lines of '${r.path}' as '${r.mode_applied}' -->`;
   } else {
     const countPrefix = r.returned_lines !== r.lines ? `${r.returned_lines} of ` : "";
     const unit = r.lines === 1 ? "line" : "lines";
