@@ -53,6 +53,17 @@ function applyReplace(
   const matches = findAllNormalized(content, oldStr);
 
   if (matches.length === 0) {
+    const fuzzyMatches = findAllFuzzyLineMatches(buf.lines, oldStr);
+    if (fuzzyMatches.length === 1) {
+      const { startIdx, endIdx } = fuzzyMatches[0]!;
+      const { lines: newLines, endings: newEndings } = parseInsertContent(buf, newStr);
+      buf.lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+      buf.endings.splice(startIdx, endIdx - startIdx + 1, ...newEndings);
+      return {
+        ok: true,
+        summary: `replaced 1 occurrence at line ${startIdx + 1} (whitespace-normalized match)`,
+      };
+    }
     return buildNotFound(content, oldStr);
   }
   if (matches.length > 1) {
@@ -89,6 +100,20 @@ function applyReplaceAll(
   const matches = findAllNormalized(content, oldStr);
 
   if (matches.length === 0) {
+    const fuzzyMatches = findAllFuzzyLineMatches(buf.lines, oldStr);
+    if (fuzzyMatches.length > 0) {
+      const matchLines = fuzzyMatches.map(m => m.startIdx + 1);
+      for (let i = fuzzyMatches.length - 1; i >= 0; i--) {
+        const { startIdx, endIdx } = fuzzyMatches[i]!;
+        const { lines: newLines, endings: newEndings } = parseInsertContent(buf, newStr);
+        buf.lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+        buf.endings.splice(startIdx, endIdx - startIdx + 1, ...newEndings);
+      }
+      return {
+        ok: true,
+        summary: summarizeReplaceAll(matchLines) + " (whitespace-normalized match)",
+      };
+    }
     return buildNotFound(content, oldStr);
   }
 
@@ -273,6 +298,33 @@ function parseInsertContent(
     endings[endings.length - 1] = buf.defaultEnding;
   }
   return { lines, endings };
+}
+
+function findAllFuzzyLineMatches(
+  lines: readonly string[],
+  oldStr: string,
+): { startIdx: number; endIdx: number }[] {
+  const normOld = splitAndNormalize(oldStr);
+  if (normOld.length === 0) return [];
+  const results: { startIdx: number; endIdx: number }[] = [];
+  for (let i = 0; i <= lines.length - normOld.length; i++) {
+    let match = true;
+    for (let j = 0; j < normOld.length; j++) {
+      if (normalizeLine(lines[i + j] ?? "") !== normOld[j]) { match = false; break; }
+    }
+    if (match) results.push({ startIdx: i, endIdx: i + normOld.length - 1 });
+  }
+  return results;
+}
+
+function splitAndNormalize(s: string): string[] {
+  const lines = s.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines.map(normalizeLine);
+}
+
+function normalizeLine(line: string): string {
+  return line.trim().replace(/[ \t]+/g, " ");
 }
 
 export function toOpResult(index: number, res: OpApplyResult): OpResult {
