@@ -178,9 +178,27 @@ describe("handleBatchRead", () => {
     expect(paths.some(p => p.endsWith(".txt"))).toBe(false);
   });
 
-  it("glob read: verbatim_numbered + glob returns error", async () => {
-    const out = await read({ requests: [{ path: `${workDir}/*.ts`, mode: "verbatim_numbered" }] });
-    expect(out.results[0]!.error?.reason).toBe("not_supported");
+  it("glob read: verbatim_numbered expands and numbers each matched file independently", async () => {
+    const a = await fixture("vng_a.ts", "hello\nworld\n");
+    const b = await fixture("vng_b.ts", "foo\n");
+    const out = await read({ requests: [{ path: `${workDir}/vng_*.ts`, mode: "verbatim_numbered" }] });
+    const byPath = Object.fromEntries(out.results.map(r => [r.path, r]));
+    expect(byPath[a]!.mode_applied).toBe("verbatim_numbered");
+    expect(byPath[a]!.content).toBe("1\thello\n2\tworld\n");
+    expect(byPath[b]!.mode_applied).toBe("verbatim_numbered");
+    expect(byPath[b]!.content).toBe("1\tfoo\n");
+  });
+
+  it("folder read: verbatim_numbered expands directory to numbered results per file", async () => {
+    const a = await fixture("vnf_a.ts", "alpha\n");
+    const b = await fixture("vnf_b.ts", "beta\n");
+    const out = await read({ requests: [{ path: workDir, mode: "verbatim_numbered" }] });
+    const paths = out.results.map(r => r.path);
+    expect(paths).toContain(a);
+    expect(paths).toContain(b);
+    const ra = out.results.find(r => r.path === a)!;
+    expect(ra.mode_applied).toBe("verbatim_numbered");
+    expect(ra.content).toBe("1\talpha\n");
   });
 
   it("folder read: expands to immediate children", async () => {

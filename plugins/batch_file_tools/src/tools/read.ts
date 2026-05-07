@@ -30,11 +30,6 @@ async function expandReadRequests(
       continue;
     }
 
-    if (req.mode === "verbatim_numbered") {
-      entries.push({ kind: "err", result: errResult(req, "not_supported", "verbatim_numbered requires a concrete file path, not a glob or directory") });
-      continue;
-    }
-
     if (looksLikeGlob(req.path) && !isAbsolute(req.path)) {
       entries.push({ kind: "err", result: errResult(req, "not_absolute", `Path must be absolute: ${req.path}`) });
       continue;
