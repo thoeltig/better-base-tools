@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-08 | n/a | n/a | n/a | session 17 — longitudinal analysis across 3 projects (Thirdparty Docs/pure-native, Project/mixed, BTF/MCP-heavy); built `extract-session-metrics.mjs`; direct comparison: −15% cache_read/turn high-MCP vs low-MCP same project/period; estimation method (batching delta, 2.2 chars/token) corroborates at 14–28%; baseline estimate: ~15% cache_read reduction in real sessions; controlled test (session 16) remains ceiling: −51% cache_read, −58% tool calls, −45% duration; hidden benefits (cross-file reasoning, fewer partial-context decisions) not captured |
 | 2026-05-08 | ~8 | n/a | n/a | session 16 — controlled MCP vs native comparison test (4 tasks, 2 haiku subagents); key result: cache_read −51%, effective input −46%, tool calls −58%, duration −45% on T1-T3 |
 | 2026-05-08 | ~13 | ~26 | ~50% | session 15 — Phase 3 (fileinfo + searchTerm + glob/folder read expansion) + Phase 4 (verbatim indent normalization + disableNormalizedFormatting flag + compose tests); 250/250 tests pass |
 | 2026-04-27 | 9 | ~26 | ~65% | session 14 (blind dogfood) — `batch_edit` correctly chosen for 18 small ops/4 source files; harness output cap (58.9KB) hit on first `batch_read` (no per-file limits), forced 4 extra reads; `batch_edit` mis-used for test inserts (≥50 lines/op → should have been `batch_edit_text`) |
@@ -48,6 +49,39 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-08 (session 17) — longitudinal transcript analysis across 3 projects
+
+**Scope:** Build a transcript extraction pipeline and run longitudinal MCP vs native analysis across 3 real projects: Thirdparty Docs (pure native, 108 sessions incl. 101 subagents), Project (mixed — native-only phase Apr 29–May 4, then MCP-enabled May 5+), BTF this repo (MCP-heavy, dogfood sessions 1–16).
+
+**Shipped:**
+1. **`Claude_Temp_Files/extract-session-metrics.mjs`** — JSONL transcript parser. Accepts a folder path, recurses into `subagents/` subdirs, parses all `.jsonl` files. Extracts per-session: token counts (deduped by `message.id` — each API response splits into 3–5 events), tool call counts + timing, input/output chars, files touched (native tools from input params; batch tools from result comment headers). Outputs minified JSON array. Key fix mid-session: MCP tool name matching changed from exact string (`mcp__batch_file_tools__*`) to suffix match (`*__batch_read` etc.) after discovering the project registers the server as `batch-file-tools` (dashes not underscores).
+2. **`Claude_Temp_Files/project-metrics.json`**, **`thirdparty-docs-metrics.json`**, **`metrics-test-out.json`** — extracted data for the three projects.
+
+**Findings:**
+
+- **Direct comparison (same project, same period, same codebase):** Project high-MCP sessions (≥60%, May 5+) vs low-MCP sessions (same dates): **−15% cache_read/turn**. BTF high-MCP vs low-MCP: **−13% cache_read/turn**. Signal is consistent across two independent projects.
+- **Estimation method:** for each MCP call, count files batched beyond first → estimate additional cache_read those extra calls would have generated (`saved_calls × chars_per_file / 2.2 × remaining_turns`). Using 2.2 chars/token (TypeScript/JSON-dense content; prose ~3, not the naive 4). Result: 14–28% additional cache_read avoided. Corroborates direct comparison.
+- **Both methods converge at ~15%** as the baseline real-world estimate for cache_read reduction.
+- **Thirdparty Docs outlier:** 62K cache_read/turn despite 0% MCP and 3,090 native file calls in subagents. Subagents are short-lived (start fresh each time), so per-session cache_read never accumulates. Cost showed up instead in cache_creation (10K/turn vs 2–4K for Project/BTF) — repeated cache warm-up across 101 subagents.
+- **chart-visible tokens** (input + cache_creation + output) ≠ what is shown in Claude Code usage chart. Cache_read is billed at 0.1× and not included in the "In:" line. Project 30-day cache_creation (4.2M) exactly matches "Haiku In: 4.2m" in the usage chart.
+- **Confounds acknowledged:** task complexity drives cache_read/turn independently of tool choice; output/turn is higher in MCP sessions (complex later-project work, not MCP overhead); cross-project comparison is noisy. Direct within-project comparison is the cleanest signal available.
+
+**Three-point range:**
+
+| Method | Cache read saving |
+|---|---|
+| Estimation lower bound (batching only) | 14–28% |
+| Direct comparison (same project/period) | 13–15% |
+| Controlled test (session 16, identical tasks) | 51% |
+
+**Not captured:** reasoning quality benefits from fewer turns / full cross-file context in one shot; session 16's −45% duration and −58% tool calls are the more user-visible metrics and not reproducible longitudinally without task-type tagging.
+
+**Future measurement:** run extraction again after 20–30 sessions on a new project started with current MCP state from day one. No mixed phases, no schema evolution noise. Compare estimation vs direct comparison again to tighten the real-world range.
+
+**Tool calls (this session):** ~6 `batch_read`, ~4 `batch_edit`, ~8 `Bash` (node scripts).
+
+---
 
 ### 2026-05-08 (session 16) — MCP vs native controlled comparison test
 
