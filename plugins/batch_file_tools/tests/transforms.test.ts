@@ -255,3 +255,70 @@ describe("formatForRead — verbatim mode", () => {
     expect(r.content).toBe("a\nb");
   });
 });
+
+describe("formatForRead — verbatim indent normalization (Phase 4)", () => {
+  it("tab-indented: each leading tab → 2 spaces", () => {
+    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim" });
+    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+  });
+
+  it("double-tab nesting: each tab level → 2 spaces", () => {
+    const r = formatForRead({ content: "class A {\n\tb() {\n\t\treturn 1;\n\t}\n}\n", mode: "verbatim" });
+    expect(r.content).toBe("class A {\n  b() {\n    return 1;\n  }\n}\n");
+  });
+
+  it("4-space-indented: 4 spaces → 2 spaces per level", () => {
+    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts" });
+    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+  });
+
+  it("2-space-indented: unchanged", () => {
+    const r = formatForRead({ content: "function foo() {\n  return 1;\n}\n", mode: "verbatim", path: "/x/a.ts" });
+    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+  });
+
+  it("mixed 4/8 space: GCD=4, normalizes to 2 and 4 spaces", () => {
+    const r = formatForRead({ content: "a:\n    b:\n        c: 1\n", mode: "verbatim", path: "/x/a.ts" });
+    expect(r.content).toBe("a:\n  b:\n    c: 1\n");
+  });
+
+  it(".py path: 4-space → 2-space (indent-sensitive but not tab-required)", () => {
+    const r = formatForRead({ content: "def foo():\n    return 1\n", mode: "verbatim", path: "/x/a.py" });
+    expect(r.content).toBe("def foo():\n  return 1\n");
+  });
+
+  it("Makefile path: tabs preserved (tab-required)", () => {
+    const r = formatForRead({ content: "build:\n\techo hi\n", mode: "verbatim", path: "/x/Makefile" });
+    expect(r.content).toBe("build:\n\techo hi\n");
+  });
+
+  it("CRLF file: endings preserved after normalization", () => {
+    const r = formatForRead({ content: "function foo() {\r\n\treturn 1;\r\n}\r\n", mode: "verbatim" });
+    expect(r.content).toBe("function foo() {\r\n  return 1;\r\n}\r\n");
+  });
+
+  it("verbatim_numbered: line numbers unchanged, content normalized", () => {
+    const r = formatForRead({ content: "class A {\n\tfoo() {}\n}\n", mode: "verbatim_numbered" });
+    expect(r.content).toBe("1\tclass A {\n2\t  foo() {}\n3\t}\n");
+  });
+
+  it("verbatim_numbered: 4-space → 2-space, line numbers intact", () => {
+    const r = formatForRead({ content: "if (x) {\n    y();\n}\n", mode: "verbatim_numbered", path: "/x/a.ts" });
+    expect(r.content).toBe("1\tif (x) {\n2\t  y();\n3\t}\n");
+  });
+
+  it("disableNormalizedFormatting: true returns tabs as-is", () => {
+    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim", disableNormalizedFormatting: true });
+    expect(r.content).toBe("function foo() {\n\treturn 1;\n}\n");
+  });
+
+  it("disableNormalizedFormatting: true returns 4-space as-is", () => {
+    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts", disableNormalizedFormatting: true });
+    expect(r.content).toBe("function foo() {\n    return 1;\n}\n");
+  });
+
+  it("no indentation: normalization is a no-op", () => {
+    const r = formatForRead({ content: SAMPLE, mode: "verbatim" });
+    expect(r.content).toBe(SAMPLE);
+  });
+});

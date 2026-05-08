@@ -140,7 +140,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       const s = Math.max(0, idx - ctx);
       const e = Math.min(rawLines.length - 1, idx + ctx);
       returnedLines += e - s + 1;
-      const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
+      const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, ...(req.disableNormalizedFormatting ? { disableNormalizedFormatting: true } : {}) });
       blocks.push(`<!-- Match at line ${idx + 1} -->\n${formatted.content}`);
     }
 
@@ -162,6 +162,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
     path: req.path,
     ...(req.offset !== undefined ? { offset: req.offset } : {}),
     ...(req.count !== undefined ? { limit: req.count } : {}),
+    ...(req.disableNormalizedFormatting ? { disableNormalizedFormatting: true } : {}),
   });
 
   return {

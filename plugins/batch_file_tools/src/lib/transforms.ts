@@ -8,6 +8,7 @@ export interface FormatInput {
   readonly path?: string;
   readonly offset?: number;
   readonly limit?: number;
+  readonly disableNormalizedFormatting?: boolean;
 }
 
 export interface FormatOutput {
@@ -44,6 +45,41 @@ function isIndentSensitive(path: string | undefined): boolean {
   return false;
 }
 
+const TAB_REQUIRED_BASENAMES = new Set<string>(["makefile", "gnumakefile"]);
+
+function isTabRequired(path: string | undefined): boolean {
+  if (!path) return false;
+  const base = basename(path).toLowerCase();
+  return TAB_REQUIRED_BASENAMES.has(base) || base.startsWith("makefile.");
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+function detectIndentUnit(lines: readonly string[]): number {
+  if (lines.some(l => l.startsWith("\t"))) return 0;
+  const counts = lines
+    .map(l => /^( +)/.exec(l)?.[1]?.length ?? 0)
+    .filter(n => n > 0);
+  if (counts.length === 0) return 2;
+  return counts.reduce((a, b) => gcd(a, b));
+}
+
+function normalizeLineIndent(line: string, indentUnit: number): string {
+  if (indentUnit === 0) {
+    const m = /^(\t+)/.exec(line);
+    if (!m) return line;
+    return "  ".repeat(m[1]!.length) + line.slice(m[1]!.length);
+  }
+  const m = /^( +)/.exec(line);
+  if (!m) return line;
+  const spaces = m[1]!.length;
+  const levels = Math.floor(spaces / indentUnit);
+  const remainder = spaces % indentUnit;
+  return "  ".repeat(levels) + " ".repeat(remainder) + line.slice(spaces);
+}
+
 function isJsonPath(path: string | undefined): boolean {
   if (path === undefined) return false;
   return extname(path).toLowerCase() === ".json";
@@ -66,7 +102,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
   let content: string;
   let emittedLines = returnedLines;
   if (input.mode === "verbatim_numbered") {
-    content = formatEdit(split.lines, clampedStart, clampedEnd);
+    content = formatEdit(split.lines, clampedStart, clampedEnd, input.path, input.disableNormalizedFormatting);
   } else if (input.mode === "compact") {
     const compact = formatCompact(
       split.lines,
@@ -78,7 +114,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
     content = compact.content;
     emittedLines = compact.line_count;
   } else {
-    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd);
+    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd, input.path, input.disableNormalizedFormatting);
   }
 
   const truncated = returnedLines < totalLines - clampedStart;
@@ -96,11 +132,18 @@ function formatEdit(
   lines: readonly string[],
   start: number,
   end: number,
+  path?: string,
+  disableNorm?: boolean,
 ): string {
+  const indentUnit = (!disableNorm && !isTabRequired(path))
+    ? detectIndentUnit(lines.slice(start, end))
+    : -1;
   let out = "";
   for (let i = start; i < end; i++) {
     const lineNum = i + 1;
-    out += `${lineNum}\t${lines[i] ?? ""}\n`;
+    let line = lines[i] ?? "";
+    if (indentUnit >= 0) line = normalizeLineIndent(line, indentUnit);
+    out += `${lineNum}\t${line}\n`;
   }
   return out;
 }
@@ -110,10 +153,17 @@ function formatRaw(
   endings: readonly string[],
   start: number,
   end: number,
+  path?: string,
+  disableNorm?: boolean,
 ): string {
+  const indentUnit = (!disableNorm && !isTabRequired(path))
+    ? detectIndentUnit(lines.slice(start, end))
+    : -1;
   let out = "";
   for (let i = start; i < end; i++) {
-    out += lines[i] ?? "";
+    let line = lines[i] ?? "";
+    if (indentUnit >= 0) line = normalizeLineIndent(line, indentUnit);
+    out += line;
     out += endings[i] ?? "";
   }
   return out;

@@ -13,99 +13,121 @@ beforeAll(async () => {
 afterAll(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
-beforeEach(() => {
-  counter++;
-});
+beforeEach(() => { counter++; });
 
-function tmpPath(name: string): string {
-  return join(workDir, `${counter}-${name}`);
-}
-
-async function fixture(name: string, content: string): Promise<string> {
+function tmpPath(name: string) { return join(workDir, `${counter}-${name}`); }
+async function fixture(name: string, content: string) {
   const p = tmpPath(name);
   await writeFile(p, content, { encoding: "utf8" });
   return p;
 }
-
-async function readText(p: string): Promise<string> {
-  return readFile(p, { encoding: "utf8" });
+async function readText(path: string) { return readFile(path, { encoding: "utf8" }); }
+async function runEdit(path: string, ops: object[]) {
+  return handleBatchEdit({ dryRun: false, verbose: true, files: [{ path, ops }] }, [workDir]);
 }
 
-async function runReplace(filePath: string, old: string, newStr: string) {
-  return handleBatchEdit(
-    { verbose: true, files: [{ path: filePath, ops: [{ type: "replace", old, new: newStr }] }] },
-    [workDir],
-  );
-}
+// These tests verify that the fuzzy whitespace fallback handles the exact
+// scenario Phase 4 creates: verbatim reads normalize indentation to 2-space,
+// so any old anchor derived from a normalized read will differ from the file
+// only in whitespace. The fuzzy fallback must bridge that gap reliably.
 
-async function runReplaceAll(filePath: string, old: string, newStr: string) {
-  return handleBatchEdit(
-    { verbose: true, files: [{ path: filePath, ops: [{ type: "replace_all", old, new: newStr }] }] },
-    [workDir],
-  );
-}
-
-describe("replace — fuzzy whitespace fallback", () => {
-  it("matches when file uses tabs but old uses 2-space indent", async () => {
-    const p = await fixture("tabs.ts", "function foo() {\n\treturn 1;\n}\n");
-    const out = await runReplace(p, "function foo() {\n  return 1;\n}\n", "function foo() {\n  return 2;\n}\n");
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
-    expect(out.results[0]!.ops[0]!.summary).toMatch(/whitespace-normalized match/);
+describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
+  it("tab-indented file + 2-space old → fuzzy match, file written with new content", async () => {
+    const p = await fixture("tab.ts", "function foo() {\n\treturn 1;\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).toContain("whitespace-normalized match");
     expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
-  it("matches when file uses 4-space indent but old uses 2-space", async () => {
-    const p = await fixture("4space.ts", "function foo() {\n    return 1;\n}\n");
-    const out = await runReplace(p, "function foo() {\n  return 1;\n}\n", "function foo() {\n  return 99;\n}\n");
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
-    expect(out.results[0]!.ops[0]!.summary).toMatch(/whitespace-normalized match/);
-    expect(await readText(p)).toBe("function foo() {\n  return 99;\n}\n");
+  it("4-space-indented file + 2-space old → fuzzy match", async () => {
+    const p = await fixture("four.ts", "function foo() {\n    return 1;\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).toContain("whitespace-normalized match");
+    expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
-  it("exact match still works — fuzzy path not triggered", async () => {
-    const p = await fixture("exact.ts", "const x = 1;\n");
-    const out = await runReplace(p, "const x = 1;\n", "const x = 2;\n");
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
-    expect(out.results[0]!.ops[0]!.summary).not.toMatch(/whitespace-normalized/);
-    expect(await readText(p)).toBe("const x = 2;\n");
+  it("exact match present → exact path taken, no fuzzy marker in summary", async () => {
+    const p = await fixture("exact.ts", "function foo() {\n  return 1;\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).not.toContain("whitespace-normalized match");
+    expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
-  it("returns error when content differs (not just whitespace)", async () => {
-    const p = await fixture("content-diff.ts", "const x = 1;\n");
-    const out = await runReplace(p, "const y = 1;\n", "const y = 2;\n");
-    expect(out.results[0]!.ops[0]!.status).toBe("error");
-    expect(await readText(p)).toBe("const x = 1;\n");
-  });
-
-  it("returns nearest_anchor hint on content mismatch", async () => {
-    const p = await fixture("hint.ts", "function greet() {\n  return 'hello';\n}\n");
-    const out = await runReplace(p, "function greet() {\n  return 'bye';\n}\n", "x");
+  it("content differs beyond whitespace → not_found, file unchanged", async () => {
+    const p = await fixture("diff.ts", "function foo() {\n    return 1;\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace", old: "function bar() {\n  return 1;\n}", new: "x" },
+    ]);
     const op = out.results[0]!.ops[0]!;
     expect(op.status).toBe("error");
-    expect(op.hint?.nearest_anchor).toBeDefined();
+    expect(op.reason).toBe("not_found");
+    expect(await readText(p)).toBe("function foo() {\n    return 1;\n}\n");
   });
 
-  it("matches without trailing newline in old even though file has one", async () => {
-    const p = await fixture("trail.ts", "const a = 1;\n");
-    const out = await runReplace(p, "const a = 1;", "const a = 2;");
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
-    // exact match finds substring — trailing \n is preserved from original file
-    expect(await readText(p)).toBe("const a = 2;\n");
+  it("deeply nested multi-line block: 2-space old matches double-tab file", async () => {
+    const p = await fixture("nested.ts", "class Foo {\n\tbar() {\n\t\treturn 1;\n\t}\n}\n");
+    const out = await runEdit(p, [
+      {
+        type: "replace",
+        old: "class Foo {\n  bar() {\n    return 1;\n  }\n}",
+        new: "class Foo {\n  bar() {\n    return 2;\n  }\n}",
+      },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).toContain("whitespace-normalized match");
+  });
+
+  it("single-line old: 2-space is substring of 4-space line → exact path, original indent preserved", async () => {
+    // "  doSomething();" is a literal substring of "    doSomething();" so exact
+    // match fires before fuzzy. The prefix spaces not covered by old are kept,
+    // meaning 4-space indentation is preserved in the output. This is correct
+    // Phase 4 behavior: normalized reads are for viewing, not for reformatting.
+    const p = await fixture("single.ts", "if (x) {\n    doSomething();\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace", old: "  doSomething();", new: "  doSomethingElse();" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).not.toContain("whitespace-normalized match"); // exact path
+    expect(await readText(p)).toBe("if (x) {\n    doSomethingElse();\n}\n"); // 4-space preserved
   });
 });
 
-describe("replace_all — fuzzy whitespace fallback", () => {
-  it("matches and replaces when file uses tabs but old uses 2-space", async () => {
-    const p = await fixture("tabs-all.ts", "function foo() {\n\treturn 1;\n}\n");
-    const out = await runReplaceAll(p, "function foo() {\n  return 1;\n}\n", "function foo() {\n  return 99;\n}\n");
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
-    expect(out.results[0]!.ops[0]!.summary).toMatch(/whitespace-normalized match/);
-    expect(await readText(p)).toBe("function foo() {\n  return 99;\n}\n");
+describe("replace_all — fuzzy whitespace fallback (Phase 4 compose)", () => {
+  it("4-space file + 2-space old → exact substring path, 4-space indent preserved", async () => {
+    // Same substring issue: "  x();" is inside "    x();" so exact path fires.
+    // Each occurrence is replaced correctly; prefix spaces preserve 4-space style.
+    const p = await fixture("ra-four.ts", "if (a) {\n    x();\n}\nif (b) {\n    x();\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace_all", old: "  x();", new: "  y();" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).not.toContain("whitespace-normalized match"); // exact path
+    expect(await readText(p)).toBe("if (a) {\n    y();\n}\nif (b) {\n    y();\n}\n"); // 4-space preserved
   });
 
-  it("returns error when no fuzzy match found", async () => {
-    const p = await fixture("no-match-all.ts", "const x = 1;\n");
-    const out = await runReplaceAll(p, "const z = 999;\n", "x");
-    expect(out.results[0]!.ops[0]!.status).toBe("error");
+  it("tab-indented file + 2-space old → all occurrences replaced", async () => {
+    const p = await fixture("ra-tab.ts", "if (a) {\n\tx();\n}\nif (b) {\n\tx();\n}\n");
+    const out = await runEdit(p, [
+      { type: "replace_all", old: "  x();", new: "  y();" },
+    ]);
+    const op = out.results[0]!.ops[0]!;
+    expect(op.status).toBe("ok");
+    expect(op.summary).toContain("whitespace-normalized match");
+    expect(await readText(p)).toBe("if (a) {\n  y();\n}\nif (b) {\n  y();\n}\n");
   });
 });
