@@ -8,6 +8,8 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-08 | ~8 | n/a | n/a | session 16 — controlled MCP vs native comparison test (4 tasks, 2 haiku subagents); key result: cache_read −51%, effective input −46%, tool calls −58%, duration −45% on T1-T3 |
+| 2026-05-08 | ~13 | ~26 | ~50% | session 15 — Phase 3 (fileinfo + searchTerm + glob/folder read expansion) + Phase 4 (verbatim indent normalization + disableNormalizedFormatting flag + compose tests); 250/250 tests pass |
 | 2026-04-27 | 9 | ~26 | ~65% | session 14 (blind dogfood) — `batch_edit` correctly chosen for 18 small ops/4 source files; harness output cap (58.9KB) hit on first `batch_read` (no per-file limits), forced 4 extra reads; `batch_edit` mis-used for test inserts (≥50 lines/op → should have been `batch_edit_text`) |
 | 2026-04-27 | 2 | ~3 | ~33% | session 13 — added workload-shape hints (≤~5 lines → `batch_edit`, ≥~15 lines → `batch_edit_text`) to both tool descriptions; correctly used `batch_edit` for 2 small ops |
 | 2026-04-27 | ~10 | n/a | n/a | session 12 — token-cost A/B (native vs batch_edit vs batch_edit_text); regime split discovered: batch_edit wins on multi-op-count, batch_edit_text wins on content-heavy single ops. Test 1 (3 small ops): batch_edit_text +96% out vs native. Test 2 (1 big op): batch_edit_text −20% out vs native, −25% vs batch_edit. Retracted post-test-1 deprecation recommendation. |
@@ -46,6 +48,69 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-08 (session 16) — MCP vs native controlled comparison test
+
+**Scope:** Design and run a controlled tool-comparison test: two haiku subagents given identical 4-task workloads on isolated fixture copies, one constrained to `batch_read`/`batch_edit` only, one to native Read/Edit/Write/Glob/Grep only. Extract per-agent token usage from JSONL transcripts. T4 (precision read) excluded from MCP metrics because the native agent exploited T3 context (0 tool calls) while MCP followed instructions literally (2 reads) — comparison is T1-T3 only.
+
+**Fixture:** 5-file TypeScript mini-project (`types.ts`, `utils.ts`, `userService.ts`, `postService.ts`, `index.ts`, ~110 lines total) in `Claude_Temp_Files/comparison-fixture/{mcp,native}/src/`.
+
+**Tasks (T1-T3):**
+- T1: Find all `formatDate` usages across files (search)
+- T2: Apply 4 changes to `utils.ts` in one shot (multi-op single-file edit)
+- T3: Propagate rename to `userService.ts` + `postService.ts` (multi-file edit)
+
+**Results (T1-T3, harness-confirmed call counts):**
+
+| Metric | MCP | Native | Delta |
+|---|---|---|---|
+| Tool calls | 5 | 12 | −58% |
+| Assistant turns | 11 | 20 | −45% |
+| Output tokens | 1,901 | 2,775 | −31% |
+| Cache creation tokens | 42,974 | 42,698 | ≈0% |
+| Cache read tokens | 172,690 | 355,563 | −51% |
+| Effective input (all input) | 215,717 | 398,298 | −46% |
+| Duration | 19.6s | 35.6s | −45% |
+
+**Findings:**
+
+- **Cache creation equal → fair comparison.** Both agents wrote the same content into cache (same source files, same work done). The difference is entirely in how much context accumulated from tool call results.
+- **Cache read is the primary driver.** Each additional tool call appends its result to the context window. Native's 12 calls vs MCP's 5 means 7 extra result payloads compounding across 20 turns, inflating every subsequent cache re-read. This effect grows with session length.
+- **Most values roughly halved** even on a short 4-task test against small files. Benefit will compound on long sessions with larger files.
+- **Output tokens closer (−31%)** than other metrics — the reasoning overhead per turn is similar; the savings come from fewer turns and less context to process, not from shorter individual responses.
+- **Speed −45%** is a direct consequence of fewer round-trips to the model, not model speed.
+- **T4 design note:** native agent answered from T3 context (0 tool calls); MCP followed instructions and made 2 reads. Fair test would cold-start each task. For T1-T3 the comparison is clean.
+- **Unattributed `batch_edit` call:** harness logged 3 vs self-reported 2 for MCP — likely a silent verification or re-edit the agent made but didn't attribute to a task in its self-report.
+
+**Tool calls (this session):** ~5 `batch_read`, ~3 `batch_edit`, 1 `Write` (extraction script), 2 `Agent` (subagents), 1 `Bash` (script run).
+
+---
+
+### 2026-05-08 (session 15) — Phase 3: info + search mode / Phase 4: verbatim indent normalization
+
+**Scope:** Ship Phase 3 (fileinfo mode + searchTerm grep + glob/folder expansion for `batch_read`) and Phase 4 (indentation normalization for verbatim/verbatim_numbered). Phase 3 was implemented in the previous session; both phases logged here. Phase 4 was gated on compose tests first, to verify the fuzzy edit fallback is safe as Phase 4's dependency.
+
+**Shipped:**
+
+1. **Phase 3 — `types.ts`** — `ReadMode` extended with `"fileinfo"`; `ReadRequest` renamed `limit` → `count`, added `searchTerm`; `ReadResult` added optional `match_count`.
+2. **Phase 3 — `tools/read.ts`** — `expandReadRequests` added (glob/folder expansion, mirrors `planEntries` in `edit.ts`); `fileinfo` branch in `readOne` (stat metadata as JSON); search branch (case-insensitive grep with `count` context lines, `<!-- Match at line N -->` headers).
+3. **Phase 3 — `index.ts`** — Both tool descriptions rewritten: `batch_read` documents all modes, pagination, search, glob; `batch_edit` documents phased execution, glob, all op types.
+4. **Phase 4 — compose tests (`tests/edit-fuzzy.test.ts`, new)** — 8 tests verifying fuzzy fallback handles 2-space `old` against 4-space/tab files. Key finding: 2-space `old` is a substring of 4-space lines → exact path fires (original indent preserved). Tab files always use fuzzy (no substring possible). Both safe for Phase 4.
+5. **Phase 4 — `src/lib/transforms.ts`** — Added `TAB_REQUIRED_BASENAMES` / `isTabRequired`, `detectIndentUnit` (GCD of leading spaces; 0 for tab-indented), `normalizeLineIndent`, `gcd`. `formatRaw` and `formatEdit` accept optional `path?` + `disableNorm?`; apply normalization unless disabled or tab-required.
+6. **Phase 4 — `types.ts`** — `ReadRequest.disableNormalizedFormatting?: boolean` added; mode descriptions updated (byte-exact → indentation-normalized).
+7. **Phase 4 — `tools/read.ts`** — `disableNormalizedFormatting` threaded into normal-read and search `formatForRead` calls.
+8. **Phase 4 — `index.ts`** — `batch_read` description updated: verbatim modes described as indentation-normalized, `disableNormalizedFormatting` flag documented in Note.
+9. **Tests** — 13 normalization tests added to `transforms.test.ts`; 250/250 passing. Build clean.
+
+**Findings:**
+
+- **Verbatim normalization is safe.** Compose tests surface one nuance: single-line 2-space `old` can match as a substring inside 4-space lines (exact path fires before fuzzy, original indent preserved in result). For multi-line blocks the fuzzy path fires correctly. Both cases succeed; the distinction only affects whether the resulting file's indentation changes.
+- **`disableNormalizedFormatting` is useful at dogfood time.** When inspecting actual file formatting, set `true`. Default `false` keeps reads cheap.
+- **All codebase files use 2-space indent.** Normalization is a no-op against the local repo; correctness verified via unit tests, not live reads on foreign-indented files.
+
+**Tool calls (this session):** ~8 `batch_read`, ~5 `batch_edit`. No native Read/Edit/Write used.
+
+---
 
 ### 2026-04-27 (session 14) — blind dogfood test: op-level stopOnError
 
