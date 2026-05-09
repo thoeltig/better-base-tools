@@ -116,7 +116,7 @@ describe("handleBatchRead", () => {
     expect(out.results[0]!.error?.reason).toBe("not_absolute");
   });
 
-  it("fileinfo returns size, line count and timestamps", async () => {
+  it("fileinfo returns size, line count, ISO mtime and no ctimeMs", async () => {
     const p = await fixture("info.ts", "const x = 1;\nconst y = 2;\n");
     const out = await read({ requests: [{ path: p, mode: "fileinfo" }] });
     const r = out.results[0]!;
@@ -125,9 +125,26 @@ describe("handleBatchRead", () => {
     expect(typeof info.size).toBe("number");
     expect(info.lines).toBe(2);
     expect(r.lines).toBe(2);
-    expect(typeof info.mtimeMs).toBe("number");
-    expect(typeof info.ctimeMs).toBe("number");
+    expect(typeof info.mtime).toBe("string");
+    expect(new Date(info.mtime).getTime()).toBeGreaterThan(0);
+    expect(info.ctimeMs).toBeUndefined();
+    expect(info.mtimeMs).toBeUndefined();
     expect(info.isFile).toBe(true);
+  });
+
+  it("fileinfo_refs returns fileinfo fields plus refs array", async () => {
+    const p = await fixture("refs.ts", "import { foo } from './foo.js';\nimport bar from '../bar.js';\nimport 'react';\nconst x = 1;\n");
+    const out = await read({ requests: [{ path: p, mode: "fileinfo_refs" }] });
+    const r = out.results[0]!;
+    expect(r.mode_applied).toBe("fileinfo_refs");
+    const info = JSON.parse(r.content);
+    expect(info.lines).toBe(4);
+    expect(typeof info.mtime).toBe("string");
+    expect(info.isFile).toBe(true);
+    expect(Array.isArray(info.refs)).toBe(true);
+    expect(info.refs).toContain("./foo.js");
+    expect(info.refs).toContain("../bar.js");
+    expect(info.refs).not.toContain("react");
   });
 
   it("search: single match, no context", async () => {

@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { readFileUtf8, isPathAllowed } from "../lib/fs.js";
 import { expandToFiles, looksLikeGlob, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
+import { extractRefs } from "../lib/extract-refs.js";
 import type { ReadInput, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
 
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
@@ -76,8 +77,8 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
 }
 
 async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<ReadResult> {
-  // fileinfo: stat without reading content
-  if (req.mode === "fileinfo") {
+  // fileinfo / fileinfo_refs: stat without full content processing
+  if (req.mode === "fileinfo" || req.mode === "fileinfo_refs") {
     if (!isAbsolute(req.path)) {
       return errResult(req, "not_absolute", `Path must be absolute: ${req.path}`);
     }
@@ -89,10 +90,11 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       const s = await stat(resolved);
       const raw = s.isFile() ? await readFile(resolved, "utf8") : "";
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
-      const info = { size: s.size, lines: lineCount, mtimeMs: s.mtimeMs, ctimeMs: s.ctimeMs, isFile: s.isFile() };
+      const baseInfo = { size: s.size, lines: lineCount, mtime: new Date(s.mtimeMs).toISOString(), isFile: s.isFile() };
+      const info = req.mode === "fileinfo_refs" ? { ...baseInfo, refs: extractRefs(raw) } : baseInfo;
       return {
         path: req.path,
-        mode_applied: "fileinfo",
+        mode_applied: req.mode,
         lines: lineCount,
         returned_lines: 0,
         truncated: false,

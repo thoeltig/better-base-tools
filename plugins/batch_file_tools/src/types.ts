@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 export const ReadMode = z.enum([
-    "compact",
-    "verbatim",
-    "verbatim_numbered",
-    "fileinfo"
-  ])
+  "compact",
+  "verbatim",
+  "verbatim_numbered",
+  "fileinfo",
+  "fileinfo_refs",
+])
   .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
 
@@ -33,7 +34,7 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute file path, directory, or glob pattern (glob/folder supported for all modes)"),
     mode: ReadMode
-      .describe("compact=DEFAULT (non-indent-sensitive files: single line; indent-sensitive: collapse blanks). verbatim=indentation-normalized, no line numbers. verbatim_numbered=indentation-normalized + line-numbered (required for insert_at_line / replace_range anchors; not supported with glob/folder). fileinfo=file metadata only (size, mtimeMs, ctimeMs, isFile)."),
+      .describe("compact=DEFAULT (non-indent-sensitive files: single line; indent-sensitive: collapse blanks). verbatim=indentation-normalized, no line numbers. verbatim_numbered=indentation-normalized + line-numbered (required for insert_at_line / replace_range anchors; not supported with glob/folder). fileinfo=file metadata (size, lines, ISO mtime, isFile), no content read. fileinfo_refs=same as fileinfo plus refs[]—extracted file references (imports, require, relative paths, markdown links)."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
     count: z.number().int().min(1).optional()
