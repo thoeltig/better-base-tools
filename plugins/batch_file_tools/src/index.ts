@@ -35,8 +35,8 @@ server.registerTool(
   "batch_read",
   {
     title: "Improved read tool which supports batching and different read modes",
-    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT (single-line collapsed, strips indent, minifies JSON — cheapest read). 'verbatim'=indentation-normalized (2 spaces/level; tab→2 spaces; tab-required files like Makefile unchanged), no line numbers — use as readable anchor. 'verbatim_numbered'=indentation-normalized + line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'=file metadata (size, line count, timestamps), no content read. Path: absolute file, directory (expands to immediate children), or glob (e.g. /proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: set 'searchTerm' for case-insensitive match; 'count' = context lines per match (default 0); result includes 'match_count' and blocks prefixed '<!-- Match at line N -->'. Use cases: (1) unknown file — fileinfo first, check size+lines, then choose mode + offset+count; (2) multi-file scan — searchTerm + glob finds occurrences without full reads; (3) edit prep — verbatim_numbered + searchTerm gives absolute line anchors for replace_range / insert_at_line; (4) safe global replace — search first to verify all occurrences, then replace_all. Note: compact is for information gathering rather than edit anchors. In case you do use compact content as anchors for editing, whitespace mismatches are handled by fuzzy matching, but prefer the two verbatim modes for intended edits. verbatim/verbatim_numbered normalize indentation to 2 spaces/level by default; set disableNormalizedFormatting:true to receive raw file formatting.",
-    inputSchema: { param: ReadInput },
+    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT (single-line collapsed, strips indent, minifies JSON — cheapest read). 'verbatim'=indentation-normalized (2 spaces/level; tab→2 spaces; tab-required files like Makefile unchanged), no line numbers — use as readable anchor. 'verbatim_numbered'=indentation-normalized + line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'=file metadata (size, lines, ISO mtime, isFile), no content read. 'fileinfo_refs'=same as fileinfo plus refs[]—extracted file references (imports, require, relative paths, markdown links)—use to map file dependencies before exploring. Path: absolute file, directory (expands to immediate children), or glob (e.g. /proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: set 'searchTerm' for case-insensitive match; 'count' = context lines per match (default 0); result includes 'match_count' and blocks prefixed '<!-- Match at line N -->'. Use cases: (1) unknown file — fileinfo first, check size+lines, then choose mode + offset+count; (1b) dependency map — fileinfo_refs on a file or glob returns import graph in one call; (2) multi-file scan — searchTerm + glob finds occurrences without full reads; (3) edit prep — verbatim_numbered + searchTerm gives absolute line anchors for replace_range / insert_at_line; (4) safe global replace — search first to verify all occurrences, then replace_all. Note: compact is for information gathering rather than edit anchors. In case you do use compact content as anchors for editing, whitespace mismatches are handled by fuzzy matching, but prefer the two verbatim modes for intended edits. verbatim/verbatim_numbered normalize indentation to 2 spaces/level by default; set disableNormalizedFormatting:true to receive raw file formatting.",
+    inputSchema: ReadInput,
     annotations: {
       title: 'Improved read tool which supports batching and different read modes',
       readOnlyHint: true,
@@ -45,7 +45,7 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async ({ param }) => {
+  async (param) => {
   try {
       const parsed = ReadInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
@@ -70,7 +70,7 @@ server.registerTool(
   {
     title: "Improved edit tool which supports batching and different output modes",
     description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. verbose and stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) targeted edit — read file in verbatim_numbered, use line numbers as replace_range / insert_at_line anchors; (2) multi-file refactor — replace_all + glob to rename a symbol across all matching files; (3) new file — write(overwrite) auto-creates file and any missing parent dirs; (4) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence.",
-    inputSchema: { param: EditInput },
+    inputSchema: EditInput,
     annotations: {
       title: 'Improved edit tool which supports batching and different output modes',
       readOnlyHint: false,
@@ -79,7 +79,7 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async ({ param }) => {
+  async (param) => {
   try {
       const parsed = EditInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
