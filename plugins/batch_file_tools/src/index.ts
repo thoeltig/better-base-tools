@@ -182,3 +182,33 @@ main().catch((err: unknown) => {
   writeLogLine(`batch-tools-mcp-server fatal: ${message}`);
   process.exit(1);
 });
+
+/*
+Maybe run JSON repair before the input reaches the server. This way minor encoding issues could directly be fixed 
+and if combined with op / file level parsing we could identify the broken objects and replace them with an unparseable op/file object 
+which can be returned in the output as "Could not parse file X / op N".
+
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { jsonrepair } from "json-repair";
+
+class RepairingStdioTransport extends StdioServerTransport {
+  // Override how messages are handled as they arrive
+  override async handleMessage(message: any) {
+    if (message.method === "tools/call" && message.params?.arguments) {
+      try {
+        const rawArgs = message.params.arguments;
+        // If arguments are a string that looks like broken JSON, repair them
+        if (typeof rawArgs === 'string') {
+          message.params.arguments = JSON.parse(jsonrepair(rawArgs));
+        }
+      } catch (e) {
+        // Fall back to original message if repair fails
+      }
+    }
+    return super.handleMessage(message);
+  }
+}
+
+const transport = new RepairingStdioTransport();
+await server.connect(transport);
+*/
