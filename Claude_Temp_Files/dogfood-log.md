@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-09 | ~9 | ~15 | ~40% | session 18 — tool description review + `fileinfo_refs` mode; reframed compact note, removed large-write caveat, updated `fileinfo` (ISO mtime, no ctimeMs), added `fileinfo_refs` (metadata + refs[] via regex extraction); 269/269 tests pass |
 | 2026-05-08 | n/a | n/a | n/a | session 17 — longitudinal analysis across 3 projects (Thirdparty Docs/pure-native, Project/mixed, BTF/MCP-heavy); built `extract-session-metrics.mjs`; direct comparison: −15% cache_read/turn high-MCP vs low-MCP same project/period; estimation method (batching delta, 2.2 chars/token) corroborates at 14–28%; baseline estimate: ~15% cache_read reduction in real sessions; controlled test (session 16) remains ceiling: −51% cache_read, −58% tool calls, −45% duration; hidden benefits (cross-file reasoning, fewer partial-context decisions) not captured |
 | 2026-05-08 | ~8 | n/a | n/a | session 16 — controlled MCP vs native comparison test (4 tasks, 2 haiku subagents); key result: cache_read −51%, effective input −46%, tool calls −58%, duration −45% on T1-T3 |
 | 2026-05-08 | ~13 | ~26 | ~50% | session 15 — Phase 3 (fileinfo + searchTerm + glob/folder read expansion) + Phase 4 (verbatim indent normalization + disableNormalizedFormatting flag + compose tests); 250/250 tests pass |
@@ -49,6 +50,29 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-09 (session 18) — tool description review + fileinfo_refs mode
+
+**Scope:** Review `batch_read`/`batch_edit` tool descriptions for clarity; design and ship `fileinfo_refs` read mode.
+
+**Description changes:**
+1. **Compact note reframed** — was "compact is lossy, not the intended anchor source"; now: compact is for information gathering, not edit anchors; whitespace mismatches handled by fuzzy matching if compact content is used as anchor anyway, but prefer verbatim modes for intended edits.
+2. **Large-write caveat removed** from `batch_edit` — pre-emptively routed models to native `Write` for >400-line files, contradicting CLAUDE.md preference; model self-corrects already; warning caused the wrong behavior.
+3. **`fileinfo` updated** — ISO mtime string, dropped `ctimeMs`.
+4. **`fileinfo_refs` documented** — added to description and use-case (1b).
+
+**`fileinfo_refs` mode shipped:**
+- `src/lib/extract-refs.ts` (new) — `extractRefs(content): string[]`; 5 regex patterns: ES/TS imports, `require()`, dynamic `import()`, markdown links `[](path)` / `![](path)`, relative/absolute path literals. Filters to file-like refs (excludes npm packages, node builtins, http/https). Deduplicates, sorts.
+- `src/types.ts` — `"fileinfo_refs"` added to `ReadMode` enum.
+- `src/tools/read.ts` — merged `fileinfo`/`fileinfo_refs` into one branch; `fileinfo` returns `{size, lines, mtime (ISO), isFile}`; `fileinfo_refs` adds `refs: string[]`.
+- `tests/extract-refs.test.ts` (new, 18 cases) — patterns, npm/builtin filtering, dedup, sort, mixed content.
+- `tests/read.test.ts` — updated `fileinfo` test for ISO mtime; added `fileinfo_refs` integration test.
+
+**Design note:** implemented as a separate mode rather than a flag on `fileinfo` — a flag would be ambiguous on non-fileinfo modes (same pattern as `disableNormalizedFormatting`); mode name signals unambiguously that content is scanned. Can fuse with `fileinfo` later if models consistently do both in sequence (expected).
+
+**Tool calls (this session):** ~5 `batch_read`, ~4 `batch_edit`, ~2 native `Edit`, ~2 native `Write`. Fell back to native `Edit` twice for complex multi-line markdown content where `batch_edit` JSON encoding failed.
+
+---
 
 ### 2026-05-08 (session 17) — longitudinal transcript analysis across 3 projects
 
