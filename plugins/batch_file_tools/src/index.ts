@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { PrimitiveSchemaDefinition } from "@modelcontextprotocol/sdk/types.js";
 import { writeLogLine } from "./lib/log.js";
 
 const args = process.argv.slice(2);
@@ -46,14 +47,13 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param, ctx) => {
+  async (param) => {
   try {
       const parsed = ReadInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
       const sessionAllowed = await elicitPaths(
         parsed.requests.map(r => r.path),
         allowedDirectories,
-        ctx,
       );
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
@@ -88,21 +88,20 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param, ctx) => {
+  async (param) => {
   try {
       const parsed = EditInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
       const sessionAllowed = await elicitPaths(
         parsed.files.map(f => f.path),
         allowedDirectories,
-        ctx,
       );
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
       const result = await handleBatchEdit(parsed, effectiveAllowed);
       return { 
-        content: formatEditContent(result)
+        content: formatEditContent(result, parsed.dryRun)
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -192,23 +191,22 @@ function getAllowedDirectoriesToUse(): string[] {
 async function elicitPaths(
   paths: string[],
   allowedDirs: string[],
-  ctx: any,
 ): Promise<string[]> {
   const unauthorized = [...new Set(
     paths.filter(p => isAbsolute(p) && !looksLikeGlob(p) && !isPathAllowed(p, allowedDirs))
   )];
-  if (unauthorized.length === 0 || !ctx?.mcpReq?.elicitInput) return [];
+  if (unauthorized.length === 0 || !server.server.getClientCapabilities()?.elicitation) return [];
 
-  const props: Record<string, { type: string; title: string }> = {};
+  const props: Record<string, PrimitiveSchemaDefinition> = {};
   unauthorized.forEach((p, i) => {
-    props[`p${i}_once`] = { type: "boolean", title: `Allow once: ${p}` };
-    props[`p${i}_folder`] = { type: "boolean", title: `Allow folder: ${dirname(p)}/` };
+    props[`p${i}_once`] = { type: "boolean" as const, title: `Allow once: ${p}` };
+    props[`p${i}_folder`] = { type: "boolean" as const, title: `Allow folder: ${dirname(p)}/` };
   });
 
   try {
-    const r = await ctx.mcpReq.elicitInput({
+    const r = await server.server.elicitInput({
       message: `Path(s) outside allowed directories — grant access?\n${unauthorized.join("\n")}`,
-      requestedSchema: { type: "object", properties: props },
+      requestedSchema: { type: "object" as const, properties: props },
     });
     if (r.action !== "accept" || !r.content) return [];
     const content = r.content as Record<string, unknown>;
