@@ -130,13 +130,14 @@ describe("handleBatchRead", () => {
     expect(info.ctimeMs).toBeUndefined();
     expect(info.mtimeMs).toBeUndefined();
     expect(info.isFile).toBe(true);
+    expect(info.refs).toBeUndefined();
   });
 
-  it("fileinfo_refs returns fileinfo fields plus refs array", async () => {
+  it("fileinfo includes refs when file has imports", async () => {
     const p = await fixture("refs.ts", "import { foo } from './foo.js';\nimport bar from '../bar.js';\nimport 'react';\nconst x = 1;\n");
-    const out = await read({ requests: [{ path: p, mode: "fileinfo_refs" }] });
+    const out = await read({ requests: [{ path: p, mode: "fileinfo" }] });
     const r = out.results[0]!;
-    expect(r.mode_applied).toBe("fileinfo_refs");
+    expect(r.mode_applied).toBe("fileinfo");
     const info = JSON.parse(r.content);
     expect(info.lines).toBe(4);
     expect(typeof info.mtime).toBe("string");

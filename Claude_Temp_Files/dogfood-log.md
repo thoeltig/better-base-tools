@@ -8,6 +8,8 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-14 | ~8 | ~16 | ~50% | session 20 — `fileinfo_refs` merged into `fileinfo` (refs[] omitted when empty); `batch_edit` output redesigned: all-success collapses to one-liner, errors in single summary block + per-op anchor blocks; elicitation added to both handlers (per-path checkbox form for unauthorized dirs); `batch_edit` description + use case (5) for replace_range; JSON repair comment updated with correct stdin-Transform approach; 270/270 tests pass |
+| 2026-05-14 | ~5 | ~8 | ~38% | session 19 — extended `extract-session-metrics.mjs` (read lines + MCP edit op counts); DAJ longitudinal findings: surgical MCP reads 133–523 lines/call vs 1,000–1,600 native, subagent scope drop May 13 (658 lines/call from ~1,300), edit multiplier 3.9–7×; CLAUDE.md exploration section updated with MCP `batch_read` subagent instruction |
 | 2026-05-09 | ~9 | ~15 | ~40% | session 18 — tool description review + `fileinfo_refs` mode; reframed compact note, removed large-write caveat, updated `fileinfo` (ISO mtime, no ctimeMs), added `fileinfo_refs` (metadata + refs[] via regex extraction); 269/269 tests pass |
 | 2026-05-08 | n/a | n/a | n/a | session 17 — longitudinal analysis across 3 projects (Thirdparty Docs/pure-native, Project/mixed, BTF/MCP-heavy); built `extract-session-metrics.mjs`; direct comparison: −15% cache_read/turn high-MCP vs low-MCP same project/period; estimation method (batching delta, 2.2 chars/token) corroborates at 14–28%; baseline estimate: ~15% cache_read reduction in real sessions; controlled test (session 16) remains ceiling: −51% cache_read, −58% tool calls, −45% duration; hidden benefits (cross-file reasoning, fewer partial-context decisions) not captured |
 | 2026-05-08 | ~8 | n/a | n/a | session 16 — controlled MCP vs native comparison test (4 tasks, 2 haiku subagents); key result: cache_read −51%, effective input −46%, tool calls −58%, duration −45% on T1-T3 |
@@ -27,10 +29,18 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - **Crossover characterization test.** 2 medium ops (~8 lines each) to tighten the decision rule between the two regimes (currently ~5 vs ~15 lines per op as rough boundaries from session 12). Main conclusions don't depend on it; useful as tiebreaker datapoint. Deferred per user.
 - **B — `info` mode (peek):** metadata + per-mode dry-run `{lines, chars}`. Design agreed in session 6.
 - **I — `info_optimized` strategy:** lossy data-notation transforms (JSON pretty→compact, XML→JSON, YAML→JSON). User has reusable code. Now sharper-priority after session 9: compact's whitespace-only transforms leave the bulk of data-file savings on the table.
+- **JSON repair (stdin Transform):** implement Transform stream wrapper on `process.stdin` before transport; add `jsonrepair` npm dep. ~1/30-50 calls fail currently. See comment block in `src/index.ts`.
+- **batch_edit_text stdin wrapper:** wrap stdin to accept raw text-format blobs directly; parse to EditInput JSON before transport. Open question: does Claude Code harness pre-encode content as JSON string before reaching server stdin? Worth testing by logging incoming stdin bytes. If raw text arrives unescaped, this removes all escaping errors. See follow-up idea in `src/index.ts` comment.
 
 **Deferred:**
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
+
+**Closed (session 20):**
+- **`fileinfo_refs` mode** — merged into `fileinfo`. refs[] always computed, omitted when empty. `ReadMode` enum reduced by one entry.
+- **`batch_edit` compact output** — redesigned `formatEditContent`: single `<!-- batch_edit OK — N files -->` for success, combined summary block + separate anchor blocks for errors. verbose flag no longer changes output format. 1 new test.
+- **Elicitation on path-restriction errors** — shipped. `elicitPaths()` in `index.ts`; both handlers pass `ctx`; per-path boolean checkboxes in one form; approved paths' parent dirs added to session allowed list; falls back silently if client doesn't support elicitation.
+- **`batch_edit` description use case (5)** — replace_range / insert_at_line guidance for multi-line content to avoid JSON escaping errors.
 
 **Closed / dropped (session 14):**
 - **Blind dogfood test** — done. Session 14 verdict: `batch_edit` correctly for source changes (18 small ops/4 files); `batch_edit_text` missed for test inserts (≥50 lines/op). Harness output cap documented.
@@ -50,6 +60,47 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-14 (session 20) — fileinfo merge + compact edit output + elicitation + descriptions
+
+**Scope:** Merge `fileinfo_refs` into `fileinfo`; redesign `batch_edit` output to compact format; add elicitation for unauthorized paths; update descriptions and comments.
+
+**Shipped:**
+1. **`fileinfo_refs` merged** — `ReadMode` enum loses `fileinfo_refs`; `read.ts` always runs `extractRefs`, omits `refs` key when empty. Single mode, cleaner API.
+2. **`batch_edit` compact output** — `envelope.ts` `formatEditContent` redesigned: success = `<!-- batch_edit OK — N files -->` (single block). Error/partial = one summary block `<!--\nbatch_edit — N OK, M errors\n\n/path (status):\n  op N (type): reason — hint\n-->` + separate anchor blocks per failed op. verbose flag no longer changes output format (always compact). Prior per-file success blocks eliminated.
+3. **Elicitation** — `elicitPaths()` helper in `index.ts`; both tool handlers accept `ctx` as second arg. Pre-checks unauthorized concrete paths (skips globs), builds per-path boolean checkbox form. Approved paths’ parent dirs added to `effectiveAllowed` for the call. Silent fallback if client doesn’t support elicitation.
+4. **`batch_edit` use case (5)** — guidance to use `replace_range`/`insert_at_line` for multi-line content to avoid JSON string escaping of newlines.
+5. **JSON repair comment** — updated with correct approach: stdin Transform stream wrapping, `jsonrepair` npm, per-op recovery as future enhancement.
+
+**Assessments (not yet shipped):**
+- **JSON repair:** ~1/30-50 calls fail on complex nested edits. `handleMessage` override approach was wrong (JSON already parsed). Correct: Transform on `process.stdin` before transport. Use `jsonrepair` npm. Logged as Active follow-up.
+- **batch_edit_text stdin wrapper:** stdin bypass idea has protocol constraint — harness may pre-encode content as JSON string before reaching server. Worth testing by logging raw stdin bytes. Logged as Active follow-up.
+
+**Tool calls (this session):** ~5 `batch_read`, ~6 `batch_edit` (includes fixes), 1 `Bash` (build+test).
+
+---
+
+### 2026-05-14 (session 19) — longitudinal metrics extension + subagent MCP instruction
+
+**Scope:** Extend `extract-session-metrics.mjs` with read line counts and MCP edit op counts; analyse DAJ-FrontendAngular day-by-day breakdown; update global CLAUDE.md exploration section.
+
+**Shipped:**
+1. **`extract-session-metrics.mjs`** — `extractLinesFromResult` parses "Read N of M lines" from batch_read result text; native `Read` captures `input.limit ?? 2000`; `batch_edit` input parsed for `files[].ops[].length` to count ops per call. New per-tool fields: `total_lines_read`, `total_mcp_ops`.
+2. **Global `CLAUDE.md` exploration section** — added instruction to pass `batch_read` MCP tool preference to subagents (search, compact, verbatim with/without line numbers).
+
+**Findings (DAJ-FrontendAngular, Apr 29–May 13):**
+- **MCP reads are consistently surgical:** 133–523 lines/call vs 1,000–1,600 native lines/call. Targeted from first adoption day.
+- **Subagent lines/call dropped May 13:** 76 calls, 50K lines (658/call) vs ~1,000–1,300 on prior days — same call count, half the content. CLAUDE.md "return snippets/line numbers" instruction already reducing subagent read scope before today's MCP addition.
+- **MCP edit multiplier:** 3.9–7.0× ops per call (May 11: 7 calls/49 ops; May 13: 26 calls/101 ops). chars/op comparable to native (~1,000–1,400), so multiplier is real savings.
+- **May 5–7 ops=0:** those sessions used `batch_edit_text` (text-format input, no `files[].ops[]` to count) — schema difference, not a data gap.
+- **May 11 regression (112 native Edit/Write, 7 MCP-edit):** likely MCP not registered for earlier sessions that day; the 7 MCP calls that did fire had 49 ops (7× multiplier), consistent with correct usage when available.
+- **batch_read path-restriction failure:** `not_authorized` on out-of-project file returned silently as error comment; `stopOnError=false` (default) correctly continued to next file. No user elicitation occurred — logged as follow-up.
+- **verbatim_numbered vs verbatim:** pre-planned edits drove mode choice; correct for the script (4 line-addressed ops), unnecessary for the CLAUDE.md prose edit (content-based `replace` was always right). Rule: default `verbatim` unless line-addressed ops are already planned.
+- **searchTerm default count=0:** no context lines around match. Use `count: 1` for ±1 context sufficient to anchor a `replace` op.
+
+**Tool calls (this session):** ~3 `batch_read` (1 partial fail — path restriction), ~1 `batch_edit` (4 ops), 1 native `Read` (CLAUDE.md fallback), 1 native `Edit` (CLAUDE.md), ~3 `Bash` (pipeline runs).
+
+---
 
 ### 2026-05-09 (session 18) — tool description review + fileinfo_refs mode
 

@@ -1,12 +1,13 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { dirname, isAbsolute } from "node:path";
 import { EditInput, ReadInput } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getAllowedDirectoriesFromArgs } from "./lib/fs.js";
+import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
+import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
-import { getValidRootDirectories } from "./lib/fs.js";
 import { writeLogLine } from "./lib/log.js";
 
 const args = process.argv.slice(2);
@@ -35,7 +36,7 @@ server.registerTool(
   "batch_read",
   {
     title: "Improved read tool which supports batching and different read modes",
-    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT (single-line collapsed, strips indent, minifies JSON — cheapest read). 'verbatim'=indentation-normalized (2 spaces/level; tab→2 spaces; tab-required files like Makefile unchanged), no line numbers — use as readable anchor. 'verbatim_numbered'=indentation-normalized + line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'=file metadata (size, lines, ISO mtime, isFile), no content read. 'fileinfo_refs'=same as fileinfo plus refs[]—extracted file references (imports, require, relative paths, markdown links)—use to map file dependencies before exploring. Path: absolute file, directory (expands to immediate children), or glob (e.g. /proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: set 'searchTerm' for case-insensitive match; 'count' = context lines per match (default 0); result includes 'match_count' and blocks prefixed '<!-- Match at line N -->'. Use cases: (1) unknown file — fileinfo first, check size+lines, then choose mode + offset+count; (1b) dependency map — fileinfo_refs on a file or glob returns import graph in one call; (2) multi-file scan — searchTerm + glob finds occurrences without full reads; (3) edit prep — verbatim_numbered + searchTerm gives absolute line anchors for replace_range / insert_at_line; (4) safe global replace — search first to verify all occurrences, then replace_all. Note: compact is for information gathering rather than edit anchors. In case you do use compact content as anchors for editing, whitespace mismatches are handled by fuzzy matching, but prefer the two verbatim modes for intended edits. verbatim/verbatim_numbered normalize indentation to 2 spaces/level by default; set disableNormalizedFormatting:true to receive raw file formatting.",
+    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT (single-line collapsed, strips indent, minifies JSON — cheapest read). 'verbatim'=indentation-normalized (2 spaces/level; tab→2 spaces; tab-required files like Makefile unchanged), no line numbers — use as readable anchor. 'verbatim_numbered'=indentation-normalized + line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'=file metadata (size, lines, ISO mtime, isFile) plus refs[] when present (extracted imports, require calls, path literals, markdown links) — use to map file dependencies before exploring. Path: absolute file, directory (expands to immediate children), or glob (e.g. /proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: set 'searchTerm' for case-insensitive match; 'count' = context lines per match (default 0); result includes 'match_count' and blocks prefixed '<!-- Match at line N -->'. Use cases: (1) unknown file — fileinfo first, check size+lines, then choose mode + offset+count; (1b) dependency map — fileinfo on a file or glob returns metadata + import graph in one call; (2) multi-file scan — searchTerm + glob finds occurrences without full reads; (3) edit prep — verbatim_numbered + searchTerm gives absolute line anchors for replace_range / insert_at_line; (4) safe global replace — search first to verify all occurrences, then replace_all. Note: compact is for information gathering rather than edit anchors. In case you do use compact content as anchors for editing, whitespace mismatches are handled by fuzzy matching, but prefer the two verbatim modes for intended edits. verbatim/verbatim_numbered normalize indentation to 2 spaces/level by default; set disableNormalizedFormatting:true to receive raw file formatting.",
     inputSchema: ReadInput,
     annotations: {
       title: 'Improved read tool which supports batching and different read modes',
@@ -45,11 +46,20 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param) => {
+  async (param, ctx) => {
   try {
       const parsed = ReadInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
-      const result = await handleBatchRead(parsed, allowedDirectories);
+      const sessionAllowed = await elicitPaths(
+        parsed.requests.map(r => r.path),
+        parsed.requests.map(r => `Read (${r.mode}): ${r.path}`),
+        allowedDirectories,
+        ctx,
+      );
+      const effectiveAllowed = sessionAllowed.length > 0
+        ? [...allowedDirectories, ...sessionAllowed]
+        : allowedDirectories;
+      const result = await handleBatchRead(parsed, effectiveAllowed);
       return { 
         content: formatReadContent(result)
       };
@@ -69,7 +79,7 @@ server.registerTool(
   "batch_edit",
   {
     title: "Improved edit tool which supports batching and different output modes",
-    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. verbose and stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) targeted edit — read file in verbatim_numbered, use line numbers as replace_range / insert_at_line anchors; (2) multi-file refactor — replace_all + glob to rename a symbol across all matching files; (3) new file — write(overwrite) auto-creates file and any missing parent dirs; (4) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence.",
+    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. verbose and stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) targeted edit — read file in verbatim_numbered, use line numbers as replace_range / insert_at_line anchors; (2) multi-file refactor — replace_all + glob to rename a symbol across all matching files; (3) new file — write(overwrite) auto-creates file and any missing parent dirs; (4) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (5) multi-line content — read verbatim_numbered for line anchors, use replace_range or insert_at_line instead of replace/replace_all to avoid JSON-escaping newlines and special chars in old/new strings.",
     inputSchema: EditInput,
     annotations: {
       title: 'Improved edit tool which supports batching and different output modes',
@@ -79,11 +89,20 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param) => {
+  async (param, ctx) => {
   try {
       const parsed = EditInput.parse(param);
       const allowedDirectories = getAllowedDirectoriesToUse();
-      const result = await handleBatchEdit(parsed, allowedDirectories);
+      const sessionAllowed = await elicitPaths(
+        parsed.files.map(f => f.path),
+        parsed.files.map(f => `Edit (${f.ops.length} op(s): ${f.ops.map(o => o.type).join(", ")}): ${f.path}`),
+        allowedDirectories,
+        ctx,
+      );
+      const effectiveAllowed = sessionAllowed.length > 0
+        ? [...allowedDirectories, ...sessionAllowed]
+        : allowedDirectories;
+      const result = await handleBatchEdit(parsed, effectiveAllowed);
       return { 
         content: formatEditContent(result)
       };
@@ -172,6 +191,38 @@ function getAllowedDirectoriesToUse(): string[] {
   return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs])];
 }
 
+async function elicitPaths(
+  paths: string[],
+  titles: string[],
+  allowedDirs: string[],
+  ctx: any,
+): Promise<string[]> {
+  const unauthorized = [...new Set(
+    paths.filter(p => isAbsolute(p) && !looksLikeGlob(p) && !isPathAllowed(p, allowedDirs))
+  )];
+  if (unauthorized.length === 0 || !ctx?.mcpReq?.elicitInput) return [];
+
+  const props: Record<string, { type: string; title: string }> = {};
+  unauthorized.forEach((p, i) => {
+    const title = titles[paths.indexOf(p)] ?? p;
+    props[`p${i}`] = { type: "boolean", title };
+  });
+
+  try {
+    const r = await ctx.mcpReq.elicitInput({
+      message: `Path(s) outside allowed directories — grant access?\n${unauthorized.join("\n")}`,
+      requestedSchema: { type: "object", properties: props },
+    });
+    if (r.action !== "accept" || !r.content) return [];
+    const content = r.content as Record<string, unknown>;
+    return unauthorized
+      .filter((_, i) => content[`p${i}`] === true)
+      .map(p => dirname(p));
+  } catch {
+    return [];
+  }
+}
+
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -184,31 +235,31 @@ main().catch((err: unknown) => {
 });
 
 /*
-Maybe run JSON repair before the input reaches the server. This way minor encoding issues could directly be fixed 
-and if combined with op / file level parsing we could identify the broken objects and replace them with an unparseable op/file object 
-which can be returned in the output as "Could not parse file X / op N".
+JSON repair — assessment 2026-05-14
+Issue: ~1 in 30-50 batch_edit calls fail on malformed JSON (unescaped newlines / missing brackets
+in LLM-generated old/new/content fields). Mostly complex nested edits.
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { jsonrepair } from "json-repair";
+Previous draft (handleMessage override) is wrong: by the time handleMessage fires, the SDK
+transport has already called JSON.parse on the raw NDJSON line. `arguments` is an object,
+not a string, so `typeof rawArgs === 'string'` is always false and repair is never invoked.
 
-class RepairingStdioTransport extends StdioServerTransport {
-  // Override how messages are handled as they arrive
-  override async handleMessage(message: any) {
-    if (message.method === "tools/call" && message.params?.arguments) {
-      try {
-        const rawArgs = message.params.arguments;
-        // If arguments are a string that looks like broken JSON, repair them
-        if (typeof rawArgs === 'string') {
-          message.params.arguments = JSON.parse(jsonrepair(rawArgs));
-        }
-      } catch (e) {
-        // Fall back to original message if repair fails
-      }
-    }
-    return super.handleMessage(message);
+Correct intercept: Transform stream on raw stdin BEFORE transport creation.
+- Buffer each NDJSON line, run `jsonrepair` (npm), re-emit the repaired line.
+- Use `jsonrepair` npm package — well-tested against LLM output patterns (unescaped \n,
+  dangling quotes, missing brackets). Build custom only if per-op/per-file recovery is needed
+  (parse outer structure, mark individual broken ops as "unparseable" without failing the call).
+
+TODO: implement stdin Transform wrapper; add `jsonrepair` dependency.
+
+import { jsonrepair } from "jsonrepair";
+import { Transform } from "node:stream";
+
+const repairer = new Transform({
+  transform(chunk, _enc, cb) {
+    try { cb(null, jsonrepair(chunk.toString())); } catch { cb(null, chunk); }
   }
-}
-
-const transport = new RepairingStdioTransport();
+});
+process.stdin.pipe(repairer);
+const transport = new StdioServerTransport({ stdin: repairer as any, stdout: process.stdout });
 await server.connect(transport);
 */

@@ -88,15 +88,27 @@ describe("formatReadContent", () => {
 });
 
 describe("formatEditContent", () => {
-  it("minimal happy path: single-line comment, no body", () => {
+  it("single file OK: compact one-liner with path", () => {
     const blocks = formatEditContent({
       results: [{ path: "/a.ts", status: "ok", ops: [] }],
     });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- Edited '/a.ts' -->`);
+    expect(blocks[0]!.text).toBe(`<!-- batch_edit OK — /a.ts -->`);
   });
 
-  it("summary mode: multi-line comment lists every op", () => {
+  it("multi-file all OK: compact one-liner with count", () => {
+    const blocks = formatEditContent({
+      results: [
+        { path: "/a.ts", status: "ok", ops: [] },
+        { path: "/b.ts", status: "ok", ops: [] },
+        { path: "/c.ts", status: "ok", ops: [] },
+      ],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(`<!-- batch_edit OK — 3 files -->`);
+  });
+
+  it("successful ops with verbose summaries collapse to OK line", () => {
     const blocks = formatEditContent({
       results: [
         {
@@ -104,21 +116,16 @@ describe("formatEditContent", () => {
           status: "ok",
           ops: [
             { index: 0, status: "ok", summary: "appended 1 line" },
-            {
-              index: 1,
-              status: "ok",
-              summary: "replaced 1 occurrence at line 4",
-            },
+            { index: 1, status: "ok", summary: "replaced 1 occurrence at line 4" },
           ],
         },
       ],
     });
-    expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 0: appended 1 line\n- op 1: replaced 1 occurrence at line 4\n-->`,
-    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(`<!-- batch_edit OK — /a.ts -->`);
   });
 
-  it("partial with nearest_anchor: failed op line in header, anchor raw in body", () => {
+  it("partial with nearest_anchor: summary block + separate anchor block", () => {
     const blocks = formatEditContent({
       results: [
         {
@@ -143,13 +150,16 @@ describe("formatEditContent", () => {
         },
       ],
     });
+    expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 1 (replace): not_found — try anchor below\n-->\n` +
-        `<!-- op 1 nearest_anchor, lines 40-44 -->\nbeta\ngamma\nDELTA-changed`,
+      `<!--\nbatch_edit — 1 error\n\n/a.ts (partial):\n  op 1 (replace): not_found — try anchor below\n-->`,
+    );
+    expect(blocks[1]!.text).toBe(
+      `<!-- op 1 nearest_anchor: /a.ts lines 40-44 -->\nbeta\ngamma\nDELTA-changed`,
     );
   });
 
-  it("ambiguous: match_lines inlined in header, no body", () => {
+  it("ambiguous: match_lines in summary block, no anchor block", () => {
     const blocks = formatEditContent({
       results: [
         {
@@ -170,12 +180,13 @@ describe("formatEditContent", () => {
         },
       ],
     });
+    expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!--\nEdited '/a.ts'\n- op 0 (replace): ambiguous — widen anchor (matches at lines 3, 17, 42)\n-->`,
+      `<!--\nbatch_edit — 1 error\n\n/a.ts (error):\n  op 0 (replace): ambiguous — widen anchor (matches at lines 3, 17, 42)\n-->`,
     );
   });
 
-  it("file-level error: reason + message surfaced in header", () => {
+  it("file-level error: reason + message in summary block", () => {
     const blocks = formatEditContent({
       results: [
         {
@@ -194,8 +205,9 @@ describe("formatEditContent", () => {
         },
       ],
     });
+    expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!--\n'io_error' error editing file '/missing.ts': not absolute\n- op 0 (replace): io_error — not absolute\n-->`,
+      `<!--\nbatch_edit — 1 error\n\n/missing.ts — io_error: not absolute\n  op 0 (replace): io_error — not absolute\n-->`,
     );
   });
 });

@@ -78,7 +78,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
 
 async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<ReadResult> {
   // fileinfo / fileinfo_refs: stat without full content processing
-  if (req.mode === "fileinfo" || req.mode === "fileinfo_refs") {
+  if (req.mode === "fileinfo") {
     if (!isAbsolute(req.path)) {
       return errResult(req, "not_absolute", `Path must be absolute: ${req.path}`);
     }
@@ -91,7 +91,8 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       const raw = s.isFile() ? await readFile(resolved, "utf8") : "";
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
       const baseInfo = { size: s.size, lines: lineCount, mtime: new Date(s.mtimeMs).toISOString(), isFile: s.isFile() };
-      const info = req.mode === "fileinfo_refs" ? { ...baseInfo, refs: extractRefs(raw) } : baseInfo;
+      const refs = extractRefs(raw);
+      const info = refs.length > 0 ? { ...baseInfo, refs } : baseInfo;
       return {
         path: req.path,
         mode_applied: req.mode,

@@ -1,7 +1,5 @@
 import type {
   EditOutput,
-  FileResult,
-  OpResult,
   ReadOutput,
   ReadResult,
 } from "../types.js";
@@ -16,7 +14,59 @@ export function formatReadContent(result: ReadOutput): TextBlock[] {
 }
 
 export function formatEditContent(result: EditOutput): TextBlock[] {
-  return result.results.map(editResultToBlock);
+  const ok = result.results.filter(r => r.status === "ok");
+  const errors = result.results.filter(r => r.status === "error" || r.status === "partial");
+  const skipped = result.results.filter(r => r.status === "skipped");
+
+  if (errors.length === 0 && skipped.length === 0) {
+    const label = ok.length === 1 ? ok[0]!.path : `${ok.length} files`;
+    return [{ type: "text", text: `<!-- batch_edit OK — ${label} -->` }];
+  }
+
+  const summaryParts: string[] = [];
+  if (ok.length > 0) summaryParts.push(`${ok.length} OK`);
+  if (errors.length > 0) summaryParts.push(`${errors.length} error${errors.length > 1 ? "s" : ""}`);
+  if (skipped.length > 0) summaryParts.push(`${skipped.length} skipped`);
+
+  const errorLines: string[] = [];
+  const anchorBlocks: TextBlock[] = [];
+
+  for (const r of errors) {
+    const fileHeader = r.error
+      ? `${r.path} — ${r.error.reason}: ${r.error.message}`
+      : `${r.path} (${r.status}):`;
+    errorLines.push(fileHeader);
+
+    for (let i = 0; i < r.ops.length; i++) {
+      const op = r.ops[i]!;
+      const idx = op.index ?? i;
+      if (op.status === "error") {
+        const tag = `  op ${idx}${op.type ? ` (${op.type})` : ""}`;
+        let line = `${tag}: ${op.reason ?? "error"}`;
+        if (op.hint?.next_action) line += ` — ${op.hint.next_action}`;
+        if (op.hint?.match_lines?.length) line += ` (matches at lines ${op.hint.match_lines.join(", ")})`;
+        errorLines.push(line);
+        const anchor = op.hint?.nearest_anchor;
+        if (anchor) {
+          anchorBlocks.push({
+            type: "text",
+            text: `<!-- op ${idx} nearest_anchor: ${r.path} lines ${anchor.start_line}-${anchor.end_line} -->\n${anchor.content.replace(/\n$/, "")}`,
+          });
+        }
+      } else if (op.status === "skipped") {
+        errorLines.push(`  op ${idx}: skipped`);
+      }
+    }
+  }
+
+  for (const r of skipped) {
+    errorLines.push(`${r.path} — skipped`);
+  }
+
+  return [
+    { type: "text", text: `<!--\nbatch_edit — ${summaryParts.join(", ")}\n\n${errorLines.join("\n")}\n-->` },
+    ...anchorBlocks,
+  ];
 }
 
 function readResultToBlock(r: ReadResult): TextBlock {
@@ -33,57 +83,4 @@ function readResultToBlock(r: ReadResult): TextBlock {
     hint = `<!-- Read ${countPrefix}${r.lines} ${unit} in file '${r.path}' as '${r.mode_applied}' -->`;
   }
   return { type: "text", text: `${hint}\n${r.content ?? ""}` };
-}
-
-function editResultToBlock(r: FileResult): TextBlock {
-  const headerLines: string[] = [buildFileHeader(r)];
-  const bodyParts: string[] = [];
-
-  r.ops.forEach((op, arrayIndex) => {
-    const idx = op.index ?? arrayIndex;
-    headerLines.push(buildOpLine(op, idx));
-    const body = buildOpBody(op, idx);
-    if (body !== null) bodyParts.push(body);
-  });
-
-  const header =
-    headerLines.length === 1
-      ? `<!-- ${headerLines[0]} -->`
-      : `<!--\n${headerLines.join("\n")}\n-->`;
-
-  if (bodyParts.length === 0) return { type: "text", text: header };
-  return { type: "text", text: `${header}\n${bodyParts.join("\n")}` };
-}
-
-function buildFileHeader(r: FileResult): string {
-  if(r.error) {
-    return `'${r.error.reason}' error editing file '${r.path}': ${r.error.message}`;
-  }
-  return `Edited '${r.path}'`;
-}
-
-function buildOpLine(op: OpResult, idx: number): string {
-  const tag = `- op ${idx}${op.type ? ` (${op.type})` : ""}`;
-  if (op.status === "ok") {
-    return op.summary ? `${tag}: ${op.summary}` : tag;
-  }
-  if (op.status === "skipped") return `${tag}: skipped`;
-  const reason = op.reason ?? "error";
-  let line = `${tag}: ${reason}`;
-  const nextAction = op.hint?.next_action;
-  if (nextAction) line += ` — ${nextAction}`;
-  const matchLines = op.hint?.match_lines;
-  if (matchLines && matchLines.length > 0) {
-    line += ` (matches at lines ${matchLines.join(", ")})`;
-  }
-  return line;
-}
-
-function buildOpBody(op: OpResult, idx: number): string | null {
-  if (op.status !== "error") return null;
-  const anchor = op.hint?.nearest_anchor;
-  if (!anchor) return null;
-  const label = `<!-- op ${idx} nearest_anchor, lines ${anchor.start_line}-${anchor.end_line} -->`;
-  const content = anchor.content.replace(/\n$/, "");
-  return `${label}\n${content}`;
 }
