@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
-import { readFileUtf8, isPathAllowed } from "../lib/fs.js";
+import { isAbsolute, resolve } from "node:path";
+import { readFileUtf8, isPathAllowed, realpathOfNearestExisting } from "../lib/fs.js";
 import { expandToFiles, looksLikeGlob, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
 import { extractRefs } from "../lib/extract-refs.js";
@@ -83,10 +83,11 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       return errResult(req, "not_absolute", `Path must be absolute: ${req.path}`);
     }
     try {
-      const resolved = await realpath(req.path);
-      if (!isPathAllowed(resolved, allowedDirectories)) {
+      const authPath = await realpathOfNearestExisting(resolve(req.path));
+      if (!isPathAllowed(authPath, allowedDirectories)) {
         return errResult(req, "not_authorized", `Access denied: ${req.path}`);
       }
+      const resolved = await realpath(req.path);
       const s = await stat(resolved);
       const raw = s.isFile() ? await readFile(resolved, "utf8") : "";
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);

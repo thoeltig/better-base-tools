@@ -42,6 +42,18 @@ describe("auth — read", () => {
     const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim_numbered" }] }, []);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
+
+  it("rejects read of non-existent file outside allowed directories", async () => {
+    const p = join(outsideDir, "ghost.txt");
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+  });
+
+  it("returns not_found for non-existent file inside allowed directories", async () => {
+    const p = join(allowedDir, "ghost.txt");
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir]);
+    expect(out.results[0]!.error?.reason).toBe("not_found");
+  });
 });
 
 describe("auth — edit", () => {

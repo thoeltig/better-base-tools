@@ -129,13 +129,11 @@ async function guardPath(
 
   try {
     const absolute = resolve(expanded);
-    const resolvedPath = options.allowMissing
-      ? await realpathOfNearestExisting(absolute)
-      : await realpath(absolute);
-
-    if (!isPathAllowed(resolvedPath, allowedDirectories)) {
+    const authPath = await realpathOfNearestExisting(absolute);
+    if (!isPathAllowed(authPath, allowedDirectories)) {
       return { ok: false, reason: "not_authorized", message: `Access denied: ${inputPath}` };
     }
+    const resolvedPath = options.allowMissing ? authPath : await realpath(absolute);
     return { ok: true, resolvedPath };
   } catch (err: unknown) {
     return mapFsError(err, inputPath);
@@ -149,7 +147,7 @@ export function isPathAllowed(realPath: string, allowedDirectories: readonly str
   });
 }
 
-async function realpathOfNearestExisting(absolute: string): Promise<string> {
+export async function realpathOfNearestExisting(absolute: string): Promise<string> {
   let current = absolute;
   const missing: string[] = [];
   while (true) {
