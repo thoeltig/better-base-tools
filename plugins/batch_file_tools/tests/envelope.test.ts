@@ -96,6 +96,12 @@ describe("formatEditContent", () => {
     expect(blocks[0]!.text).toBe(`<!-- batch_edit OK — /a.ts -->`);
   });
 
+  it("dryRun OK: prefixed with DRY RUN", () => {
+    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [] }] }, true);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(`<!-- DRY RUN: batch_edit OK — /a.ts -->`);
+  });
+
   it("multi-file all OK: compact one-liner with count", () => {
     const blocks = formatEditContent({
       results: [

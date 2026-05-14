@@ -13,14 +13,15 @@ export function formatReadContent(result: ReadOutput): TextBlock[] {
   return result.results.map(readResultToBlock);
 }
 
-export function formatEditContent(result: EditOutput): TextBlock[] {
+export function formatEditContent(result: EditOutput, dryRun?: boolean): TextBlock[] {
   const ok = result.results.filter(r => r.status === "ok");
   const errors = result.results.filter(r => r.status === "error" || r.status === "partial");
   const skipped = result.results.filter(r => r.status === "skipped");
 
   if (errors.length === 0 && skipped.length === 0) {
     const label = ok.length === 1 ? ok[0]!.path : `${ok.length} files`;
-    return [{ type: "text", text: `<!-- batch_edit OK — ${label} -->` }];
+    const tag = dryRun ? "DRY RUN: batch_edit OK" : "batch_edit OK";
+    return [{ type: "text", text: `<!-- ${tag} — ${label} -->` }];
   }
 
   const summaryParts: string[] = [];
