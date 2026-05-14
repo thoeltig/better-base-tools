@@ -37,9 +37,7 @@ describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toContain("whitespace-normalized match");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
@@ -48,9 +46,7 @@ describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toContain("whitespace-normalized match");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
@@ -59,9 +55,7 @@ describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace", old: "function foo() {\n  return 1;\n}", new: "function foo() {\n  return 2;\n}" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).not.toContain("whitespace-normalized match");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("function foo() {\n  return 2;\n}\n");
   });
 
@@ -85,9 +79,7 @@ describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
         new: "class Foo {\n  bar() {\n    return 2;\n  }\n}",
       },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toContain("whitespace-normalized match");
+    expect(out.results[0]!.status).toBe("ok");
   });
 
   it("single-line old: 2-space is substring of 4-space line → exact path, original indent preserved", async () => {
@@ -99,9 +91,7 @@ describe("replace — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace", old: "  doSomething();", new: "  doSomethingElse();" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).not.toContain("whitespace-normalized match"); // exact path
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("if (x) {\n    doSomethingElse();\n}\n"); // 4-space preserved
   });
 });
@@ -114,9 +104,7 @@ describe("replace_all — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace_all", old: "  x();", new: "  y();" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).not.toContain("whitespace-normalized match"); // exact path
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("if (a) {\n    y();\n}\nif (b) {\n    y();\n}\n"); // 4-space preserved
   });
 
@@ -125,9 +113,7 @@ describe("replace_all — fuzzy whitespace fallback (Phase 4 compose)", () => {
     const out = await runEdit(p, [
       { type: "replace_all", old: "  x();", new: "  y();" },
     ]);
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toContain("whitespace-normalized match");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("if (a) {\n  y();\n}\nif (b) {\n  y();\n}\n");
   });
 });

@@ -329,7 +329,7 @@ function normalizeLine(line: string): string {
 
 export function toOpResult(index: number, res: OpApplyResult): OpResult {
   if (res.ok) {
-    return { index, status: "ok", summary: res.summary };
+    return { index, status: "ok" };
   }
   const hint: OpResult["hint"] = { next_action: res.nextAction };
   if (res.nearestAnchor !== undefined) {

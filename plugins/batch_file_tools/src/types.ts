@@ -91,7 +91,6 @@ const OpReplace = z.object({
       .describe("Text to find and replace"),
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
-    verbose: z.boolean().optional(),
     stopOnError: z.boolean().optional(),
   })
   .strict();
@@ -102,7 +101,6 @@ const OpReplaceAll = z.object({
       .describe("Text to find and replace"),
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
-    verbose: z.boolean().optional(),
     stopOnError: z.boolean().optional(),
   })
   .strict();
@@ -114,7 +112,6 @@ const OpInsertAtLine = z
       .describe("1-indexed line where to insert text"),
     content: z.string().min(1)
       .describe("Text to insert"),
-    verbose: z.boolean().optional(),
     stopOnError: z.boolean().optional(),
   })
   .strict();
@@ -128,7 +125,6 @@ const OpReplaceRange = z
       .describe("1-indexed line where text replace ends"),
     content: z.string()
       .describe("Replacement text"),
-    verbose: z.boolean().optional(),
     stopOnError: z.boolean().optional(),
   })
   .strict();
@@ -139,7 +135,6 @@ const OpWrite = z.object({
       .describe("'append' adds content to EOF; 'overwrite' replaces full file content. Both auto-create the file and any missing parent directories."),
     content: z.string()
       .describe("Text to write; empty allowed only in overwrite mode (truncates to empty file)"),
-    verbose: z.boolean().optional(),
     stopOnError: z.boolean().optional(),
   })
   .strict();
@@ -157,9 +152,8 @@ export const EditFile = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path. For `replace`/`replace_all`/`write(append)` ops: also accepts a glob pattern (`*` matches within one path segment; `**` recurses across segments — e.g. `C:/proj/**/*.ts`) or a directory path (single level — use an explicit `**` glob for recursive walks). Other ops require a concrete absolute file path."),
     stopOnError: z.boolean().optional(),
-    verbose: z.boolean().optional(),
     ops: z.array(EditOp).min(1)
-      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts optional `verbose` and `stopOnError` booleans."),
+      .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts an optional `stopOnError` boolean."),
   })
   .strict();
 export type EditFile = z.infer<typeof EditFile>;
@@ -169,8 +163,6 @@ export const EditInput = z.object({
       .describe("Stop on first error. Default false (continue): a failed op or file does not skip remaining work. Set true to abort: in-file ops after a failure get status:'skipped'; subsequent files get status:'skipped' when set at root. Resolution within a file: op.stopOnError ?? file.stopOnError ?? root.stopOnError ?? false (first defined wins). Across-file abort uses the root flag only; file-level scopes within-file."),
     dryRun: z.boolean().optional()
       .describe("Use to test changes without actually applying them"),
-    verbose: z.boolean().optional()
-      .describe("Verbosity of output. Default false: response contains failed ops only (plus per-file status). Set true to also include successful ops, each with a summary string. Errors always surface regardless of this flag. Resolution: op.verbose ?? file.verbose ?? root.verbose ?? false (first defined wins; explicit false overrides a higher-level true)."),
     files: z.array(EditFile).min(1),
   })
   .strict();
@@ -206,7 +198,6 @@ export const OpResult = z.object({
     index: z.number().int().min(0).optional(),
     status: OpStatus,
     type: OpType.optional(),
-    summary: z.string().optional(),
     reason: Reason.optional(),
     hint: ErrorHint.optional(),
   })

@@ -49,7 +49,6 @@ export async function handleBatchEditText(
     const handlerInput: EditInput = {
       ...(parsed.stopOnError !== undefined ? { stopOnError: parsed.stopOnError } : {}),
       ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
-      ...(parsed.verbose !== undefined ? { verbose: parsed.verbose } : {}),
       files: handlerFiles,
     };
     handlerOutput = await handleBatchEdit(handlerInput, allowedDirectories);

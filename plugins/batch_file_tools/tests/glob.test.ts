@@ -62,7 +62,6 @@ describe("glob expansion — replace_all", () => {
     expect(out.results).toHaveLength(3);
     for (const r of out.results) {
       expect(r.status).toBe("ok");
-      expect(r.ops[0]!.status).toBe("ok");
     }
     expect(await readFile(join(caseDir, "a.txt"), "utf8")).toBe("bar line\n");
     expect(await readFile(join(caseDir, "b.txt"), "utf8")).toBe("bar here\n");
@@ -210,7 +209,6 @@ describe("glob expansion — merge with concrete entries", () => {
     const out = await handleBatchEdit(
       {
         dryRun: false,
-        verbose: true,
         files: [
           { path: target, ops: [{ type: "write", mode: "append", content: "A\n" }] },
           { path: altSep, ops: [{ type: "write", mode: "append", content: "B\n" }] },
@@ -219,7 +217,7 @@ describe("glob expansion — merge with concrete entries", () => {
       [allowedDir],
     );
     expect(out.results).toHaveLength(1);
-    expect(out.results[0]!.ops).toHaveLength(2);
+    expect(out.results[0]!.ops).toHaveLength(0);
     expect(await readFile(target, "utf8")).toBe("foo\nA\nB\n");
   });
 
@@ -231,7 +229,6 @@ describe("glob expansion — merge with concrete entries", () => {
     const out = await handleBatchEdit(
       {
         dryRun: false,
-        verbose: true,
         files: [
           { path: target, ops: [{ type: "replace", old: "alpha", new: "ALPHA" }] },
           { path: join(caseDir, "*.txt"), ops: [{ type: "replace_all", old: "beta", new: "BETA" }] },
@@ -242,7 +239,7 @@ describe("glob expansion — merge with concrete entries", () => {
     expect(out.results).toHaveLength(1);
     const r = out.results[0]!;
     expect(r.status).toBe("ok");
-    expect(r.ops).toHaveLength(2);
+    expect(r.ops).toHaveLength(0);
     expect(await readFile(target, "utf8")).toBe("ALPHA\nBETA\n");
   });
 });

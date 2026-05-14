@@ -18,7 +18,6 @@ import type {
 interface FileEditOptions {
   stopOnError: boolean;
   dryRun: boolean | undefined;
-  verbose: boolean;
 }
 
 interface IndexedOp {
@@ -33,14 +32,13 @@ export async function handleBatchEdit(
   const results: FileResult[] = [];
   let abortRemaining = false;
   const rootStop = input.stopOnError ?? false;
-  const rootVerbose = input.verbose ?? false;
 
   const entries = await planEntries(input.files, allowedDirectories);
 
   for (const entry of entries) {
     if (abortRemaining) {
       results.push(
-        entry.kind === "error" ? entry.result : skipFile(entry.file, rootVerbose),
+        entry.kind === "error" ? entry.result : skipFile(entry.file),
       );
       continue;
     }
@@ -52,7 +50,6 @@ export async function handleBatchEdit(
       const options: FileEditOptions = {
         stopOnError: entry.file.stopOnError ?? rootStop,
         dryRun: input.dryRun,
-        verbose: entry.file.verbose ?? rootVerbose,
       };
       fileResult = await editOneFile(entry.file, options, allowedDirectories);
     }
@@ -187,18 +184,11 @@ function buildGlobError(file: EditFile, reason: Reason, message: string): FileRe
   };
 }
 
-function skipFile(file: EditFile, rootVerbose: boolean): FileResult {
-  const fileVerbose = file.verbose ?? rootVerbose;
-  const decorated = file.ops.map((op, index) => {
-    const opVerbose = resolveOpVerbose(op, fileVerbose);
-    const res: OpResult = { index, status: "skipped" };
-    if (opVerbose) res.type = op.type;
-    return { res, opVerbose };
-  });
+function skipFile(file: EditFile): FileResult {
   return {
     path: file.path,
     status: "skipped",
-    ops: filterOps(decorated),
+    ops: file.ops.map((_, index): OpResult => ({ index, status: "skipped" })),
   };
 }
 
@@ -211,7 +201,7 @@ async function editOneFile(
   try {
     buf = await loadBuffer(file.path, allowedDirectories);
   } catch (err: unknown) {
-    return buildFileLoadErrorResult(file, options, err);
+    return buildFileLoadErrorResult(file, err);
   }
 
   const originalContent = joinLines(buf.lines, buf.endings);
@@ -227,54 +217,35 @@ async function editOneFile(
   );
   const executionOrder: IndexedOp[] = [...sortedPhase1, ...phase2];
 
-  const decoratedByIndex = new Map<number, DecoratedOp>();
+  const resultsByIndex = new Map<number, OpResult>();
   let abortedOps = false;
 
   for (const { op, inputIndex } of executionOrder) {
-    const opVerbose = resolveOpVerbose(op, options.verbose);
-
     if (abortedOps) {
-      decoratedByIndex.set(inputIndex, {
-        res: decorateOp({ index: inputIndex, status: "skipped" }, op, opVerbose),
-        opVerbose,
-      });
+      resultsByIndex.set(inputIndex, decorateOp({ index: inputIndex, status: "skipped" }, op));
       continue;
     }
 
     const overlap = overlapErrors.get(inputIndex);
     if (overlap) {
-      const errRes = toOpResult(inputIndex, overlap);
-      decoratedByIndex.set(inputIndex, {
-        res: decorateOp(errRes, op, opVerbose),
-        opVerbose,
-      });
+      resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, overlap), op));
       if (op.stopOnError ?? options.stopOnError) abortedOps = true;
       continue;
     }
 
     const res = applyOp(buf, op);
-    const opResult = toOpResult(inputIndex, res);
-
-    decoratedByIndex.set(inputIndex, {
-      res: decorateOp(opResult, op, opVerbose),
-      opVerbose,
-    });
+    resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, res), op));
 
     if (!res.ok && (op.stopOnError ?? options.stopOnError)) {
       abortedOps = true;
     }
   }
 
-  const decorated: DecoratedOp[] = file.ops.map((op, i) => {
-    const existing = decoratedByIndex.get(i);
+  const opResults: OpResult[] = file.ops.map((op, i) => {
+    const existing = resultsByIndex.get(i);
     if (existing !== undefined) return existing;
-    const opVerbose = resolveOpVerbose(op, options.verbose);
-    return {
-      res: decorateOp({ index: i, status: "skipped" }, op, opVerbose),
-      opVerbose,
-    };
+    return decorateOp({ index: i, status: "skipped" }, op);
   });
-  const opResults: OpResult[] = decorated.map((d) => d.res);
 
   const finalContent = joinLines(buf.lines, buf.endings);
   const changed = finalContent !== originalContent || (buf.exists && !buf.existed);
@@ -283,7 +254,7 @@ async function editOneFile(
     try {
       await writeBuffer(buf);
     } catch (err: unknown) {
-      return buildWriteErrorResult(file, options, opResults, err);
+      return buildWriteErrorResult(file, opResults, err);
     }
   }
 
@@ -291,100 +262,50 @@ async function editOneFile(
   return {
     path: file.path,
     status,
-    ops: filterOps(decorated),
+    ops: filterOps(opResults),
   };
 }
 
-interface DecoratedOp {
-  readonly res: OpResult;
-  readonly opVerbose: boolean;
-}
-
-function buildFileLoadErrorResult(
-  file: EditFile,
-  options: FileEditOptions,
-  err: unknown,
-): FileResult {
+function buildFileLoadErrorResult(file: EditFile, err: unknown): FileResult {
   const message = err instanceof Error ? err.message : String(err);
   const fileReason: Reason = err instanceof BufferLoadError ? err.reason : "io_error";
-  const decorated: DecoratedOp[] = file.ops.map((op, index) => {
-    const opVerbose = resolveOpVerbose(op, options.verbose);
-    const res: OpResult = {
-      index,
-      status: "error",
-      reason: fileReason,
-      hint: { next_action: message },
-      type: op.type,
-    };
-    return { res, opVerbose };
-  });
   return {
     path: file.path,
     status: "error",
     error: { reason: fileReason, message },
-    ops: filterOps(decorated),
+    ops: file.ops.map((op, index): OpResult => ({
+      index,
+      status: "error",
+      reason: fileReason,
+      type: op.type,
+      hint: { next_action: message },
+    })),
   };
 }
 
-function buildWriteErrorResult(
-  file: EditFile,
-  options: FileEditOptions,
-  opResults: OpResult[],
-  err: unknown,
-): FileResult {
+function buildWriteErrorResult(file: EditFile, opResults: OpResult[], err: unknown): FileResult {
   const message = err instanceof Error ? err.message : String(err);
-  const decorated: DecoratedOp[] = opResults.map((r, i) => {
-    const op = file.ops[i]!;
-    const opVerbose = resolveOpVerbose(op, options.verbose);
-    const res: OpResult = {
-      index: r.index,
-      status: "error",
-      reason: "io_error",
-      hint: { next_action: `write failed: ${message}` },
-      type: op.type,
-    };
-    return { res, opVerbose };
-  });
   return {
     path: file.path,
     status: "error",
     error: { reason: "io_error", message: `write failed: ${message}` },
-    ops: filterOps(decorated),
+    ops: opResults.map((r, i): OpResult => ({
+      index: r.index,
+      status: "error",
+      reason: "io_error",
+      type: file.ops[i]!.type,
+      hint: { next_action: `write failed: ${message}` },
+    })),
   };
 }
 
-function resolveOpVerbose(op: EditOp, fileVerbose: boolean): boolean {
-  return op.verbose ?? fileVerbose;
+function decorateOp(result: OpResult, op: EditOp): OpResult {
+  if (result.status !== "error") return result;
+  return { ...result, type: op.type };
 }
 
-function decorateOp(
-  result: OpResult,
-  op: EditOp,
-  opVerbose: boolean,
-): OpResult {
-  const out = { ...result };
-  if (!opVerbose) {
-    if (out.status === "error") {
-      out.type = op.type;
-    } else {
-      delete out.type;
-      delete out.summary;
-    }
-    return out;
-  }
-  delete out.index;
-  if (out.status === "error") {
-    out.type = op.type;
-  } else {
-    delete out.type;
-  }
-  return out;
-}
-
-function filterOps(decorated: readonly DecoratedOp[]): OpResult[] {
-  return decorated
-    .filter((d) => d.res.status !== "ok" || d.opVerbose)
-    .map((d) => d.res);
+function filterOps(results: readonly OpResult[]): OpResult[] {
+  return results.filter(r => r.status !== "ok");
 }
 
 function computeFileStatus(ops: readonly OpResult[]): FileStatus {

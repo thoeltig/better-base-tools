@@ -86,7 +86,7 @@ describe("handleBatchEditText — happy path", () => {
     ].join("\n");
     const out = await handleBatchEditText({ content: text }, [workDir]);
     expect(out.results[0]!.status).toBe("ok");
-    expect(out.results[0]!.ops).toHaveLength(2);
+    expect(out.results[0]!.ops).toHaveLength(0);
     expect(await readText(p)).toBe("ONE\ntwo\nTHREE\n");
   });
 
@@ -218,11 +218,9 @@ describe("handleBatchEditText — parser errors", () => {
     const out = await handleBatchEditText({ content: text }, [workDir]);
     expect(out.results[0]!.status).toBe("partial");
     const ops = out.results[0]!.ops;
-    expect(ops).toHaveLength(3);
-    expect(ops[0]!.status).toBe("ok");
-    expect(ops[1]!.status).toBe("error");
-    expect(ops[1]!.reason).toBe("unparseable");
-    expect(ops[2]!.status).toBe("ok");
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!.status).toBe("error");
+    expect(ops[0]!.reason).toBe("unparseable");
     expect(await readText(p)).toBe("ALPHA\nBETA\n");
   });
 });
@@ -296,8 +294,8 @@ describe("handleBatchEditText — stopOnError op level", () => {
       "NEW>>>",
     ].join("\n");
     const out = await handleBatchEditText({ content: text }, [workDir]);
+    expect(out.results[0]!.ops).toHaveLength(1);
     expect(out.results[0]!.ops[0]!.status).toBe("error");
-    expect(out.results[0]!.ops[1]!.status).toBe("ok");
     const disk = await readText(p);
     expect(disk).toBe("A\nB\n");
   });

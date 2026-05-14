@@ -32,7 +32,6 @@ async function fixture(name: string, content: string): Promise<string> {
 async function runEdit(file: EditFile) {
   return handleBatchEdit({
     dryRun: false,
-    verbose: true,
     files: [file],
   }, [workDir]);
 }
@@ -45,23 +44,21 @@ describe("write op — create new file", () => {
   it("creates a new file with content", async () => {
     const p = tmpPath("new.txt");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "hello\n" }] });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/^created file/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("hello\n");
   });
 
   it("auto-creates missing parent directories", async () => {
     const p = join(workDir, `${counter}-nested/sub/dir/file.txt`);
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(existsSync(p)).toBe(true);
   });
 
   it("empty content produces empty file", async () => {
     const p = tmpPath("empty.txt");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("");
   });
 });
@@ -70,16 +67,14 @@ describe("write op — overwrite existing", () => {
   it("replaces existing content", async () => {
     const p = await fixture("ow.txt", "line1\nline2\nline3\n");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "only\n" }] });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/was 3 lines, now 1 line/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("only\n");
   });
 
   it("creates file if missing", async () => {
     const p = tmpPath("ow_new.txt");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "overwrite", content: "x\n" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("x\n");
   });
 });
@@ -88,21 +83,21 @@ describe("write op — append", () => {
   it("appends to EOF of existing file", async () => {
     const p = await fixture("app.txt", "a\nb\n");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "c\n" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\nb\nc\n");
   });
 
   it("creates file if missing", async () => {
     const p = tmpPath("app_new.txt");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "hi\n" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("hi\n");
   });
 
   it("appends literally — no implicit newline when file has no trailing newline", async () => {
     const p = await fixture("no_nl.txt", "abc");
     const out = await runEdit({ path: p, ops: [{ type: "write", mode: "append", content: "def\n" }] });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("abcdef\n");
   });
 });
@@ -114,7 +109,7 @@ describe("insert_at_line op", () => {
       path: p,
       ops: [{ type: "insert_at_line", line: 2, content: "X\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("A\nX\nB\nC\n");
   });
 
@@ -124,7 +119,7 @@ describe("insert_at_line op", () => {
       path: p,
       ops: [{ type: "insert_at_line", line: 3, content: "C\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("A\nB\nC\n");
   });
 
@@ -146,7 +141,7 @@ describe("insert_at_line op", () => {
       path: p,
       ops: [{ type: "insert_at_line", line: 2, content: "X" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("A\nX\nB\n");
   });
 
@@ -156,7 +151,7 @@ describe("insert_at_line op", () => {
       path: p,
       ops: [{ type: "insert_at_line", line: 2, content: "X" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("A\r\nX\r\nB\r\n");
   });
 });
@@ -168,9 +163,7 @@ describe("replace_range op", () => {
       path: p,
       ops: [{ type: "replace_range", start: 2, end: 4, content: "X\nY\n" }],
     });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/3 lines → 2 lines/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("1\nX\nY\n5\n");
   });
 
@@ -316,9 +309,7 @@ describe("replace op", () => {
       path: p,
       ops: [{ type: "replace", old: "bar", new: "QUX" }],
     });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/replaced 1 occurrence at line 1/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("foo QUX baz\n");
   });
 
@@ -378,7 +369,7 @@ describe("replace op", () => {
       path: p,
       ops: [{ type: "replace", old: "OLD", new: "NEW" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\r\nNEW\r\nb\r\n");
   });
 
@@ -388,7 +379,7 @@ describe("replace op", () => {
       path: p,
       ops: [{ type: "replace", old: "B1\nB2", new: "X" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\nX\nc\n");
   });
 });
@@ -400,9 +391,7 @@ describe("replace_all op", () => {
       path: p,
       ops: [{ type: "replace_all", old: "foo", new: "X" }],
     });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/replaced 3 occurrences/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("X bar X baz X\n");
   });
 
@@ -421,7 +410,7 @@ describe("replace_all op", () => {
       path: p,
       ops: [{ type: "replace_all", old: "a", new: "aa" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("aaaaaa\n"); // 3 a's -> 6 a's (each replaced once)
   });
 });
@@ -433,9 +422,7 @@ describe("delete via replace(new='')", () => {
       path: p,
       ops: [{ type: "replace", old: "DROP\n", new: "" }],
     });
-    const op = out.results[0]!.ops[0]!;
-    expect(op.status).toBe("ok");
-    expect(op.summary).toMatch(/replaced 1 occurrence/);
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("keep\nkeep\n");
   });
 
@@ -456,7 +443,6 @@ describe("batch across multiple files", () => {
     const b = await fixture("bb.txt", "B\n");
     const out = await handleBatchEdit({
       dryRun: false,
-      verbose: true,
       files: [
         { path: a, ops: [{ type: "write", mode: "append", content: "A2\n" }] },
         { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] },
@@ -475,7 +461,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace", old: "beta", new: "BETA" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("alpha\r\nBETA\r\ngamma\r\n");
   });
 
@@ -485,7 +471,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace", old: "a\nb", new: "X\nY" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     // Replacement \n converts to file dominant CRLF.
     expect(await readText(p)).toBe("X\r\nY\r\nc\r\n");
   });
@@ -496,7 +482,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace", old: "a\r\nb", new: "X\r\nY" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("X\nY\nc\n");
   });
 
@@ -506,7 +492,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace_all", old: "x", new: "Y" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("Y\r\nY\r\nY\r\n");
   });
 
@@ -516,7 +502,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace", old: "drop\n", new: "" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("keep\r\nkeep\r\n");
   });
 
@@ -526,7 +512,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "write", mode: "append", content: "x\ny\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("head\r\nx\r\ny\r\n");
   });
 
@@ -536,7 +522,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "insert_at_line", line: 2, content: "X\nY\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("A\r\nX\r\nY\r\nB\r\nC\r\n");
   });
 
@@ -546,7 +532,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "replace_range", start: 2, end: 2, content: "X\nY\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("1\r\nX\r\nY\r\n3\r\n");
   });
 
@@ -556,7 +542,7 @@ describe("line-ending auto-match", () => {
       path: p,
       ops: [{ type: "write", mode: "overwrite", content: "a\r\nb\nc\r\n" }],
     });
-    expect(out.results[0]!.ops[0]!.status).toBe("ok");
+    expect(out.results[0]!.status).toBe("ok");
     expect(await readText(p)).toBe("a\r\nb\nc\r\n");
   });
 });

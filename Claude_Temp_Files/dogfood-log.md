@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-14 | ~4 | ~8 | ~50% | session 21 — verbose flag removed (schema + descriptions + test fixtures); 41 broken tests fixed (filterOps contract: ops[] now empty on full success, tests updated to check result.status / toHaveLength(0)); elicitation upgraded to allow-once vs allow-folder per unauthorized path (two checkboxes, once→adds file path, folder→adds dirname); 265/265 tests pass |
 | 2026-05-14 | ~8 | ~16 | ~50% | session 20 — `fileinfo_refs` merged into `fileinfo` (refs[] omitted when empty); `batch_edit` output redesigned: all-success collapses to one-liner, errors in single summary block + per-op anchor blocks; elicitation added to both handlers (per-path checkbox form for unauthorized dirs); `batch_edit` description + use case (5) for replace_range; JSON repair comment updated with correct stdin-Transform approach; 270/270 tests pass |
 | 2026-05-14 | ~5 | ~8 | ~38% | session 19 — extended `extract-session-metrics.mjs` (read lines + MCP edit op counts); DAJ longitudinal findings: surgical MCP reads 133–523 lines/call vs 1,000–1,600 native, subagent scope drop May 13 (658 lines/call from ~1,300), edit multiplier 3.9–7×; CLAUDE.md exploration section updated with MCP `batch_read` subagent instruction |
 | 2026-05-09 | ~9 | ~15 | ~40% | session 18 — tool description review + `fileinfo_refs` mode; reframed compact note, removed large-write caveat, updated `fileinfo` (ISO mtime, no ctimeMs), added `fileinfo_refs` (metadata + refs[] via regex extraction); 269/269 tests pass |
@@ -36,6 +37,11 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
 
+**Closed (session 21):**
+- **verbose flag fully removed** — already absent from schema in session 20; this session cleaned up description strings (`index.ts`, `types.ts`) and removed `verbose: true` from glob test fixtures. No runtime behavior change.
+- **41 broken tests fixed** — `filterOps` (session 20) strips successful ops from results; tests were accessing `ops[0]!` on now-empty arrays. Fix: single-op success → `result.status === "ok"`; multi-op all-success → `ops.toHaveLength(0)`; mixed partial → count only remaining error ops. Fuzzy `op.summary` checks removed (field was never in `OpResult`; checks were dead code).
+- **Elicitation allow-once vs allow-folder** — `elicitPaths()` now emits two boolean props per unauthorized path: `p${i}_once` (adds file path to effectiveAllowed; `isPathAllowed(p,[p])` works because `relative(p,p)===""`) and `p${i}_folder` (adds `dirname(p)`). `titles` param removed; labels auto-generated from path. Both call sites updated.
+
 **Closed (session 20):**
 - **`fileinfo_refs` mode** — merged into `fileinfo`. refs[] always computed, omitted when empty. `ReadMode` enum reduced by one entry.
 - **`batch_edit` compact output** — redesigned `formatEditContent`: single `<!-- batch_edit OK — N files -->` for success, combined summary block + separate anchor blocks for errors. verbose flag no longer changes output format. 1 new test.
@@ -60,6 +66,24 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-14 (session 21) — verbose cleanup + test fixes + elicitation allow-once/folder
+
+**Scope:** Fix 41 broken tests from session 20's `filterOps` change; fully remove dead `verbose` flag; upgrade elicitation from single checkbox to allow-once vs allow-folder per path.
+
+**Shipped:**
+1. **41 tests fixed** — `filterOps` intentionally strips `status:"ok"` ops from results (compact output). Tests were written against the old contract where all ops were returned. Fix pattern: `ops[0]!.status === "ok"` → `result.status === "ok"`; all-success multi-op → `ops.toHaveLength(0)`; mixed partial (edit-text) → count only surviving error ops. Fuzzy test `op.summary` checks removed — field was never in `OpResult` type, the file-content assertions below them carry the actual coverage.
+2. **verbose flag removed** — already stripped from schema in session 20; now removed from description strings in `index.ts` and `types.ts`, and `verbose: true` removed from two glob merge test fixtures. Clean typecheck pass.
+3. **Elicitation allow-once vs allow-folder** — `elicitPaths()` signature drops `titles` param; emits two boolean props per unauthorized path: `p${i}_once` (`Allow once: /path/to/file.ts`) and `p${i}_folder` (`Allow folder: /path/to/`). Logic: folder checked → push `dirname(p)`; only-once checked → push `p` itself (`isPathAllowed(p,[p])` works because `relative(p,p)===""`, so exact-file match without leaking sibling files). Both read and edit call sites updated (titles arg dropped).
+
+**Assessment:**
+- `filterOps` contract is now correctly expressed in tests. The semantic is clear: `ops` contains only failures/skips; empty ops = everything succeeded.
+- `op.summary` removal loses no real coverage — the fuzzy match quality is validated by the file content assertions (correct content written even with indentation mismatch).
+- Allow-once path math verified: `relative("/a/b/c.ts", "/a/b/c.ts") === ""` → true; `relative("/a/b/c.ts", "/a/b/d.ts") === "../d.ts"` → false. Sibling files are correctly denied. Unverifiable without live elicitation-capable client.
+
+**Tool calls (this session):** ~4 `batch_read`, ~4 `batch_edit`, ~3 `Bash` (test + build + typecheck).
+
+---
 
 ### 2026-05-14 (session 20) — fileinfo merge + compact edit output + elicitation + descriptions
 

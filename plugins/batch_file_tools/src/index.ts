@@ -52,7 +52,6 @@ server.registerTool(
       const allowedDirectories = getAllowedDirectoriesToUse();
       const sessionAllowed = await elicitPaths(
         parsed.requests.map(r => r.path),
-        parsed.requests.map(r => `Read (${r.mode}): ${r.path}`),
         allowedDirectories,
         ctx,
       );
@@ -79,7 +78,7 @@ server.registerTool(
   "batch_edit",
   {
     title: "Improved edit tool which supports batching and different output modes",
-    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. verbose and stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) targeted edit — read file in verbatim_numbered, use line numbers as replace_range / insert_at_line anchors; (2) multi-file refactor — replace_all + glob to rename a symbol across all matching files; (3) new file — write(overwrite) auto-creates file and any missing parent dirs; (4) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (5) multi-line content — read verbatim_numbered for line anchors, use replace_range or insert_at_line instead of replace/replace_all to avoid JSON-escaping newlines and special chars in old/new strings.",
+    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) targeted edit — read file in verbatim_numbered, use line numbers as replace_range / insert_at_line anchors; (2) multi-file refactor — replace_all + glob to rename a symbol across all matching files; (3) new file — write(overwrite) auto-creates file and any missing parent dirs; (4) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (5) multi-line content — read verbatim_numbered for line anchors, use replace_range or insert_at_line instead of replace/replace_all to avoid JSON-escaping newlines and special chars in old/new strings.",
     inputSchema: EditInput,
     annotations: {
       title: 'Improved edit tool which supports batching and different output modes',
@@ -95,7 +94,6 @@ server.registerTool(
       const allowedDirectories = getAllowedDirectoriesToUse();
       const sessionAllowed = await elicitPaths(
         parsed.files.map(f => f.path),
-        parsed.files.map(f => `Edit (${f.ops.length} op(s): ${f.ops.map(o => o.type).join(", ")}): ${f.path}`),
         allowedDirectories,
         ctx,
       );
@@ -193,7 +191,6 @@ function getAllowedDirectoriesToUse(): string[] {
 
 async function elicitPaths(
   paths: string[],
-  titles: string[],
   allowedDirs: string[],
   ctx: any,
 ): Promise<string[]> {
@@ -204,8 +201,8 @@ async function elicitPaths(
 
   const props: Record<string, { type: string; title: string }> = {};
   unauthorized.forEach((p, i) => {
-    const title = titles[paths.indexOf(p)] ?? p;
-    props[`p${i}`] = { type: "boolean", title };
+    props[`p${i}_once`] = { type: "boolean", title: `Allow once: ${p}` };
+    props[`p${i}_folder`] = { type: "boolean", title: `Allow folder: ${dirname(p)}/` };
   });
 
   try {
@@ -215,9 +212,15 @@ async function elicitPaths(
     });
     if (r.action !== "accept" || !r.content) return [];
     const content = r.content as Record<string, unknown>;
-    return unauthorized
-      .filter((_, i) => content[`p${i}`] === true)
-      .map(p => dirname(p));
+    const result: string[] = [];
+    unauthorized.forEach((p, i) => {
+      if (content[`p${i}_folder`] === true) {
+        result.push(dirname(p));
+      } else if (content[`p${i}_once`] === true) {
+        result.push(p);
+      }
+    });
+    return result;
   } catch {
     return [];
   }
