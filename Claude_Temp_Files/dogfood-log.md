@@ -8,7 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
-| 2026-05-14 | ~4 | ~8 | ~50% | session 21 — verbose flag removed (schema + descriptions + test fixtures); 41 broken tests fixed (filterOps contract: ops[] now empty on full success, tests updated to check result.status / toHaveLength(0)); elicitation upgraded to allow-once vs allow-folder per unauthorized path (two checkboxes, once→adds file path, folder→adds dirname); 265/265 tests pass |
+| 2026-05-15 | ~6 | ~12 | ~50% | session 22 — elicitation redesigned: N×2 booleans → two multi-select fields (allow_folders/allow_once); toolName shown in message; allow_folder now session-persistent via module-level `sessionAllowedPaths`; allow_once deduped against selected folders; 268/268 tests pass |
 | 2026-05-14 | ~8 | ~16 | ~50% | session 20 — `fileinfo_refs` merged into `fileinfo` (refs[] omitted when empty); `batch_edit` output redesigned: all-success collapses to one-liner, errors in single summary block + per-op anchor blocks; elicitation added to both handlers (per-path checkbox form for unauthorized dirs); `batch_edit` description + use case (5) for replace_range; JSON repair comment updated with correct stdin-Transform approach; 270/270 tests pass |
 | 2026-05-14 | ~5 | ~8 | ~38% | session 19 — extended `extract-session-metrics.mjs` (read lines + MCP edit op counts); DAJ longitudinal findings: surgical MCP reads 133–523 lines/call vs 1,000–1,600 native, subagent scope drop May 13 (658 lines/call from ~1,300), edit multiplier 3.9–7×; CLAUDE.md exploration section updated with MCP `batch_read` subagent instruction |
 | 2026-05-09 | ~9 | ~15 | ~40% | session 18 — tool description review + `fileinfo_refs` mode; reframed compact note, removed large-write caveat, updated `fileinfo` (ISO mtime, no ctimeMs), added `fileinfo_refs` (metadata + refs[] via regex extraction); 269/269 tests pass |
@@ -36,6 +36,9 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 **Deferred:**
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
+
+**Closed (session 22):**
+- **Elicitation multi-select redesign** — `elicitPaths()` now emits two `TitledMultiSelectEnumSchema` fields instead of N×2 booleans: `allow_folders` (unique dirnames) and `allow_once` (individual paths). `toolName` param added; shown in message as `batch_read — path(s) outside allowed directories`. allow_once entries filtered if their dirname is in allow_folders. Module-level `sessionAllowedPaths: string[]` added; folder approvals pushed there and included in `getAllowedDirectoriesToUse()`—subsequent calls to the same folder bypass elicitation. 268/268 tests pass.
 
 **Closed (session 21):**
 - **verbose flag fully removed** — already absent from schema in session 20; this session cleaned up description strings (`index.ts`, `types.ts`) and removed `verbose: true` from glob test fixtures. No runtime behavior change.
@@ -66,6 +69,24 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-15 (session 22) — elicitation multi-select + session persistence
+
+**Scope:** Replace per-file boolean checkboxes with two multi-select fields; show tool name in prompt; make allow_folder session-persistent.
+
+**Shipped:**
+1. **Multi-select elicitation form** — `elicitPaths(paths, allowedDirs, toolName)` now builds two `TitledMultiSelectEnumSchema` properties: `allow_folders` (unique `dirname`s of unauthorized paths) and `allow_once` (all unauthorized file paths). Message prefix changed to `${toolName} — path(s) outside allowed directories`. Result: N files from same folder → one folder option, not N checkbox pairs.
+2. **Folder dedup on allow_once** — if a folder is selected, any `allow_once` entry whose `dirname` matches is excluded from the returned paths (no double-adding).
+3. **Session persistence for allow_folder** — module-level `sessionAllowedPaths: string[]` added to `index.ts`. `getAllowedDirectoriesToUse()` includes it. `elicitPaths` pushes `allowedFolders` into it after user approval; subsequent handler calls include those folders in `allowedDirs`, so `unauthorized` filter excludes already-approved paths and elicitation does not fire again.
+
+**Observed behavior (dogfood):**
+- Tool name visible in prompt title ✓
+- Accept without selection = deny (correct) ✓
+- allow_once: ephemeral — elicitation fires again on next call ✓
+- allow_folder: persists — subsequent reads of same folder need no prompt ✓
+- Model only sees binary outcome (content vs `not_authorized`); no visibility into whether elicitation fired or what was selected.
+
+**Tool calls (this session):** ~4 `batch_read`, ~3 `batch_edit` (3 ops each), ~2 `Bash` (typecheck + build + test).
 
 ### 2026-05-14 (session 21) — verbose cleanup + test fixes + elicitation allow-once/folder
 

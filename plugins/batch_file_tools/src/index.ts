@@ -14,6 +14,7 @@ import { writeLogLine } from "./lib/log.js";
 const args = process.argv.slice(2);
 const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
 let validRootDirectories: string[] = [];
+const sessionAllowedPaths: string[] = [];
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
 // DO NOT set on either tool. Claude Code's harness surfaces
@@ -54,6 +55,7 @@ server.registerTool(
       const sessionAllowed = await elicitPaths(
         parsed.requests.map(r => r.path),
         allowedDirectories,
+        "batch_read",
       );
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
@@ -95,6 +97,7 @@ server.registerTool(
       const sessionAllowed = await elicitPaths(
         parsed.files.map(f => f.path),
         allowedDirectories,
+        "batch_edit",
       );
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
@@ -185,39 +188,47 @@ async function updateValidRootDirectories() {
 }
 
 function getAllowedDirectoriesToUse(): string[] {
-  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs])];
+  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs, ...sessionAllowedPaths])];
 }
 
 async function elicitPaths(
   paths: string[],
   allowedDirs: string[],
+  toolName: string,
 ): Promise<string[]> {
   const unauthorized = [...new Set(
     paths.filter(p => isAbsolute(p) && !looksLikeGlob(p) && !isPathAllowed(p, allowedDirs))
   )];
   if (unauthorized.length === 0 || !server.server.getClientCapabilities()?.elicitation) return [];
 
-  const props: Record<string, PrimitiveSchemaDefinition> = {};
-  unauthorized.forEach((p, i) => {
-    props[`p${i}_once`] = { type: "boolean" as const, title: `Allow once: ${p}` };
-    props[`p${i}_folder`] = { type: "boolean" as const, title: `Allow folder: ${dirname(p)}/` };
-  });
+  const uniqueFolders = [...new Set(unauthorized.map(p => dirname(p)))];
+  const props: Record<string, PrimitiveSchemaDefinition> = {
+    allow_folders: {
+      type: "array" as const,
+      title: "Allow folder (session)",
+      items: { anyOf: uniqueFolders.map(f => ({ const: f, title: `${f}/` })) },
+    },
+    allow_once: {
+      type: "array" as const,
+      title: "Allow once (this call)",
+      items: { anyOf: unauthorized.map(p => ({ const: p, title: p })) },
+    },
+  };
 
   try {
     const r = await server.server.elicitInput({
-      message: `Path(s) outside allowed directories — grant access?\n${unauthorized.join("\n")}`,
+      message: `${toolName} — path(s) outside allowed directories`,
       requestedSchema: { type: "object" as const, properties: props },
     });
     if (r.action !== "accept" || !r.content) return [];
     const content = r.content as Record<string, unknown>;
-    const result: string[] = [];
-    unauthorized.forEach((p, i) => {
-      if (content[`p${i}_folder`] === true) {
-        result.push(dirname(p));
-      } else if (content[`p${i}_once`] === true) {
-        result.push(p);
-      }
-    });
+    const allowedFolders = Array.isArray(content['allow_folders']) ? content['allow_folders'] as string[] : [];
+    const allowedOnce = Array.isArray(content['allow_once']) ? content['allow_once'] as string[] : [];
+    const result = [...allowedFolders];
+    for (const p of allowedOnce) {
+      if (!allowedFolders.includes(dirname(p))) result.push(p);
+    }
+    sessionAllowedPaths.push(...allowedFolders);
     return result;
   } catch {
     return [];
