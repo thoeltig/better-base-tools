@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-15 | 0 | ~17 | 0% / negative | session 24 — progress + logging (mcpLog, reportProgress, onProgress/onOpDone); used 0 MCP calls (Read×10, Edit×7); ~3 batch_read+batch_edit would have sufficed (~82% reduction missed); build + typecheck pass |
 | 2026-05-15 | ~5 | ~9 | ~44% | session 23 — per-file elicitation (one prompt per unauthorized file, detail in message); session allow list split into read/edit; accept/deny per-file; build passes |
 | 2026-05-15 | ~6 | ~12 | ~50% | session 22 — elicitation redesigned: N×2 booleans → two multi-select fields (allow_folders/allow_once); toolName shown in message; allow_folder now session-persistent via module-level `sessionAllowedPaths`; allow_once deduped against selected folders; 268/268 tests pass |
 | 2026-05-14 | ~8 | ~16 | ~50% | session 20 — `fileinfo_refs` merged into `fileinfo` (refs[] omitted when empty); `batch_edit` output redesigned: all-success collapses to one-liner, errors in single summary block + per-op anchor blocks; elicitation added to both handlers (per-path checkbox form for unauthorized dirs); `batch_edit` description + use case (5) for replace_range; JSON repair comment updated with correct stdin-Transform approach; 270/270 tests pass |
@@ -73,6 +74,29 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-15 (session 24) — MCP progress + logging
+
+**Scope:** Add logging and progress tracking to both tool handlers; log elicitation accept/deny decisions.
+
+**Shipped:**
+1. **`handleBatchRead` `onProgress` callback** — optional `(done, total) => Promise<void>`; fires after each file inside `Promise.all` via atomic counter (parallel reads preserved).
+2. **`handleBatchEdit` `onProgress` + `editOneFile` `onOpDone`** — total = sum of all ops post-merge/expand; counter increments per op via `try/finally` in execution loop; catch-up guard handles buffer-load-error early-exit.
+3. **`mcpLog` helper** — fire-and-forget `server.server.sendLoggingMessage()`; logs entry (info), success (info), error (error) per tool call. SDK 1.29 has no `ctx.log()` convenience method.
+4. **`reportProgress` helper** — reads `extra._meta?.progressToken`; sends `notifications/progress` via `extra.sendNotification`; no-op if client sends no token.
+5. **Elicitation logging** — accept: `"elicit accept — path (session: none|file|folder)"` (info); deny: `"elicit deny — path"` (info); elicitation error: warning level with message.
+6. **`logging: {}` capability** added to server constructor options.
+
+**SDK findings (1.29):**
+- `RequestHandlerExtra` has no `reportProgress`/`log` convenience methods.
+- Progress: `extra._meta?.progressToken` → `extra.sendNotification({ method: "notifications/progress", params: { progressToken, progress, total } })`.
+- Logging: `server.server.sendLoggingMessage({ level, data, logger })` — requires `logging: {}` in server capabilities.
+
+**Dogfood failure:** Used 0 MCP calls — all native `Read`/`Edit`/`Grep`/`Glob` (~17 calls total). ~3 MCP calls (`batch_read` for source + SDK type lookups, `batch_edit` for all edits) would have achieved ~82% reduction. Caught by user post-session.
+
+**Tool calls (this session):** 0 `batch_read`, 0 `batch_edit`, ~10 `Read`, ~7 `Edit`, ~5 `Grep`, 1 `Glob`, 2 `Bash` (typecheck + build).
+
+---
 
 ### 2026-05-15 (session 23) — per-file elicitation + read/edit session allow split
 
