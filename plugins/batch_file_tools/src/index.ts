@@ -14,7 +14,8 @@ import { writeLogLine } from "./lib/log.js";
 const args = process.argv.slice(2);
 const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
 let validRootDirectories: string[] = [];
-const sessionAllowedPaths: string[] = [];
+const sessionAllowedReadPaths: string[] = [];
+const sessionAllowedEditPaths: string[] = [];
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
 // DO NOT set on either tool. Claude Code's harness surfaces
@@ -51,12 +52,13 @@ server.registerTool(
   async (param) => {
   try {
       const parsed = ReadInput.parse(param);
-      const allowedDirectories = getAllowedDirectoriesToUse();
-      const sessionAllowed = await elicitPaths(
-        parsed.requests.map(r => r.path),
-        allowedDirectories,
-        "batch_read",
-      );
+      const allowedDirectories = getAllowedDirectoriesToUse("read");
+      const pathInfos = parsed.requests.map(r => {
+        const parts = [`mode: ${r.mode}`];
+        if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
+        return { path: r.path, detail: parts.join(", ") };
+      });
+      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read");
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
@@ -93,12 +95,12 @@ server.registerTool(
   async (param) => {
   try {
       const parsed = EditInput.parse(param);
-      const allowedDirectories = getAllowedDirectoriesToUse();
-      const sessionAllowed = await elicitPaths(
-        parsed.files.map(f => f.path),
-        allowedDirectories,
-        "batch_edit",
-      );
+      const allowedDirectories = getAllowedDirectoriesToUse("edit");
+      const pathInfos = parsed.files.map(f => ({
+        path: f.path,
+        detail: `ops: ${[...new Set(f.ops.map(o => o.type))].join(", ")}`,
+      }));
+      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_edit", "edit");
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
@@ -164,7 +166,7 @@ server.server.oninitialized = async () => {
     await updateValidRootDirectories();
   }
 
-  if (getAllowedDirectoriesToUse().length === 0) {
+  if (getAllowedDirectoriesToUse("read").length === 0) {
     writeLogLine(`No allowed directories provided via args or MCP roots. Server will be shut down.`);
     process.exit(1);
   }
@@ -187,52 +189,70 @@ async function updateValidRootDirectories() {
   }
 }
 
-function getAllowedDirectoriesToUse(): string[] {
-  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs, ...sessionAllowedPaths])];
+function getAllowedDirectoriesToUse(toolType: "read" | "edit"): string[] {
+  const sessionPaths = toolType === "read" ? sessionAllowedReadPaths : sessionAllowedEditPaths;
+  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs, ...sessionPaths])];
 }
 
 async function elicitPaths(
-  paths: string[],
+  pathInfos: { path: string; detail: string }[],
   allowedDirs: string[],
   toolName: string,
+  toolType: "read" | "edit",
 ): Promise<string[]> {
   const unauthorized = [...new Set(
-    paths.filter(p => isAbsolute(p) && !looksLikeGlob(p) && !isPathAllowed(p, allowedDirs))
+    pathInfos
+      .filter(pi => isAbsolute(pi.path) && !looksLikeGlob(pi.path) && !isPathAllowed(pi.path, allowedDirs))
+      .map(pi => pi.path)
   )];
   if (unauthorized.length === 0 || !server.server.getClientCapabilities()?.elicitation) return [];
 
-  const uniqueFolders = [...new Set(unauthorized.map(p => dirname(p)))];
-  const props: Record<string, PrimitiveSchemaDefinition> = {
-    allow_folders: {
-      type: "array" as const,
-      title: "Allow folder (session)",
-      items: { anyOf: uniqueFolders.map(f => ({ const: f, title: `${f}/` })) },
-    },
-    allow_once: {
-      type: "array" as const,
-      title: "Allow once (this call)",
-      items: { anyOf: unauthorized.map(p => ({ const: p, title: p })) },
-    },
-  };
+  const sessionList = toolType === "read" ? sessionAllowedReadPaths : sessionAllowedEditPaths;
+  const acceptedPaths: string[] = [];
 
-  try {
-    const r = await server.server.elicitInput({
-      message: `${toolName} — path(s) outside allowed directories`,
-      requestedSchema: { type: "object" as const, properties: props },
-    });
-    if (r.action !== "accept" || !r.content) return [];
-    const content = r.content as Record<string, unknown>;
-    const allowedFolders = Array.isArray(content['allow_folders']) ? content['allow_folders'] as string[] : [];
-    const allowedOnce = Array.isArray(content['allow_once']) ? content['allow_once'] as string[] : [];
-    const result = [...allowedFolders];
-    for (const p of allowedOnce) {
-      if (!allowedFolders.includes(dirname(p))) result.push(p);
+  for (const p of unauthorized) {
+    const info = pathInfos.find(pi => pi.path === p);
+    const detail = info?.detail ?? "";
+    const folder = dirname(p);
+
+    const props: Record<string, PrimitiveSchemaDefinition> = {
+      session_allow: {
+        type: "array" as const,
+        title: "Also add to session allow list (optional)",
+        items: { anyOf: [
+          { const: "file", title: `File: ${p}` },
+          { const: "folder", title: `Folder: ${folder}` },
+        ]},
+      },
+    };
+
+    const msg = detail
+      ? `${toolName} — ${p}  (${detail})`
+      : `${toolName} — ${p}`;
+    try {
+      const r = await server.server.elicitInput({
+        message: msg,
+        requestedSchema: { type: "object" as const, properties: props },
+      });
+
+      if (r.action !== "accept") continue;
+
+      acceptedPaths.push(p);
+
+      const content = r.content as Record<string, unknown>;
+      const sessionAllow = Array.isArray(content['session_allow']) ? content['session_allow'] as string[] : [];
+
+      if (sessionAllow.includes("folder")) {
+        sessionList.push(folder);
+      } else if (sessionAllow.includes("file")) {
+        sessionList.push(p);
+      }
+    } catch {
+      // elicitation error for this file, skip it
     }
-    sessionAllowedPaths.push(...allowedFolders);
-    return result;
-  } catch {
-    return [];
   }
+
+  return acceptedPaths;
 }
 
 async function main(): Promise<void> {

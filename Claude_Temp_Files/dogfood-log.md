@@ -8,6 +8,7 @@ Append new entries at the **top** of the Sessions list (newest first) and add a 
 
 | Date | MCP calls | Native equiv (est) | Reduction | Notes |
 |---|---|---|---|---|
+| 2026-05-15 | ~5 | ~9 | ~44% | session 23 — per-file elicitation (one prompt per unauthorized file, detail in message); session allow list split into read/edit; accept/deny per-file; build passes |
 | 2026-05-15 | ~6 | ~12 | ~50% | session 22 — elicitation redesigned: N×2 booleans → two multi-select fields (allow_folders/allow_once); toolName shown in message; allow_folder now session-persistent via module-level `sessionAllowedPaths`; allow_once deduped against selected folders; 268/268 tests pass |
 | 2026-05-14 | ~8 | ~16 | ~50% | session 20 — `fileinfo_refs` merged into `fileinfo` (refs[] omitted when empty); `batch_edit` output redesigned: all-success collapses to one-liner, errors in single summary block + per-op anchor blocks; elicitation added to both handlers (per-path checkbox form for unauthorized dirs); `batch_edit` description + use case (5) for replace_range; JSON repair comment updated with correct stdin-Transform approach; 270/270 tests pass |
 | 2026-05-14 | ~5 | ~8 | ~38% | session 19 — extended `extract-session-metrics.mjs` (read lines + MCP edit op counts); DAJ longitudinal findings: surgical MCP reads 133–523 lines/call vs 1,000–1,600 native, subagent scope drop May 13 (658 lines/call from ~1,300), edit multiplier 3.9–7×; CLAUDE.md exploration section updated with MCP `batch_read` subagent instruction |
@@ -36,6 +37,9 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 **Deferred:**
 - **Token measurement perf test.** Deferred per user — transcript-extracted numbers exist. Could add a vitest case that encodes 4 representative edits both ways and asserts savings ≥ threshold. Useful as regression guard once we land grammar tweaks.
 - **C — `SessionStart` hook** to replace CLAUDE.md MCP-preference directive. Not needed pre-public-release; user updated CLAUDE.md, observing whether it holds under long planning chains.
+
+**Closed (session 23):**
+- **Per-file elicitation + read/edit session allow split** — `elicitPaths()` loops per unauthorized path, one `elicitInput` per file. Message: `toolName — path  (detail)` (detail = `mode: X` or `ops: a, b`). Schema: single optional `session_allow` array with `File: /path` and `Folder: /dirname` options. Accept = allow once; accept + file/folder checkbox = add to session list for that tool type only. `sessionAllowedPaths` split into `sessionAllowedReadPaths` / `sessionAllowedEditPaths`; `getAllowedDirectoriesToUse(toolType)` uses the matching list. Deny = `not_authorized` for that file; other files in the batch unaffected.
 
 **Closed (session 22):**
 - **Elicitation multi-select redesign** — `elicitPaths()` now emits two `TitledMultiSelectEnumSchema` fields instead of N×2 booleans: `allow_folders` (unique dirnames) and `allow_once` (individual paths). `toolName` param added; shown in message as `batch_read — path(s) outside allowed directories`. allow_once entries filtered if their dirname is in allow_folders. Module-level `sessionAllowedPaths: string[]` added; folder approvals pushed there and included in `getAllowedDirectoriesToUse()`—subsequent calls to the same folder bypass elicitation. 268/268 tests pass.
@@ -69,6 +73,26 @@ Native equiv = what the same workflow would cost using `Read`/`Edit`/`Write` wit
 - F (README MCP-roots note), J (`replace(new='')` summary wording), K (`batch_write` tool — already covered by `write` op), H (glob rollup envelope) — dropped.
 
 ## Sessions
+
+### 2026-05-15 (session 23) — per-file elicitation + read/edit session allow split
+
+**Scope:** Replace single-batch elicitation (N files → one form with two multi-select fields) with sequential per-file prompts; split session allow list by tool type.
+
+**Shipped:**
+1. **Per-file elicitation loop** — `elicitPaths()` iterates each unauthorized path individually, one `elicitInput` per file. Message: `${toolName} — ${path}  (${detail})` where detail = `mode: X[, search: "Y"]` for reads and `ops: a, b` (deduped op types) for edits. Accept/deny is per-file: deny = skip (`not_authorized`), accept = add to `effectiveAllowed` for this call.
+2. **Per-file session allow checkboxes** — each prompt has a single optional `session_allow` array with two options: `File: /path` and `Folder: /dirname`. Accept with nothing checked = allow once. Checking `file` → adds exact path. Checking `folder` → adds parent folder (supercedes file if both).
+3. **Read/edit session allow split** — `sessionAllowedPaths` replaced by `sessionAllowedReadPaths` + `sessionAllowedEditPaths`. `getAllowedDirectoriesToUse(toolType: "read" | "edit")` uses the matching list. Folder approved via `batch_read` does not auto-allow `batch_edit` and vice versa.
+4. **Detail extraction at call sites** — batch_read: `{ path, detail: "mode: X[, search: Y]" }`; batch_edit: `{ path, detail: "ops: a, b" }` (Set-deduped).
+
+**Observed behavior (dogfood):**
+- Deny → `not_authorized` ✓
+- Accept (no checkbox) → read succeeds, prompts again on next call ✓
+- Accept + session checkbox → session list updated, subsequent reads skip elicitation ✓
+- Model cannot see elicitation prompts; only sees read result or `not_authorized`.
+
+**Tool calls (this session):** ~3 `batch_read`, ~2 `batch_edit` (~5 ops), ~2 `Bash` (typecheck + build).
+
+---
 
 ### 2026-05-15 (session 22) — elicitation multi-select + session persistence
 
