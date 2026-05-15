@@ -10,11 +10,18 @@ type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadR
 
 export async function handleBatchRead(
   input: ReadInput,
-  allowedDirectories: string[]
+  allowedDirectories: string[],
+  onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
   const plan = await expandReadRequests(input.requests, allowedDirectories);
+  const total = plan.length;
+  let done = 0;
   const results = await Promise.all(
-    plan.map(entry => entry.kind === "err" ? entry.result : readOne(entry.req, allowedDirectories))
+    plan.map(async entry => {
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories);
+      await onProgress?.(++done, total);
+      return result;
+    })
   );
   return { results };
 }

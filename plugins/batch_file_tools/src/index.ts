@@ -8,7 +8,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { PrimitiveSchemaDefinition } from "@modelcontextprotocol/sdk/types.js";
+import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { writeLogLine } from "./lib/log.js";
 
 const args = process.argv.slice(2);
@@ -31,9 +32,41 @@ const server = new McpServer(
   {
     capabilities: {
       tools: {},
+      logging: {}
     },
   },
 );
+
+function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
+  try {
+    server.sendLoggingMessage({ 
+      level, 
+      data,
+      logger 
+    });
+  } catch { /* ignore if client doesn't support logging */ }
+}
+
+async function reportProgress(
+  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  progress: number,
+  total: number,
+  message?: string
+): Promise<void> {
+  const token = extra._meta?.progressToken;
+  if (token === undefined) return;
+  try {
+    await extra.sendNotification({
+      method: "notifications/progress",
+      params: { 
+        progressToken: token, 
+        progress, 
+        total, 
+        message 
+      },
+    });
+  } catch { /* ignore if client doesn't support progress */ }
+}
 
 server.registerTool(
   "batch_read",
@@ -49,9 +82,10 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param) => {
+  async (param, extra) => {
   try {
       const parsed = ReadInput.parse(param);
+      writeMcpLogLine("info", `batch_read — ${parsed.requests.length} request(s)`, "batch_read");
       const allowedDirectories = getAllowedDirectoriesToUse("read");
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
@@ -62,12 +96,16 @@ server.registerTool(
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchRead(parsed, effectiveAllowed);
-      return { 
+      const result = await handleBatchRead(parsed, effectiveAllowed, (done, total) => reportProgress(extra, done, total));
+      const errCount = result.results.filter(r => r.error).length;
+      const okCount = result.results.length - errCount;
+      writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
+      return {
         content: formatReadContent(result)
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      writeMcpLogLine("error", `batch_read error — ${message}`, "batch_read");
       const logLine = `Tool error: ${message}`;
       writeLogLine(logLine);
       return {
@@ -92,9 +130,11 @@ server.registerTool(
       openWorldHint: false
     }
   },
-  async (param) => {
+  async (param, extra) => {
   try {
       const parsed = EditInput.parse(param);
+      const totalOps = parsed.files.reduce((s, f) => s + f.ops.length, 0);
+      writeMcpLogLine("info", `batch_edit — ${parsed.files.length} file(s), ${totalOps} op(s)`, "batch_edit");
       const allowedDirectories = getAllowedDirectoriesToUse("edit");
       const pathInfos = parsed.files.map(f => ({
         path: f.path,
@@ -104,12 +144,16 @@ server.registerTool(
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchEdit(parsed, effectiveAllowed);
-      return { 
+      const result = await handleBatchEdit(parsed, effectiveAllowed, (done, total) => reportProgress(extra, done, total));
+      const okCount = result.results.filter(r => r.status === "ok").length;
+      const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
+      writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
+      return {
         content: formatEditContent(result, parsed.dryRun)
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");
       const logLine = `Tool error: ${message}`;
       writeLogLine(logLine);
       return {
@@ -235,20 +279,26 @@ async function elicitPaths(
         requestedSchema: { type: "object" as const, properties: props },
       });
 
-      if (r.action !== "accept") continue;
+      if (r.action !== "accept") {
+        writeMcpLogLine("info", `elicit deny — ${p}`, "elicit");
+        continue;
+      }
 
       acceptedPaths.push(p);
 
       const content = r.content as Record<string, unknown>;
       const sessionAllow = Array.isArray(content['session_allow']) ? content['session_allow'] as string[] : [];
 
+      const sessionScope = sessionAllow.includes("folder") ? "folder" : sessionAllow.includes("file") ? "file" : "none";
+      writeMcpLogLine("info", `elicit accept — ${p} (session: ${sessionScope})`, "elicit");
+
       if (sessionAllow.includes("folder")) {
         sessionList.push(folder);
       } else if (sessionAllow.includes("file")) {
         sessionList.push(p);
       }
-    } catch {
-      // elicitation error for this file, skip it
+    } catch (err) {
+      writeMcpLogLine("warning", `elicit error — ${p}: ${err instanceof Error ? err.message : String(err)}`, "elicit");
     }
   }
 

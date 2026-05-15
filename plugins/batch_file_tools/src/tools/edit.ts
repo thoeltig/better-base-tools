@@ -27,7 +27,8 @@ interface IndexedOp {
 
 export async function handleBatchEdit(
   input: EditInput,
-  allowedDirectories: string[]
+  allowedDirectories: string[],
+  onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<EditOutput> {
   const results: FileResult[] = [];
   let abortRemaining = false;
@@ -35,23 +36,42 @@ export async function handleBatchEdit(
 
   const entries = await planEntries(input.files, allowedDirectories);
 
+  const total = onProgress
+    ? entries.reduce((s, e) => s + (e.kind === "process" ? e.file.ops.length : e.result.ops.length), 0)
+    : 0;
+  let done = 0;
+
   for (const entry of entries) {
     if (abortRemaining) {
-      results.push(
-        entry.kind === "error" ? entry.result : skipFile(entry.file),
-      );
+      const r = entry.kind === "error" ? entry.result : skipFile(entry.file);
+      results.push(r);
+      if (onProgress) {
+        done += r.ops.length;
+        await onProgress(done, total);
+      }
       continue;
     }
 
     let fileResult: FileResult;
     if (entry.kind === "error") {
       fileResult = entry.result;
+      if (onProgress) {
+        done += fileResult.ops.length;
+        await onProgress(done, total);
+      }
     } else {
       const options: FileEditOptions = {
         stopOnError: entry.file.stopOnError ?? rootStop,
         dryRun: input.dryRun,
       };
-      fileResult = await editOneFile(entry.file, options, allowedDirectories);
+      const opsBefore = done;
+      const onOpDone = onProgress ? async () => { await onProgress(++done, total); } : undefined;
+      fileResult = await editOneFile(entry.file, options, allowedDirectories, onOpDone);
+      // If editOneFile returned early (e.g. buffer load error), catch up the counter
+      if (onProgress && done - opsBefore < entry.file.ops.length) {
+        done = opsBefore + entry.file.ops.length;
+        await onProgress(done, total);
+      }
     }
     results.push(fileResult);
 
@@ -195,7 +215,8 @@ function skipFile(file: EditFile): FileResult {
 async function editOneFile(
   file: EditFile,
   options: FileEditOptions,
-  allowedDirectories: string[]
+  allowedDirectories: string[],
+  onOpDone?: () => Promise<void>
 ): Promise<FileResult> {
   let buf;
   try {
@@ -221,23 +242,27 @@ async function editOneFile(
   let abortedOps = false;
 
   for (const { op, inputIndex } of executionOrder) {
-    if (abortedOps) {
-      resultsByIndex.set(inputIndex, decorateOp({ index: inputIndex, status: "skipped" }, op));
-      continue;
-    }
+    try {
+      if (abortedOps) {
+        resultsByIndex.set(inputIndex, decorateOp({ index: inputIndex, status: "skipped" }, op));
+        continue;
+      }
 
-    const overlap = overlapErrors.get(inputIndex);
-    if (overlap) {
-      resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, overlap), op));
-      if (op.stopOnError ?? options.stopOnError) abortedOps = true;
-      continue;
-    }
+      const overlap = overlapErrors.get(inputIndex);
+      if (overlap) {
+        resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, overlap), op));
+        if (op.stopOnError ?? options.stopOnError) abortedOps = true;
+        continue;
+      }
 
-    const res = applyOp(buf, op);
-    resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, res), op));
+      const res = applyOp(buf, op);
+      resultsByIndex.set(inputIndex, decorateOp(toOpResult(inputIndex, res), op));
 
-    if (!res.ok && (op.stopOnError ?? options.stopOnError)) {
-      abortedOps = true;
+      if (!res.ok && (op.stopOnError ?? options.stopOnError)) {
+        abortedOps = true;
+      }
+    } finally {
+      await onOpDone?.();
     }
   }
 
