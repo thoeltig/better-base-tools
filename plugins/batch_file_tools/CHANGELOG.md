@@ -144,13 +144,13 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[1.0.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v1.0.0
-[0.9.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.9.0
-[0.8.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.8.0
-[0.7.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.7.0
-[0.6.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.6.0
-[0.5.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.5.0
-[0.4.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.4.0
-[0.3.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.3.0
-[0.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.2.0
-[0.1.0]: https://github.com/thoeltig/better-base-tools/releases/tag/v0.1.0
+[1.0.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.0.0
+[0.9.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.9.0
+[0.8.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.8.0
+[0.7.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.7.0
+[0.6.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.6.0
+[0.5.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.5.0
+[0.4.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.4.0
+[0.3.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.3.0
+[0.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.2.0
+[0.1.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.1.0
