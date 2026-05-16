@@ -98,7 +98,7 @@ cd scripts && npm install && npm run build
 ## Installation
 
 Install via the Claude Code plugin system. When the plugin loads and the build is present the `SessionStart` hook injects tool-preference guidance automatically.
-To register the MCP server manually and add the following to your MCP configuration.
+To register the MCP server manually add the following to your MCP configuration.
 
 ```json
 {
