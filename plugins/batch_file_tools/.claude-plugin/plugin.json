@@ -1,0 +1,14 @@
+{
+  "name": "batch_file_tools",
+  "description": "Read, write & edit tool with batch support and more granular actions.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Thore Höltig",
+    "url": "https://github.com/thoeltig"
+  },
+  "homepage": "https://github.com/thoeltig/better-base-tools",
+  "repository": "https://github.com/thoeltig/better-base-tools",
+  "license": "MIT",
+  "keywords": ["tokens", "efficiency", "file-reading", "context-optimization"],
+  "dependencies": []
+}

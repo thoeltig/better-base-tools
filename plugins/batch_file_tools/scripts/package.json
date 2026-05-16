@@ -1,6 +1,6 @@
 {
   "name": "batch-tools-mcp-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "license": "MIT",
   "author": "Thore Höltig",
   "description": "Batch-capable Read/Edit MCP server: fewer round-trips, explicit error hints.",

@@ -2,7 +2,7 @@
   "mcpServers": {
     "batch_file_tools": {
       "command": "node",
-      "args": ["./plugins/batch_file_tools/dist/index.js"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/dist/index.js"]
     }
   }
 }

@@ -1,0 +1,17 @@
+{
+  "name": "better-base-tools",
+  "owner": {
+    "name": "Thore Höltig",
+    "url": "https://github.com/thoeltig"
+  },
+  "metadata": {
+    "description": "More efficient base tools to reduce turns, duplicate tool calls and reduce tokens.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "batch_file_tools",
+      "source": "./plugins/batch_file_tools"
+    }
+  ]
+}
