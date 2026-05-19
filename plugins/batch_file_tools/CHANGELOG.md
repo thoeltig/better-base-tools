@@ -4,6 +4,13 @@ All notable changes to batch_file_tools are documented here.
 Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+
+## [1.0.1] - 2026-05-19
+
+### Changed
+
+- Simpler read tool description with more use case examples.
+
 ## [1.0.0] - 2026-05-15
 
 ### Added
