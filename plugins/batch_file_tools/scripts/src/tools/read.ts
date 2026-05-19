@@ -1,7 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { readFileUtf8, isPathAllowed, realpathOfNearestExisting } from "../lib/fs.js";
-import { expandToFiles, looksLikeGlob, needsExpansion } from "../lib/glob.js";
+import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
 import { extractRefs } from "../lib/extract-refs.js";
 import type { ReadInput, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
@@ -33,15 +33,12 @@ async function expandReadRequests(
   const entries: PlanEntry[] = [];
 
   for (const req of requests) {
+    if (!isAbsolute(req.path)) req.path = resolve(req.path);
     if (!(await needsExpansion(req.path))) {
       entries.push({ kind: "ok", req });
       continue;
     }
 
-    if (looksLikeGlob(req.path) && !isAbsolute(req.path)) {
-      entries.push({ kind: "err", result: errResult(req, "not_absolute", `Path must be absolute: ${req.path}`) });
-      continue;
-    }
 
     let candidates: string[];
     try {
@@ -86,9 +83,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
 async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<ReadResult> {
   // fileinfo / fileinfo_refs: stat without full content processing
   if (req.mode === "fileinfo") {
-    if (!isAbsolute(req.path)) {
-      return errResult(req, "not_absolute", `Path must be absolute: ${req.path}`);
-    }
+    if (!isAbsolute(req.path)) req.path = resolve(req.path);
     try {
       const authPath = await realpathOfNearestExisting(resolve(req.path));
       if (!isPathAllowed(authPath, allowedDirectories)) {
@@ -99,7 +94,12 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       const raw = s.isFile() ? await readFile(resolved, "utf8") : "";
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
       const baseInfo = { size: s.size, lines: lineCount, mtime: new Date(s.mtimeMs).toISOString(), isFile: s.isFile() };
-      const refs = extractRefs(raw);
+      const fileDir = dirname(resolved);
+      const refs = extractRefs(raw).map(ref => {
+        const abs = resolve(fileDir, ref);
+        const rel = relative(process.cwd(), abs);
+        return rel.startsWith("..") || isAbsolute(rel) ? abs : rel;
+      });
       const info = refs.length > 0 ? { ...baseInfo, refs } : baseInfo;
       return {
         path: req.path,

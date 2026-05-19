@@ -5,6 +5,18 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.0] - 2026-05-19
+
+### Added
+
+- Accept relative paths in `path` fields for both `batch_read` and `batch_edit` — relative paths (including `./`, `../`, `~/`) resolve against the working directory at each validation site before the allow-list check; globs and directories follow the same rule
+- Shorten output paths in all comment headers — paths within the working directory are rendered as relative; paths outside are kept absolute
+- Resolve `refs[]` in `fileinfo` mode to working-directory-relative paths — raw import strings (e.g. `../types.js`) are resolved against the containing file's directory and shortened to cwd-relative (e.g. `src/types.js`); paths outside the working directory are kept absolute
+
+### Changed
+
+- Updated `path` field descriptions in both tool schemas to document relative path support
+
 ## [1.0.1] - 2026-05-19
 
 ### Changed

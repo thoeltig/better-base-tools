@@ -1,6 +1,6 @@
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleBatchRead } from "../src/tools/read.js";
 import type { ReadInput } from "../src/types.js";
@@ -109,11 +109,11 @@ describe("handleBatchRead", () => {
     expect(r.returned_lines).toBe(1);
   });
 
-  it("rejects non-absolute paths", async () => {
+  it("relative paths resolve from cwd, not_authorized when outside allowed dirs", async () => {
     const out = await read({
       requests: [{ path: "relative/path.txt", mode: "verbatim_numbered" }],
     });
-    expect(out.results[0]!.error?.reason).toBe("not_absolute");
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
 
   it("fileinfo returns size, line count, ISO mtime and no ctimeMs", async () => {
@@ -143,8 +143,8 @@ describe("handleBatchRead", () => {
     expect(typeof info.mtime).toBe("string");
     expect(info.isFile).toBe(true);
     expect(Array.isArray(info.refs)).toBe(true);
-    expect(info.refs).toContain("./foo.js");
-    expect(info.refs).toContain("../bar.js");
+    expect(info.refs).toContain(join(workDir, "foo.js"));
+    expect(info.refs).toContain(resolve(workDir, "../bar.js"));
     expect(info.refs).not.toContain("react");
   });
 

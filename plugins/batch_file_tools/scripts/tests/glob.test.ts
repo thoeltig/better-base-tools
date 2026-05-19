@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { handleBatchEdit } from "../src/tools/edit.js";
 import type { EditFile } from "../src/types.js";
@@ -192,12 +192,15 @@ describe("glob expansion — match outcomes", () => {
     expect(await readFile(join(outsideDir, "secret.txt"), "utf8")).toBe("foo\n");
   });
 
-  it("relative glob path errors as not_absolute", async () => {
+  it("relative glob path resolves from cwd and matches files within allowed dirs", async () => {
+    await makeFiles(caseDir, { "a.txt": "hello\n" });
+    const relGlob = relative(process.cwd(), join(caseDir, "*.txt"));
     const out = await runEdit({
-      path: "*.txt",
-      ops: [{ type: "replace_all", old: "a", new: "b" }],
+      path: relGlob,
+      ops: [{ type: "replace_all", old: "hello", new: "world" }],
     });
-    expect(out.results[0]!.error?.reason).toBe("not_absolute");
+    expect(out.results[0]!.status).toBe("ok");
+    expect(await readFile(join(caseDir, "a.txt"), "utf8")).toBe("world\n");
   });
 });
 

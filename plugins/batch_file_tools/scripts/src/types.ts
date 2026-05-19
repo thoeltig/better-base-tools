@@ -31,7 +31,7 @@ export type FileError = z.infer<typeof FileError>;
 
 export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
-      .describe("Absolute file path, directory, or glob pattern (glob/folder supported for all modes)"),
+      .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
     mode: ReadMode
       .describe("'compact'=DEFAULT (single-line collapsed, strips indent, consecutive whitespace and new lines — cheapest read for information retrieval). 'verbatim'= no line numbers — use as readable anchor. 'verbatim_numbered'= line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'= file metadata (size, lines, ISO mtime, isFile) plus refs[] which contains related and mentioned files — use to map file dependencies before exploring."),
     offset: z.number().int().min(1).optional()
@@ -150,7 +150,7 @@ export type EditOp = z.infer<typeof EditOp>;
 
 export const EditFile = z.object({
     path: z.string().min(1).max(260)
-      .describe("Absolute path. For `replace`/`replace_all`/`write(append)` ops: also accepts a glob pattern (`*` matches within one path segment; `**` recurses across segments — e.g. `C:/proj/**/*.ts`) or a directory path (single level — use an explicit `**` glob for recursive walks). Other ops require a concrete absolute file path."),
+      .describe("Absolute or relative path (relative resolves from working directory). For `replace`/`replace_all`/`write(append)` ops: also accepts a glob pattern (`*` matches within one path segment; `**` recurses across segments — e.g. `proj/**/*.ts`) or a directory path (single level — use an explicit `**` glob for recursive walks). Other ops require a concrete file path."),
     stopOnError: z.boolean().optional(),
     ops: z.array(EditOp).min(1)
       .describe("Discriminated by 'type': replace {old,new} | replace_all {old,new} | insert_at_line {line,content} | replace_range {start,end,content} | write {mode,content}. Use replace with new='' to delete matched text. Each op accepts an optional `stopOnError` boolean."),

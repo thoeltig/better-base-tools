@@ -1,5 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { dirname, isAbsolute } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { EditInput, ReadInput } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
@@ -27,7 +27,7 @@ const sessionAllowedEditPaths: string[] = [];
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.0.1",
+    version: "1.1.0",
   },
   {
     capabilities: {
@@ -90,7 +90,7 @@ server.registerTool(
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
         if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
-        return { path: r.path, detail: parts.join(", ") };
+        return { path: isAbsolute(r.path) ? r.path : resolve(r.path), detail: parts.join(", ") };
       });
       const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read");
       const effectiveAllowed = sessionAllowed.length > 0
@@ -137,7 +137,7 @@ server.registerTool(
       writeMcpLogLine("info", `batch_edit — ${parsed.files.length} file(s), ${totalOps} op(s)`, "batch_edit");
       const allowedDirectories = getAllowedDirectoriesToUse("edit");
       const pathInfos = parsed.files.map(f => ({
-        path: f.path,
+        path: isAbsolute(f.path) ? f.path : resolve(f.path),
         detail: `ops: ${[...new Set(f.ops.map(o => o.type))].join(", ")}`,
       }));
       const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_edit", "edit");

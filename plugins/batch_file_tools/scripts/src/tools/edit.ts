@@ -1,8 +1,8 @@
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
 import { isPathAllowed } from "../lib/fs.js";
-import { expandToFiles, looksLikeGlob, needsExpansion } from "../lib/glob.js";
+import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
 import type {
   EditFile,
@@ -108,6 +108,7 @@ async function planEntries(
   };
 
   for (const file of files) {
+    if (!isAbsolute(file.path)) file.path = resolve(file.path);
     if (!(await needsExpansion(file.path))) {
       merge(file);
       continue;
@@ -128,13 +129,6 @@ async function planEntries(
       continue;
     }
 
-    if (looksLikeGlob(file.path) && !isAbsolute(file.path)) {
-      entries.push({
-        kind: "error",
-        result: buildGlobError(file, "not_absolute", `Path must be absolute: ${file.path}`),
-      });
-      continue;
-    }
 
     let candidates: string[];
     try {

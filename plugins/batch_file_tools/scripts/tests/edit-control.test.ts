@@ -230,7 +230,7 @@ describe("output: non-ok ops only", () => {
     });
     const fr = out.results[0]!;
     expect(fr.status).toBe("error");
-    expect(fr.error?.reason).toBe("not_absolute");
+    expect(fr.error?.reason).toBe("not_authorized");
   });
 });
 

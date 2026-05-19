@@ -115,10 +115,7 @@ async function guardPath(
   allowedDirectories: readonly string[],
   options: GuardOptions,
 ): Promise<GuardResult> {
-  const expanded = expandHome(inputPath);
-  if (!isAbsolute(expanded)) {
-    return { ok: false, reason: "not_absolute", message: `Path must be absolute: ${inputPath}` };
-  }
+  const expanded = resolve(expandHome(inputPath));
   if (allowedDirectories.length === 0) {
     return {
       ok: false,
