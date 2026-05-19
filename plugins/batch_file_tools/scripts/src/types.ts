@@ -33,7 +33,7 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
     mode: ReadMode
-      .describe("'compact'=DEFAULT (single-line collapsed, strips indent, consecutive whitespace and new lines — cheapest read for information retrieval). 'verbatim'= no line numbers — use as readable anchor. 'verbatim_numbered'= line-numbered (format: '{line}\\t{content}') — use for edit anchors (insert_at_line, replace_range) or with searchTerm for absolute line positions. 'fileinfo'= file metadata (size, lines, ISO mtime, isFile) plus refs[] which contains related and mentioned files — use to map file dependencies before exploring."),
+      .describe("'compact'=DEFAULT (strips indent and consecutive whitespace — cheapest read; +count slices N compacted lines) — replace/replace_all also works via fuzzy whitespace matching, but verbatim anchors are more reliable. 'verbatim'= content as-is, no line numbers — anchor for replace/replace_all ops. 'verbatim_numbered'= line-numbered ('{line}\\t{content}') — use with searchTerm to target a section; returned line numbers are anchors for replace_range/insert_at_line ops. 'fileinfo'= metadata (size, lines, mtime, isFile) plus refs[] of resolved file references — use before reading content."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
     count: z.number().int().min(1).optional()

@@ -5,6 +5,15 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.1] - 2026-05-19
+
+### Changed
+
+- Rewrote `batch_read` tool description: added explicit mode→op pairing table (`verbatim_numbered→replace_range/insert_at_line`, `verbatim→replace/replace_all`, `compact→replace/replace_all` via fuzzy match), restructured use cases as an exploration cascade (fileinfo→compact→verbatim_numbered+searchTerm→edit), clarified `compact+count` as an N-line slice, removed contradictory closing note
+- Rewrote `batch_edit` tool description: added upfront op-selection rule linking read mode to edit op choice before the use cases
+- Updated `ReadRequest.mode` field description in schema to carry the same mode→op coupling
+- Reduced `CLAUDE.md` to two essential points: tool preference override and bundle/plan-ahead principle; removed mode/op detail now covered in tool descriptions
+
 ## [1.1.0] - 2026-05-19
 
 ### Added
