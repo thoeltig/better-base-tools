@@ -5,6 +5,16 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.2] - 2026-05-20
+
+### Fixed
+
+- Fix duplicate elicitation for session-approved paths — `elicitPaths` now checks the session allow list before prompting; paths already approved in the current session are accepted immediately without re-eliciting
+
+### Changed
+
+- Add `_meta` with `anthropic/maxResultSizeChars: 500000` and `anthropic/alwaysLoad: true` to both `batch_read` and `batch_edit` tool registrations — raises the result size cap because harness side configuration alone resulted in errors and ensures both tools are always loaded by the harness
+
 ## [1.1.1] - 2026-05-19
 
 ### Changed
