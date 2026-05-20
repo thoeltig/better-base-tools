@@ -5,6 +5,17 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.3] - 2026-05-20
+
+### Changed
+
+- Enforce `verbatim_numbered` restriction via schema validation — requires `searchTerm`, `offset`, or `count`; full-file reads without these return a validation error directing the model to use `compact` or `verbatim` instead
+- Rewrite mode descriptions in `batch_read` tool and `ReadRequest.mode` field — remove "verbatim anchors are more reliable" bias; position `compact` as the correct default for full-file reads, `verbatim` for exact-whitespace full-file reads, `verbatim_numbered` as targeted-slice only
+- Update Mode→op pairing in both tools: `compact`/`verbatim` → `replace`/`replace_all`; `verbatim_numbered+searchTerm/offset` → `replace_range`/`insert_at_line`
+- Update `batch_read` use-case cascade: `compact` at position 2 (full-file, lowest cost), `verbatim` at 3 (full-file, exact whitespace), `verbatim_numbered` at 4 (targeted slice only)
+- Update `batch_edit` use cases to distinguish full-file edits (compact/verbatim → replace) from targeted edits (verbatim_numbered → replace_range/insert_at_line)
+- Clarify `disableNormalizedFormatting`: only set true when indentation itself is being edited (indent-style fixes, tab-to-space); leave false for all other reads
+
 ## [1.1.2] - 2026-05-20
 
 ### Fixed
@@ -182,6 +193,11 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.1.3]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.3
+[1.1.2]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.2
+[1.1.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.1
+[1.1.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.0
+[1.0.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.0.1
 [1.0.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.0.0
 [0.9.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.9.0
 [0.8.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.8.0
