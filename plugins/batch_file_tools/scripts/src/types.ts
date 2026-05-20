@@ -43,7 +43,16 @@ export const ReadRequest = z.object({
     disableNormalizedFormatting: z.boolean().optional()
       .describe("Set true to return original file indentation unchanged (verbatim / verbatim_numbered only). Default false — reads normalize to 2 spaces per indent level to reduce token usage."),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.mode === "verbatim_numbered" && !val.searchTerm && !val.offset && !val.count) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "verbatim_numbered requires searchTerm, offset, or count — use compact or verbatim for full-file reads",
+        path: ["mode"],
+      });
+    }
+  });
 export type ReadRequest = z.infer<typeof ReadRequest>;
 
 export const ReadInput = z.object({
