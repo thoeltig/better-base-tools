@@ -255,6 +255,12 @@ async function elicitPaths(
   const acceptedPaths: string[] = [];
 
   for (const p of unauthorized) {
+    if (isPathAllowed(p, sessionList)) {
+      writeMcpLogLine("info", `elicit skip (session-allowed) — ${p}`, "elicit");
+      acceptedPaths.push(p);
+      continue;
+    }
+
     const info = pathInfos.find(pi => pi.path === p);
     const detail = info?.detail ?? "";
     const folder = dirname(p);
