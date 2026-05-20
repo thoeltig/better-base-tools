@@ -80,6 +80,10 @@ server.registerTool(
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false
+    },
+    _meta:{
+      "anthropic/maxResultSizeChars": 500000,
+      "anthropic/alwaysLoad": true
     }
   },
   async (param, extra) => {
@@ -128,6 +132,10 @@ server.registerTool(
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false
+    },
+    _meta:{
+      "anthropic/maxResultSizeChars": 500000,
+      "anthropic/alwaysLoad": true
     }
   },
   async (param, extra) => {
