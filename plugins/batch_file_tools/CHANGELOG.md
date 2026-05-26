@@ -5,6 +5,13 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.4] - 2026-05-26
+
+### Added
+
+- Deduplicate `batch_read` requests within a single call — after glob expansion, requests for the same file are collapsed: `fileinfo` to one entry; search requests by `(searchTerm, count, disableNorm)` with mode coalescion (same→same, mixed→`verbatim`); range/full-file requests by `(disableNorm)` with mode coalescion and overlapping/adjacent range merging. Single-source entries pass through unchanged; multi-source merges produce the coalesced result. `verbatim_numbered` merged to a full-file range downgrades to `verbatim`.
+- Normalize all request paths via `resolve()` in `expandReadRequests` — previously only relative paths were resolved, causing glob-expanded and explicitly specified paths to the same file to not deduplicate on Windows due to separator differences
+
 ## [1.1.3] - 2026-05-20
 
 ### Changed
@@ -193,6 +200,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.1.4]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.4
 [1.1.3]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.3
 [1.1.2]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.2
 [1.1.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.1
