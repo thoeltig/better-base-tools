@@ -166,6 +166,14 @@ describe("handleBatchRead", () => {
     expect(r.content).toContain("<!-- Match at line 3 -->");
   });
 
+  it("search: multiple matches on the same line returns that line once", async () => {
+    const p = await fixture("same-line.ts", "foo foo foo\nbar\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content.match(/<!-- Match at line/g)).toHaveLength(1);
+  });
+
   it("search: no match returns match_count=0 and empty content", async () => {
     const p = await fixture("no-match.ts", "const x = 1;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "zzznomatch" }] });
@@ -268,5 +276,202 @@ describe("handleBatchRead", () => {
       expect(r.mode_applied).toBe("fileinfo");
       expect(JSON.parse(r.content).isFile).toBe(true);
     }
+  });
+});
+
+describe("deduplication", () => {
+  it("fileinfo: duplicate requests collapse to one result", async () => {
+    const p = await fixture("dedup_fi.ts", "x\n");
+    const out = await read({ requests: [{ path: p, mode: "fileinfo" }, { path: p, mode: "fileinfo" }] });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.mode_applied).toBe("fileinfo");
+  });
+
+  it("search: identical requests collapse to one result", async () => {
+    const p = await fixture("dedup_search_dup.ts", "foo\nbar\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.match_count).toBe(1);
+  });
+
+  it("search: same file different searchTerm keeps both", async () => {
+    const p = await fixture("dedup_search_terms.ts", "foo\nbar\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+        { path: p, mode: "verbatim", searchTerm: "bar" },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+  });
+
+  it("search: same file same searchTerm different mode coalesces to verbatim", async () => {
+    const p = await fixture("dedup_search_mode.ts", "foo\nbar\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+        { path: p, mode: "compact", searchTerm: "foo" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.mode_applied).toBe("verbatim");
+    expect(out.results[0]!.match_count).toBe(1);
+  });
+
+  it("range: duplicate full-file requests collapse to one", async () => {
+    const p = await fixture("dedup_range_full.ts", "L1\nL2\nL3\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "compact" },
+        { path: p, mode: "compact" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+  });
+
+  it("range: full-file subsumes partial slice", async () => {
+    const p = await fixture("dedup_range_subsume.ts", "L1\nL2\nL3\nL4\nL5\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim" },
+        { path: p, mode: "verbatim", offset: 2, count: 2 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.returned_lines).toBe(5);
+  });
+
+  it("range: overlapping slices merge to union range", async () => {
+    const p = await fixture("dedup_range_overlap.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim_numbered", offset: 1, count: 6 },
+        { path: p, mode: "verbatim_numbered", offset: 4, count: 6 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.returned_lines).toBe(9);
+    expect(out.results[0]!.content).toContain("1\tL1");
+    expect(out.results[0]!.content).toContain("9\tL9");
+  });
+
+  it("range: adjacent slices merge", async () => {
+    const p = await fixture("dedup_range_adj.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim_numbered", offset: 1, count: 4 },
+        { path: p, mode: "verbatim_numbered", offset: 5, count: 4 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.returned_lines).toBe(8);
+  });
+
+  it("range: non-overlapping slices stay separate", async () => {
+    const p = await fixture("dedup_range_sep.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim_numbered", offset: 1, count: 3 },
+        { path: p, mode: "verbatim_numbered", offset: 7, count: 3 },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+    expect(out.results[0]!.returned_lines).toBe(3);
+    expect(out.results[1]!.returned_lines).toBe(3);
+  });
+
+  it("mode: mixed compact+verbatim coalesces to verbatim", async () => {
+    const p = await fixture("dedup_mode_mix.ts", "const   a = 1;\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "compact" },
+        { path: p, mode: "verbatim" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.mode_applied).toBe("verbatim");
+    expect(out.results[0]!.content).toBe("const   a = 1;\n");
+  });
+
+  it("mode: verbatim_numbered slices with no overlap stay verbatim_numbered", async () => {
+    const p = await fixture("dedup_mode_vn.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim_numbered", offset: 1, count: 3 },
+        { path: p, mode: "verbatim_numbered", offset: 7, count: 3 },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+    expect(out.results[0]!.mode_applied).toBe("verbatim_numbered");
+    expect(out.results[1]!.mode_applied).toBe("verbatim_numbered");
+  });
+
+  it("mode: verbatim_numbered merged to full-file downgrades to verbatim", async () => {
+    const p = await fixture("dedup_mode_vn_full.ts", "L1\nL2\nL3\nL4\nL5\n");
+    // offset:3 with no count = [3, Infinity]; offset:1,count:4 = [1,4]; merged = [1, Infinity]
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim_numbered", offset: 1, count: 4 },
+        { path: p, mode: "verbatim_numbered", offset: 3 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.mode_applied).toBe("verbatim");
+    expect(out.results[0]!.returned_lines).toBe(5);
+    expect(out.results[0]!.content).not.toContain("1\t");
+  });
+
+  it("glob + explicit: same resolved path deduplicates", async () => {
+    const p = await fixture("dedup_glob_explicit.ts", "hello\n");
+    const out = await read({
+      requests: [
+        { path: `${workDir}/dedup_glob_explicit.ts`, mode: "verbatim" },
+        { path: p, mode: "verbatim" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+  });
+
+  it("disableNormalizedFormatting: different values produce separate results", async () => {
+    const p = await fixture("dedup_norm.ts", "  const a = 1;\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "compact" },
+        { path: p, mode: "compact", disableNormalizedFormatting: true },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+  });
+
+  it("different files: not merged", async () => {
+    const a = await fixture("dedup_diff_a.ts", "A\n");
+    const b = await fixture("dedup_diff_b.ts", "B\n");
+    const out = await read({
+      requests: [
+        { path: a, mode: "verbatim" },
+        { path: b, mode: "verbatim" },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+  });
+
+  it("errors pass through alongside deduped ok results", async () => {
+    const p = await fixture("dedup_err_ok.ts", "hi\n");
+    const missing = join(workDir, "dedup_missing.ts");
+    const out = await read({
+      requests: [
+        { path: missing, mode: "verbatim" },
+        { path: p, mode: "verbatim" },
+        { path: p, mode: "verbatim" },
+      ],
+    });
+    expect(out.results).toHaveLength(2);
+    expect(out.results.filter(r => r.error?.reason === "not_found")).toHaveLength(1);
+    expect(out.results.filter(r => !r.error)).toHaveLength(1);
   });
 });

@@ -4,7 +4,7 @@ import { readFileUtf8, isPathAllowed, realpathOfNearestExisting } from "../lib/f
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
 import { extractRefs } from "../lib/extract-refs.js";
-import type { ReadInput, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
+import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
 
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
 
@@ -13,7 +13,8 @@ export async function handleBatchRead(
   allowedDirectories: string[],
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
-  const plan = await expandReadRequests(input.requests, allowedDirectories);
+  const expanded = await expandReadRequests(input.requests, allowedDirectories);
+  const plan = deduplicateEntries(expanded);
   const total = plan.length;
   let done = 0;
   const results = await Promise.all(
@@ -26,6 +27,107 @@ export async function handleBatchRead(
   return { results };
 }
 
+function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
+  const result: PlanEntry[] = [];
+  const pathOrder: string[] = [];
+  const byPath = new Map<string, ReadRequest[]>();
+
+  for (const entry of entries) {
+    if (entry.kind === "err") {
+      result.push(entry);
+      continue;
+    }
+    if (!byPath.has(entry.req.path)) {
+      pathOrder.push(entry.req.path);
+      byPath.set(entry.req.path, []);
+    }
+    byPath.get(entry.req.path)!.push(entry.req);
+  }
+
+  for (const path of pathOrder) {
+    result.push(...deduplicatePath(path, byPath.get(path)!));
+  }
+
+  return result;
+}
+
+function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
+  const result: PlanEntry[] = [];
+
+  // fileinfo: collapse all to one
+  if (reqs.some(r => r.mode === "fileinfo")) {
+    result.push({ kind: "ok", req: { path, mode: "fileinfo" } });
+  }
+
+  // search: group by (searchTerm, count, disableNorm), coalesce mode (same→same, mixed→verbatim)
+  const searchGroups = new Map<string, ReadRequest[]>();
+  for (const req of reqs) {
+    if (req.searchTerm === undefined) continue;
+    const key = `${req.searchTerm}|${req.count ?? ""}|${req.disableNormalizedFormatting ?? ""}`;
+    if (!searchGroups.has(key)) searchGroups.set(key, []);
+    searchGroups.get(key)!.push(req);
+  }
+  for (const group of searchGroups.values()) {
+    const modes = new Set(group.map(r => r.mode));
+    const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
+    result.push({ kind: "ok", req: { ...group[0]!, mode: coalescedMode } });
+  }
+
+  // range/full: group by disableNorm, coalesce mode, merge overlapping ranges
+  const rangeReqs = reqs.filter(r => r.mode !== "fileinfo" && r.searchTerm === undefined);
+  if (rangeReqs.length === 0) return result;
+
+  const normGroups = new Map<boolean, ReadRequest[]>();
+  for (const req of rangeReqs) {
+    const dn = req.disableNormalizedFormatting ?? false;
+    if (!normGroups.has(dn)) normGroups.set(dn, []);
+    normGroups.get(dn)!.push(req);
+  }
+
+  for (const [disableNorm, group] of normGroups) {
+    const modes = new Set(group.map(r => r.mode));
+    const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
+
+    type RangeEntry = { start: number; end: number; sources: number; originalReq: ReadRequest | undefined };
+    const ranges: RangeEntry[] = group.map(req => ({
+      start: req.offset ?? 1,
+      end: req.count !== undefined ? (req.offset ?? 1) + req.count - 1 : Infinity,
+      sources: 1,
+      originalReq: req,
+    }));
+    ranges.sort((a, b) => a.start - b.start);
+
+    const merged: RangeEntry[] = [];
+    for (const r of ranges) {
+      const last = merged.at(-1);
+      if (!last || (last.end !== Infinity && r.start > last.end + 1)) {
+        merged.push({ ...r });
+      } else {
+        last.sources += r.sources;
+        last.originalReq = undefined;
+        last.end = last.end === Infinity || r.end === Infinity ? Infinity : Math.max(last.end, r.end);
+      }
+    }
+
+    for (const range of merged) {
+      // Single source with no merging: pass through the original request unchanged
+      if (range.sources === 1 && range.originalReq) {
+        result.push({ kind: "ok", req: range.originalReq });
+        continue;
+      }
+      const isFullFile = range.start === 1 && range.end === Infinity;
+      const finalMode = isFullFile && coalescedMode === "verbatim_numbered" ? "verbatim" : coalescedMode;
+      const req: ReadRequest = { path, mode: finalMode };
+      if (range.start > 1) req.offset = range.start;
+      if (range.end !== Infinity) req.count = range.end - range.start + 1;
+      if (disableNorm) req.disableNormalizedFormatting = true;
+      result.push({ kind: "ok", req });
+    }
+  }
+
+  return result;
+}
+
 async function expandReadRequests(
   requests: readonly ReadRequest[],
   allowedDirs: readonly string[],
@@ -33,7 +135,7 @@ async function expandReadRequests(
   const entries: PlanEntry[] = [];
 
   for (const req of requests) {
-    if (!isAbsolute(req.path)) req.path = resolve(req.path);
+    req.path = resolve(req.path);
     if (!(await needsExpansion(req.path))) {
       entries.push({ kind: "ok", req });
       continue;
