@@ -1,6 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { readFileUtf8, isPathAllowed, realpathOfNearestExisting } from "../lib/fs.js";
+import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
 import { extractRefs } from "../lib/extract-refs.js";
@@ -15,16 +16,31 @@ export async function handleBatchRead(
 ): Promise<ReadOutput> {
   const expanded = await expandReadRequests(input.requests, allowedDirectories);
   const plan = await deduplicateEntries(expanded);
+  const fileCache = await buildFileCache(plan, allowedDirectories);
   const total = plan.length;
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache);
       await onProgress?.(++done, total);
       return result;
     })
   );
   return { results };
+}
+
+type FileCache = Map<string, ReadFileResult | ReadFileError>;
+
+async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[]): Promise<FileCache> {
+  const paths = new Set<string>();
+  for (const entry of plan) {
+    if (entry.kind === "ok") paths.add(entry.req.path);
+  }
+  const cache: FileCache = new Map();
+  await Promise.all(
+    [...paths].map(async p => { cache.set(p, await readFileUtf8(p, allowedDirectories)); })
+  );
+  return cache;
 }
 
 async function safeRealpath(p: string): Promise<string> {
@@ -196,7 +212,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<ReadResult> {
+async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache): Promise<ReadResult> {
   // fileinfo / fileinfo_refs: stat without full content processing
   if (req.mode === "fileinfo") {
     if (!isAbsolute(req.path)) req.path = resolve(req.path);
@@ -207,7 +223,8 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
       }
       const resolved = await realpath(req.path);
       const s = await stat(resolved);
-      const raw = s.isFile() ? await readFile(resolved, "utf8") : "";
+      const cachedFile = fileCache.get(req.path);
+      const raw = cachedFile?.ok ? cachedFile.content : (s.isFile() ? await readFile(resolved, "utf8") : "");
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
       const baseInfo = { size: s.size, lines: lineCount, mtime: new Date(s.mtimeMs).toISOString(), isFile: s.isFile() };
       const fileDir = dirname(resolved);
@@ -232,7 +249,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[]): Promise<
     }
   }
 
-  const file = await readFileUtf8(req.path, allowedDirectories);
+  const file = fileCache.get(req.path) ?? await readFileUtf8(req.path, allowedDirectories);
   if (!file.ok) {
     return errResult(req, file.reason, file.message);
   }
