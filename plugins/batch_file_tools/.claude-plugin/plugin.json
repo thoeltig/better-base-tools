@@ -1,7 +1,7 @@
 {
   "name": "batch_file_tools",
   "description": "Batch file I/O for Claude Code — read N files and run M edits per call, cutting tool calls and context overhead by ~50–60%.",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "author": {
     "name": "Thore Höltig",
     "url": "https://github.com/thoeltig"

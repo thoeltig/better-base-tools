@@ -27,7 +27,7 @@ const sessionAllowedEditPaths: string[] = [];
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.1.4",
+    version: "1.1.5",
   },
   {
     capabilities: {

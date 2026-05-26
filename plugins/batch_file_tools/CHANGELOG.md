@@ -5,6 +5,13 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.5] - 2026-05-27
+
+### Added
+
+- Path normalisation via `safeRealpath(resolve(...))` applied at entry in `batch_read` and in `batch_edit` (direct and glob-expanded paths) — uses `realpath()` to produce OS-canonical paths, falling back to `resolve()` for non-existent files; fixes symlink and case-insensitive deduplication
+- `batch_read` per-call file content cache — all unique paths (including `fileinfo`) are read once before result processing; `fileinfo` still calls `stat` for metadata but pulls content from cache; eliminates redundant I/O calls
+
 ## [1.1.4] - 2026-05-26
 
 ### Added
@@ -200,6 +207,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.1.5]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.5
 [1.1.4]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.4
 [1.1.3]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.3
 [1.1.2]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.2
