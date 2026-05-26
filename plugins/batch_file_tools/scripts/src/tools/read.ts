@@ -14,7 +14,7 @@ export async function handleBatchRead(
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
   const expanded = await expandReadRequests(input.requests, allowedDirectories);
-  const plan = deduplicateEntries(expanded);
+  const plan = await deduplicateEntries(expanded);
   const total = plan.length;
   let done = 0;
   const results = await Promise.all(
@@ -27,7 +27,21 @@ export async function handleBatchRead(
   return { results };
 }
 
-function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
+async function safeRealpath(p: string): Promise<string> {
+  try {
+    return await realpath(p);
+  } catch {
+    return p;
+  }
+}
+
+async function deduplicateEntries(entries: PlanEntry[]): Promise<PlanEntry[]> {
+  await Promise.all(
+    entries.map(async entry => {
+      if (entry.kind === "ok") entry.req.path = await safeRealpath(entry.req.path);
+    })
+  );
+
   const result: PlanEntry[] = [];
   const pathOrder: string[] = [];
   const byPath = new Map<string, ReadRequest[]>();

@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -424,6 +424,24 @@ describe("deduplication", () => {
     expect(out.results[0]!.mode_applied).toBe("verbatim");
     expect(out.results[0]!.returned_lines).toBe(5);
     expect(out.results[0]!.content).not.toContain("1\t");
+  });
+
+  it("same file via symlink deduplicates", async () => {
+    const p = await fixture("symlink_target.ts", "hello\n");
+    const link = join(workDir, "symlink_link.ts");
+    try {
+      await symlink(p, link);
+    } catch {
+      return; // symlink creation not supported on this platform/config
+    }
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim" },
+        { path: link, mode: "verbatim" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.content).toBe("hello\n");
   });
 
   it("glob + explicit: same resolved path deduplicates", async () => {
