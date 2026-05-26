@@ -1,7 +1,7 @@
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
-import { isPathAllowed } from "../lib/fs.js";
+import { isPathAllowed, safeRealpath } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
 import type {
@@ -96,7 +96,7 @@ async function planEntries(
   const byPath = new Map<string, EditFile>();
 
   const merge = (file: EditFile): void => {
-    const key = dedupeKey(file.path);
+    const key = file.path;
     const existing = byPath.get(key);
     if (existing) {
       existing.ops.push(...file.ops);
@@ -108,7 +108,7 @@ async function planEntries(
   };
 
   for (const file of files) {
-    if (!isAbsolute(file.path)) file.path = resolve(file.path);
+    file.path = await safeRealpath(resolve(file.path));
     if (!(await needsExpansion(file.path))) {
       merge(file);
       continue;
@@ -164,7 +164,7 @@ async function planEntries(
     }
 
     for (const resolvedPath of allowed) {
-      merge({ ...file, path: resolvedPath });
+      merge({ ...file, path: await safeRealpath(resolvedPath) });
     }
   }
 
@@ -175,11 +175,6 @@ function isGlobAllowedOp(op: EditOp): boolean {
   if (op.type === "replace" || op.type === "replace_all") return true;
   if (op.type === "write" && op.mode === "append") return true;
   return false;
-}
-
-function dedupeKey(p: string): string {
-  const slashed = p.replace(/\\/g, "/");
-  return process.platform === "win32" ? slashed.toLowerCase() : slashed;
 }
 
 function buildGlobError(file: EditFile, reason: Reason, message: string): FileResult {

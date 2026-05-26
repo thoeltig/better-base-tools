@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { readFileUtf8, isPathAllowed, realpathOfNearestExisting } from "../lib/fs.js";
+import { readFileUtf8, isPathAllowed, realpathOfNearestExisting, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
@@ -15,7 +15,7 @@ export async function handleBatchRead(
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
   const expanded = await expandReadRequests(input.requests, allowedDirectories);
-  const plan = await deduplicateEntries(expanded);
+  const plan = deduplicateEntries(expanded);
   const fileCache = await buildFileCache(plan, allowedDirectories);
   const total = plan.length;
   let done = 0;
@@ -43,21 +43,7 @@ async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[]): 
   return cache;
 }
 
-async function safeRealpath(p: string): Promise<string> {
-  try {
-    return await realpath(p);
-  } catch {
-    return p;
-  }
-}
-
-async function deduplicateEntries(entries: PlanEntry[]): Promise<PlanEntry[]> {
-  await Promise.all(
-    entries.map(async entry => {
-      if (entry.kind === "ok") entry.req.path = await safeRealpath(entry.req.path);
-    })
-  );
-
+function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
   const pathOrder: string[] = [];
   const byPath = new Map<string, ReadRequest[]>();
@@ -165,7 +151,7 @@ async function expandReadRequests(
   const entries: PlanEntry[] = [];
 
   for (const req of requests) {
-    req.path = resolve(req.path);
+    req.path = await safeRealpath(resolve(req.path));
     if (!(await needsExpansion(req.path))) {
       entries.push({ kind: "ok", req });
       continue;
@@ -193,7 +179,7 @@ async function expandReadRequests(
     }
 
     for (const resolvedPath of allowed) {
-      entries.push({ kind: "ok", req: { ...req, path: resolvedPath } });
+      entries.push({ kind: "ok", req: { ...req, path: await safeRealpath(resolvedPath) } });
     }
   }
 

@@ -18,6 +18,14 @@ export interface ReadFileError {
   readonly message: string;
 }
 
+export async function safeRealpath(p: string): Promise<string> {
+  try {
+    return await realpath(p);
+  } catch {
+    return p;
+  }
+}
+
 export async function readFileUtf8(
   inputPath: string,
   allowedDirectories: readonly string[],
