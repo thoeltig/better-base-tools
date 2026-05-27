@@ -10,7 +10,7 @@ import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries, mergeSamplingResults } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
-import { buildSamplingBatches, runSamplingBackground, SamplingServer } from './lib/sampler.js';
+import { buildSamplingBatches, runSamplingBackground, writeBatchFiles, SamplingServer } from './lib/sampler.js';
 import {
   FORMAT_GROUPED,
   GroupedScoredFileSummary,
@@ -32,6 +32,13 @@ const LOCK_FILE = 'summaries.lock';
 const LOCK_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 let isScanning = false;
+
+// MCP harnesses like Claude Code do not support sampling or logging via the MCP protocol.
+// Sampling is replaced by a subagent workaround and logging falls back to console.error for errors only.
+// Both are disabled by default so the server works out of the box in any harness.
+// Enable only when the harness is known to support the respective MCP capability.
+const USE_MCP_SAMPLING = process.env['MCP_SAMPLING'] === 'true' || process.argv.includes('--mcp-sampling');
+const USE_MCP_LOGGING = process.env['MCP_LOGGING'] === 'true' || process.argv.includes('--mcp-logging');
 let activeLockPath: string | null = null;
 
 const shutdownController = new AbortController();
@@ -70,6 +77,15 @@ function releaseLock(): void {
   activeLockPath = null;
 }
 
+async function acquireSubmitLock(knowledgeDir: string, timeoutMs = 30_000, intervalMs = 200): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (acquireLock(knowledgeDir)) return true;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
 function shutdown(): void {
   console.error('[server] Shutdown signal received, aborting background tasks');
   shutdownController.abort();
@@ -81,13 +97,36 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
-  try {
-    server.sendLoggingMessage({ level, data, logger });
-  } catch { /* ignore if client doesn't support logging */ }
+  if (USE_MCP_LOGGING) {
+    try {
+      server.sendLoggingMessage({ level, data, logger });
+    } catch { /* ignore if client doesn't support logging */ }
+  } else if (level === 'error') {
+    console.error(`[${logger ?? 'server'}] ${data}`);
+  }
 }
 
 function samplerLog(level: 'info' | 'warning' | 'error', msg: string): void {
   writeMcpLogLine(level, msg, 'sampler');
+}
+
+function prepareAnalysisBatches(
+  filesToScan: string[],
+  knowledgeDir: string,
+  projectRoot: string,
+): ReturnType<typeof buildSamplingBatches> {
+  const fileMap = buildFileMap(filesToScan, projectRoot);
+  const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
+    const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
+    const entry: SamplingFileSummary = { path: filePath, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
+    if (fm.exports.length > 0) entry.exports = fm.exports;
+    if (fm.imports.length > 0) entry.imports = fm.imports;
+    if (fm.refs.length > 0) entry.refs = fm.refs;
+    return entry;
+  });
+  const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
+  writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
+  return buildSamplingBatches(filesToScan, fileMap, summaries);
 }
 
 async function runFullScanBackground(
@@ -96,21 +135,7 @@ async function runFullScanBackground(
   projectRoot: string,
 ): Promise<void> {
   try {
-    const fileMap = buildFileMap(filesToScan, projectRoot);
-
-    // Pre-populate structural data so query works before AI descriptions arrive
-    const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
-      const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
-      const entry: SamplingFileSummary = { path: filePath, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
-      if (fm.exports.length > 0) entry.exports = fm.exports;
-      if (fm.imports.length > 0) entry.imports = fm.imports;
-      if (fm.refs.length > 0) entry.refs = fm.refs;
-      return entry;
-    });
-    const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
-    writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
-
-    const batches = buildSamplingBatches(filesToScan, fileMap, summaries);
+    const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot);
 
     await runSamplingBackground(
       batches,
@@ -237,22 +262,41 @@ server.registerTool(
         };
       }
 
-      if (!acquireLock(knowledgeDir)) {
-        return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress for this project.' }) }] };
+      if (USE_MCP_SAMPLING) {
+        if (!acquireLock(knowledgeDir)) {
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress for this project.' }) }] };
+        }
+        isScanning = true;
+        runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
+          .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
+        writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'scanning',
+              filesToScan: filesToScan.length,
+              message: `Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`,
+            }),
+          }],
+        };
       }
-      isScanning = true;
 
-      runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
-        .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
-
-      writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
+      // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
+      const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot);
+      const batchFiles = writeBatchFiles(batches, knowledgeDir, projectRoot);
+      writeMcpLogLine('info', `scan — wrote ${batches.length} batch file(s) for subagent analysis`, 'scan');
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            status: 'scanning',
-            filesToScan: filesToScan.length,
-            message: `Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`,
+            status: 'analysis_required',
+            batchCount: batches.length,
+            batchFiles,
+            instruction:
+              `Spawn ${batches.length} subagent(s). For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ` +
+              'Subagent task: read the file — it contains the full analysis prompt with embedded file contents and instructions. Follow the instructions in it. ' +
+              'Return a short completion message when done.',
           }),
         }],
       };
@@ -263,6 +307,64 @@ server.registerTool(
     }
   }
 );
+
+if (!USE_MCP_SAMPLING) {
+  server.registerTool(
+    'submit_analysis',
+    {
+      title: 'Submit file analysis results from subagent',
+      description:
+        'Called by analysis subagents to submit file summaries into project knowledge. ' +
+        'Serializes concurrent writes — multiple subagents can safely call this in parallel.',
+      inputSchema: z.object({
+        results: z.array(z.object({
+          path: z.string(),
+          summary: z.string().optional(),
+          purpose: z.string().optional(),
+          role: z.string().optional(),
+          technologies: z.array(z.string()).optional(),
+          exports: z.array(z.string()).optional(),
+          imports: z.array(z.string()).optional(),
+        })),
+      }).strict(),
+      annotations: {
+        title: 'Submit file analysis results from subagent',
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+      _meta:{
+        "anthropic/maxResultSizeChars": 500000
+      },
+    },
+    async (args) => {
+      writeMcpLogLine('info', `submit_analysis — ${args.results.length} file(s) queued`, 'submit');
+      const root = assertRoots();
+      if (!root) {
+        return { isError: true, content: [{ type: 'text', text: 'No MCP roots available.' }] };
+      }
+      const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
+
+      if (!await acquireSubmitLock(knowledgeDir)) {
+        return { isError: true, content: [{ type: 'text', text: 'submit_analysis: timed out waiting for write lock' }] };
+      }
+      try {
+        mergeSamplingResults(knowledgeDir, args.results as SamplingFileSummary[]);
+        writeMcpLogLine('info', `submit_analysis — merged ${args.results.length} file(s)`, 'submit');
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ status: 'success', filesProcessed: args.results.length }) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        writeMcpLogLine('error', `submit_analysis error — ${message}`, 'submit');
+        return { isError: true, content: [{ type: 'text', text: `submit_analysis error: ${message}` }] };
+      } finally {
+        releaseLock();
+      }
+    }
+  );
+}
 
 server.registerTool(
   'query',

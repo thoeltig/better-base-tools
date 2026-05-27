@@ -248,3 +248,21 @@ export async function runSamplingBackground(
   }
   log('info', 'Complete');
 }
+
+export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, projectRoot: string): string[] {
+  const batchDir = path.join(knowledgeDir, 'batches');
+  if (!fs.existsSync(batchDir)) fs.mkdirSync(batchDir, { recursive: true });
+  const noopLog: SamplerLog = () => {};
+  return batches.map((batch, i) => {
+    const fp = path.join(batchDir, `batch-${i}.txt`);
+    const basePrompt = buildPrompt(batch, projectRoot, noopLog) ?? '';
+    const prompt = basePrompt
+      ? basePrompt.replace(
+          'Return only the JSON array. No markdown, no explanation.',
+          'Call the submit_analysis MCP tool with the results array. No other output needed.'
+        )
+      : '';
+    fs.writeFileSync(fp, prompt);
+    return fp;
+  });
+}
