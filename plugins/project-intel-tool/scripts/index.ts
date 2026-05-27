@@ -29,11 +29,52 @@ const server = new McpServer(
 
 let validRootDirectories: string[] = [];
 
+const LOCK_FILE = 'summaries.lock';
+const LOCK_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+let isScanning = false;
+let activeLockPath: string | null = null;
+
 const shutdownController = new AbortController();
+
+function isLockStale(lock: { pid: number; startedAt: string }): boolean {
+  try {
+    process.kill(lock.pid, 0);
+    return Date.now() - new Date(lock.startedAt).getTime() > LOCK_MAX_AGE_MS;
+  } catch (err: any) {
+    return err.code !== 'EPERM'; // ESRCH = dead; EPERM = alive, no permission
+  }
+}
+
+function acquireLock(knowledgeDir: string): boolean {
+  const lockPath = path.join(knowledgeDir, LOCK_FILE);
+  if (fs.existsSync(lockPath)) {
+    try {
+      const lock = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+      if (!isLockStale(lock)) return false;
+    } catch { /* corrupt lock — treat as stale */ }
+  }
+  try {
+    const tmpPath = lockPath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+    fs.renameSync(tmpPath, lockPath);
+    activeLockPath = lockPath;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function releaseLock(): void {
+  if (!activeLockPath) return;
+  try { fs.unlinkSync(activeLockPath); } catch { /* ignore */ }
+  activeLockPath = null;
+}
 
 function shutdown(): void {
   console.error('[server] Shutdown signal received, aborting background tasks');
   shutdownController.abort();
+  releaseLock();
   process.exit(0);
 }
 
@@ -84,6 +125,9 @@ async function runFullScanBackground(
     );
   } catch (err) {
     writeMcpLogLine('error', `Background scan error: ${err instanceof Error ? err.message : String(err)}`, 'scan');
+  } finally {
+    isScanning = false;
+    releaseLock();
   }
 }
 
@@ -152,6 +196,9 @@ server.registerTool(
   },
   async (args) => {
     writeMcpLogLine('info', `scan — called${args.scanLocation ? ` (scope: ${args.scanLocation})` : ''}`, 'scan');
+    if (isScanning) {
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress.' }) }] };
+    }
     const root = assertRoots();
     if (!root) {
       return { isError: true, content: [{ type: 'text', text: 'No MCP roots available. Cannot determine project location.' }] };
@@ -182,6 +229,11 @@ server.registerTool(
           }],
         };
       }
+
+      if (!acquireLock(knowledgeDir)) {
+        return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress for this project.' }) }] };
+      }
+      isScanning = true;
 
       runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
         .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
