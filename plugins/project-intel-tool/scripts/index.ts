@@ -7,7 +7,7 @@ import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
-import { getOrCreateSummaries } from './lib/summary-merger.js';
+import { getOrCreateSummaries, mergeSamplingResults } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
 import { buildSamplingBatches, runSamplingBackground, SamplingServer } from './lib/sampler.js';
 import {
@@ -16,6 +16,7 @@ import {
   HierarchicalGrouping,
   KNOWLEDGE_DIRECTORY,
   QUERY_RESULT_MAX,
+  SamplingFileSummary,
   ScoredFileSummary,
 } from './types.js';
 
@@ -47,6 +48,43 @@ function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): vo
 
 function samplerLog(level: 'info' | 'warning' | 'error', msg: string): void {
   writeMcpLogLine(level, msg, 'sampler');
+}
+
+async function runFullScanBackground(
+  filesToScan: string[],
+  knowledgeDir: string,
+  projectRoot: string,
+): Promise<void> {
+  try {
+    const fileMap = buildFileMap(filesToScan, projectRoot);
+
+    // Pre-populate structural data so query works before AI descriptions arrive
+    const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
+      const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
+      const entry: SamplingFileSummary = { path: filePath, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
+      if (fm.exports.length > 0) entry.exports = fm.exports;
+      if (fm.imports.length > 0) entry.imports = fm.imports;
+      if (fm.refs.length > 0) entry.refs = fm.refs;
+      return entry;
+    });
+    mergeSamplingResults(knowledgeDir, structuralEntries);
+    writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
+
+    const summaries = getOrCreateSummaries(knowledgeDir);
+    const batches = buildSamplingBatches(filesToScan, fileMap, summaries);
+
+    await runSamplingBackground(
+      batches,
+      server.server as unknown as SamplingServer,
+      knowledgeDir,
+      projectRoot,
+      shutdownController.signal,
+      fileMap,
+      samplerLog
+    );
+  } catch (err) {
+    writeMcpLogLine('error', `Background scan error: ${err instanceof Error ? err.message : String(err)}`, 'scan');
+  }
 }
 
 async function updateValidRootDirectories(): Promise<void> {
@@ -145,29 +183,17 @@ server.registerTool(
         };
       }
 
-      const summaries = getOrCreateSummaries(knowledgeDir);
-      const fileMap = buildFileMap(filesToScan, projectRoot);
-      const batches = buildSamplingBatches(filesToScan, fileMap, summaries);
+      runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
+        .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
 
-      runSamplingBackground(
-        batches,
-        server.server as unknown as SamplingServer,
-        knowledgeDir,
-        projectRoot,
-        shutdownController.signal,
-        fileMap,
-        samplerLog
-      ).catch(err => writeMcpLogLine('error', `Background sampling crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
-
-      writeMcpLogLine('info', `scan — launched ${batches.length} batch(es) for ${filesToScan.length} file(s)`, 'scan');
+      writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             status: 'scanning',
             filesToScan: filesToScan.length,
-            batches: batches.length,
-            message: `Processing ${filesToScan.length} files in the background. Query is available now and will return more results as summaries complete.`,
+            message: `Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`,
           }),
         }],
       };
