@@ -25,7 +25,7 @@ const IGNORED_DIRS = new Set([
   'node_modules', 'dist', 'build', '.next', '__pycache__', 'target',
   'bin', 'obj', '.git', '.svn', 'coverage', '.pytest_cache', '.venv',
   'venv', '.env', '.idea', '.meteor', '.angular', '.vscode', '.vs',
-  'vendor', 'tmp', '.cache', KNOWLEDGE_DIRECTORY, '.claude',
+  'vendor', 'tmp', '.cache',
 ]);
 
 function shouldIgnore(name: string): boolean {
