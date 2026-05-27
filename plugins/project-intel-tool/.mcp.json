@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "project-intel-tool": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/dist/index.js"]
+    }
+  }
+}

@@ -6,12 +6,16 @@
   },
   "metadata": {
     "description": "More efficient base tools to reduce turns, duplicate tool calls and reduce tokens.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "plugins": [
     {
       "name": "batch_file_tools",
       "source": "./plugins/batch_file_tools"
+    },
+    {
+      "name": "project-intel-tool",
+      "source": "./plugins/project-intel-tool"
     }
   ]
 }

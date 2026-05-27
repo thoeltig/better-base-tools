@@ -1,18 +1,15 @@
 export const KNOWLEDGE_DIRECTORY: string = '.knowledge';
 export const SUMMARIES_FILE: string = 'summaries.json';
 export const SCAN_FILE: string = 'scan.json';
-
 export const FORMAT_FLAT: string = 'flat';
 export const FORMAT_GROUPED: string = 'grouped';
-
 export const QUERY_RESULT_MAX: number = 25;
+export const SAMPLING_DELAY_MS: number = 1500;
+export const SAMPLING_TOKEN_BUDGET: number = 60000;
 
-// Summaries
-export interface DirectorySummary {
-  summary?: string;
-  purpose?: string;
-  technologies?: string[];
-  lastUpdated?: string;
+export interface SubKnowledgeRef {
+  location: string;
+  knowledgeDir: string;
 }
 
 export interface FileSummary {
@@ -22,56 +19,60 @@ export interface FileSummary {
   technologies?: string[];
   exports?: string[];
   imports?: string[];
+  refs?: string[];       // intra-project file references resolved from imports
+  sizeChars?: number;
+  lineCount?: number;
+  deleted?: boolean;
   lastUpdated?: string;
 }
 
 export interface SummariesDataStorage {
   generated: string;
-  directories: {
-    [dirPath: string]: DirectorySummary;
-  };
-  files: {
-    [filePath: string]: FileSummary;
-  };
+  files: { [filePath: string]: FileSummary };
+  subKnowledge?: SubKnowledgeRef[];
 }
 
 export interface SummariesData {
   generated: string;
-  directories: Map<string, DirectorySummary>;
   files: Map<string, FileSummary>;
+  subKnowledge: SubKnowledgeRef[];
 }
 
-export interface PartialSummaries {
-  directories: PartialDirectorySummary[];
-  files: PartialFileSummary[];
+// Output of one sampling call per file; refs/sizeChars/lineCount merged from file-map before persisting
+export interface SamplingFileSummary {
+  path: string;
+  summary?: string;
+  purpose?: string;
+  role?: string;
+  technologies?: string[];
+  exports?: string[];
+  imports?: string[];
+  refs?: string[];
+  sizeChars?: number;
+  lineCount?: number;
 }
 
-export interface PartialDirectorySummary extends DirectorySummary {
-  path: string; 
-}
-
-export interface PartialFileSummary extends FileSummary {
-  path: string; 
+export interface SamplingBatch {
+  files: string[];
+  contextFiles: { path: string; summary: string }[];
+  estimatedTokens: number;
 }
 
 // Query output
 export interface HierarchicalGrouping {
-  folderPath: string; 
+  folderPath: string;
   folderScore: number;
-  summary?: string;
-  purpose?: string;
-  technologies?: string[];
-  files: GroupedScoredFileSummary[]
+  files: GroupedScoredFileSummary[];
 }
 
 export interface ScoredFileSummary extends FileSummary {
-  path: string; 
+  path: string;
   fileScore: number;
 }
 
 export interface GroupedScoredFileSummary extends FileSummary {
-  fileName: string; 
-  path?: string; 
+  fileName: string;
+  path?: string;
   fileScore: number;
 }
 

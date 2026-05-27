@@ -1,335 +1,268 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { getOrCreateSummaries, writeSummaries } from './summary-merger';
-import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, SummariesData } from '../types';
+import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted } from './summary-merger.js';
+import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, SubKnowledgeRef, SummariesData } from '../types.js';
 
 export interface ScanResult {
-  filesToScan: string[][];
+  filesToScan: string[];
+  subKnowledge: SubKnowledgeRef[];
   projectStats: {
     knowledgeDir: string;
     totalFilesInKnowledge: number;
     numberOfFilesToScan: number;
-    extensionCountsOfFilesToScan: Record<string,number>;
+    extensionCountsOfFilesToScan: Record<string, number>;
   };
 }
 
-interface Files{
+interface Files {
   new: string[];
   modified: string[];
   deleted: string[];
 }
 
 const IGNORED_DIRS = new Set([
-  'node_modules', 'dist', 'build', '.next', '__pycache__', 'target', 'bin', 'obj', 
-  '.git', '.svn', 'coverage', '.pytest_cache', '.venv', 'venv', '.env', '.idea', 
-  '.meteor', '.angular', '.vscode', '.vs', 'vendor', 'tmp', '.cache', KNOWLEDGE_DIRECTORY, '.claude', 
+  'node_modules', 'dist', 'build', '.next', '__pycache__', 'target',
+  'bin', 'obj', '.git', '.svn', 'coverage', '.pytest_cache', '.venv',
+  'venv', '.env', '.idea', '.meteor', '.angular', '.vscode', '.vs',
+  'vendor', 'tmp', '.cache', KNOWLEDGE_DIRECTORY, '.claude',
 ]);
 
 function shouldIgnore(name: string): boolean {
   return IGNORED_DIRS.has(name);
 }
 
-function trimToProjectDirFromFilepath(filepath: string, projectRoot:string): string{
-  // Normalize to forward slashes for consistency across platforms (git uses forward slashes)
-  return path.relative(projectRoot, filepath).replace(/\\/g, '/');
-}
-
-function searchFileSystemRecursive(dir: string): string | undefined {  
-  try {
-    const entries = fs.readdirSync(dir);
-    for (const entry of entries) {
-      const dirPath = path.join(dir, entry);
-      const stat = fs.statSync(dirPath);
-      if (stat.isDirectory()) {        
-        if (entry === KNOWLEDGE_DIRECTORY) {
-          const fullPath = path.join(dirPath, SUMMARIES_FILE);
-          if(fs.existsSync(fullPath)) {
-            return path.normalize(fullPath);
-          }
-        }
-        
-        const result = searchFileSystemRecursive(dirPath);
-        if(result) {
-          return result;
-        }
-      }
-    }
-  } catch {}
-
-  return undefined;
-}
-
-function getSummaryFiles(summaries: SummariesData): Map<string, Date>{
-  const mapOfSummaryFileEntries = new Map<string, Date>();
-
-  // Check for a summary if one exist filepaths can be further reduced to only the actually modified files since last scan
-  if(summaries.files.size === 0){
-    // No Summary = initial scan so return all tracked files
-    return mapOfSummaryFileEntries;
-  }
-
-  // Find oldest scan date and create look for filepath and date
-  summaries.files
-    .forEach((val, key) => { 
-      const dateString = val.lastUpdated;
-      const lastUpdate = dateString ? new Date(dateString) : new Date();
-      mapOfSummaryFileEntries.set(key, lastUpdate);
-    });
-    
-  return mapOfSummaryFileEntries;
-}
-
-function getGitTrackedFiles(location: string): string[]{  
-  // Get git tracked files in this location
-  const trackedFiles = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
-    .trim()
-    .split('\n');
-
-  // Filter out the build, obj, cache, etc directorie and .claude/.knowledge directory
-  const filteredTrackedFiles = trackedFiles
-    .filter(f => {
-      const segments = f.split('/');
-      return !segments.some(x => shouldIgnore(x));
-    })
-    .map(x => path.join(location, x));
-
-  return filteredTrackedFiles;
-}
-
 function isGitRepository(): boolean {
-  try {
-    execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  try { execSync('git rev-parse --git-dir', { stdio: 'ignore' }); return true; }
+  catch { return false; }
 }
 
-function getFilesFromGit(location: string, summaries: SummariesData, projectRoot: string): Files{
-  const files:Files = {
-    new: [],
-    modified: [],
-    deleted: []
-  };
+function getGitRoot(): string {
+  return execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
+}
 
+// Normalize to forward-slash relative path from projectRoot using path.resolve to handle casing/symlinks
+function toRelative(absOrGitPath: string, projectRoot: string): string {
+  return path.relative(path.resolve(projectRoot), path.resolve(absOrGitPath)).replace(/\\/g, '/');
+}
+
+function getSummaryFileMap(summaries: SummariesData): Map<string, Date> {
+  const map = new Map<string, Date>();
+  summaries.files.forEach((val, key) => {
+    if (!val.deleted) map.set(key, val.lastUpdated ? new Date(val.lastUpdated) : new Date());
+  });
+  return map;
+}
+
+function getFilesFromGit(location: string, summaries: SummariesData, projectRoot: string): Files {
+  const files: Files = { new: [], modified: [], deleted: [] };
   try {
-    // Get git tracked files in this location
-    const trackedFiles = getGitTrackedFiles(location);
-    
-    // Check for a summary if one exist filepaths can be further reduced to only the actually modified files since last scan    
-    const mapOfSummaryFileEntries = getSummaryFiles(summaries);
-    if(mapOfSummaryFileEntries.size === 0){
-      // No Summary = initial scan so return all tracked files
-      trackedFiles.forEach(filepath => files.new.push(trimToProjectDirFromFilepath(filepath, projectRoot)));
+    const gitRoot = getGitRoot();
+    const tracked = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
+      .trim().split('\n').filter(Boolean)
+      .filter(f => !f.split('/').some(shouldIgnore))
+      // git ls-files --full-name returns paths relative to git root
+      .map(f => toRelative(path.resolve(gitRoot, f), projectRoot));
+
+    const summaryMap = getSummaryFileMap(summaries);
+    if (summaryMap.size === 0) {
+      files.new.push(...tracked);
       return files;
     }
-        
-    // Find oldest scan date and create look for filepath and date
+
     let since = new Date();
-    mapOfSummaryFileEntries.forEach(x => {
-      if(x < since) since = x;
-    });
-    
-    // Get git log since the last update to check if the git modified date is newer then the correlating file last scan date
-    const output = execSync(`git log --format=%ai --name-only --since="${since.toISOString()}" -- "${location}"`, { encoding: 'utf-8' });
-    const lines = output.trim().split('\n');
+    summaryMap.forEach(d => { if (d < since) since = d; });
 
-    const modifiedFileMap = new Map<string, Date>();
+    const output = execSync(
+      `git log --format=%ai --name-only --since="${since.toISOString()}" -- "${location}"`,
+      { encoding: 'utf-8' }
+    );
+
+    const modifiedMap = new Map<string, Date>();
     let currentDate: Date | null = null;
-
-    for (const line of lines) {
+    for (const line of output.trim().split('\n')) {
       if (!line) continue;
-
-      // Check if this is a date line (ISO format)
       if (line.match(/^\d{4}-\d{2}-\d{2}/)) {
         currentDate = new Date(line);
-      } else if (currentDate && line && !line.split('/').some(x => shouldIgnore(x))) {
-        // Only add if we haven't seen it yet (first = most recent)
-        const lastUpdated = mapOfSummaryFileEntries.get(line);
-        const filepath = path.join(location, line);
-        const relativePath = trimToProjectDirFromFilepath(filepath, projectRoot);
-        if ((!lastUpdated || lastUpdated < currentDate) && !modifiedFileMap.has(relativePath) && fs.existsSync(filepath)) {
-          modifiedFileMap.set(relativePath, currentDate);
+      } else if (currentDate && !line.split('/').some(shouldIgnore)) {
+        const absPath = path.resolve(gitRoot, line);
+        const relPath = toRelative(absPath, projectRoot);
+        const lastUpdated = summaryMap.get(relPath);
+        if ((!lastUpdated || lastUpdated < currentDate) && !modifiedMap.has(relPath) && fs.existsSync(absPath)) {
+          modifiedMap.set(relPath, currentDate);
         }
       }
     }
-        
-    trackedFiles.forEach(x => {
-      const relativePath = trimToProjectDirFromFilepath(x, projectRoot);
-      const founDate = mapOfSummaryFileEntries.get(relativePath);
-      if(!founDate){
-        files.new.push(relativePath);
+
+    const trackedSet = new Set(tracked);
+    tracked.forEach(relPath => { if (!summaryMap.has(relPath)) files.new.push(relPath); });
+
+    const resolvedLocation = path.resolve(location);
+    summaryMap.forEach((_, relPath) => {
+      const absPath = path.resolve(projectRoot, relPath);
+      if (absPath.startsWith(resolvedLocation) && !trackedSet.has(relPath)) {
+        files.deleted.push(relPath);
       }
     });
 
-    const set = new Set<string>(trackedFiles);
-    mapOfSummaryFileEntries.forEach((_,relativePath) => {
-      const filepath = path.join(projectRoot, relativePath);
-      if(filepath.startsWith(location) && set.has(filepath) === false){
-        files.deleted.push(relativePath);
-      }
-    });
-
-    files.modified.push(...modifiedFileMap.keys());
-    return files;
-  } catch { 
-    return files;
-  }
-}
-
-function getFilesFromFileSystem(location: string, summaries: SummariesData, projectRoot: string): Files{
-  const files:Files = {
-    new: [],
-    modified: [],
-    deleted: []
-  };
-
-   try { 
-    const filepathesInThisLocation = new Map<string, Date>();
-    getFilesFromFileSystemRecursive(location, location, filepathesInThisLocation);
-      
-    const mapOfSummaryFileEntries = getSummaryFiles(summaries);
-    if(mapOfSummaryFileEntries.size == 0){      
-      // No Summary = initial scan so return all tracked files
-      filepathesInThisLocation.forEach((_, filepath) => files.new.push(trimToProjectDirFromFilepath(filepath, projectRoot)));
-      return files;
-    }
-        
-    filepathesInThisLocation.forEach((currentDate, filepath) => {      
-      const relativePath = trimToProjectDirFromFilepath(filepath, projectRoot);
-      const lastDate = mapOfSummaryFileEntries.get(relativePath);
-      if(!lastDate){
-        files.new.push(relativePath);
-      }else if(currentDate > lastDate){
-        files.modified.push(relativePath);
-      }
-    });
-
-    mapOfSummaryFileEntries.forEach((_, relativePath) => {
-      const filepath = path.join(projectRoot, relativePath);
-      if(filepath.startsWith(location) && !filepathesInThisLocation.get(filepath)){
-        files.deleted.push(relativePath);
-      }
-    });
-
+    files.modified.push(...modifiedMap.keys());
     return files;
   } catch {
     return files;
   }
 }
 
-function getFilesFromFileSystemRecursive(dir: string, rootDir: string, filePaths: Map<string,Date>): void {   
+function scanDirRecursive(
+  dir: string,
+  filePaths: Map<string, Date>,
+  subKnowledge: SubKnowledgeRef[],
+  projectRoot: string
+): void {
   try {
-    const entries = fs.readdirSync(dir);
-    for (const entry of entries) {
-      if (shouldIgnore(entry)) {
-        continue;
-      }
-
+    for (const entry of fs.readdirSync(dir)) {
+      if (shouldIgnore(entry)) continue;
       const fullPath = path.join(dir, entry);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) {
-        getFilesFromFileSystemRecursive(fullPath, rootDir, filePaths);
+        // Detect nested .knowledge with summaries.json → skip subtree, record ref
+        if (entry === KNOWLEDGE_DIRECTORY) {
+          if (fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
+            subKnowledge.push({
+              location: toRelative(dir, projectRoot),
+              knowledgeDir: toRelative(fullPath, projectRoot),
+            });
+          }
+          continue;
+        }
+        scanDirRecursive(fullPath, filePaths, subKnowledge, projectRoot);
       } else if (stat.isFile()) {
         filePaths.set(fullPath, stat.mtime);
       }
     }
-  } catch (e) {}
+  } catch {}
 }
 
-function deletedOldEntriesFromKnowledge(filePaths: string[], summaries: SummariesData, knowledgeDir: string): number{
-  const directoryDeleteCandidates = new Set<string>();
-  filePaths.forEach(x => {
-    directoryDeleteCandidates.add(path.dirname(x));
-    summaries.files.delete(x);
-  });
+function getFilesFromFileSystem(
+  location: string,
+  summaries: SummariesData,
+  projectRoot: string,
+  subKnowledge: SubKnowledgeRef[]
+): Files {
+  const files: Files = { new: [], modified: [], deleted: [] };
+  try {
+    const fsFiles = new Map<string, Date>();
+    scanDirRecursive(location, fsFiles, subKnowledge, projectRoot);
 
-  const fileKeys = [...summaries.files.keys()];
-  const remainingDictionariesInFiles = new Set<string>(fileKeys.map(x => path.dirname(x)));
-  directoryDeleteCandidates.forEach(x => {
-    if(remainingDictionariesInFiles.has(x) === false){
-      summaries.directories.delete(x);
+    const summaryMap = getSummaryFileMap(summaries);
+    if (summaryMap.size === 0) {
+      fsFiles.forEach((_, absPath) => files.new.push(toRelative(absPath, projectRoot)));
+      return files;
     }
-  });
 
-  writeSummaries(knowledgeDir, summaries);
-  return fileKeys.length;
-}
+    fsFiles.forEach((mtime, absPath) => {
+      const relPath = toRelative(absPath, projectRoot);
+      const lastDate = summaryMap.get(relPath);
+      if (!lastDate) files.new.push(relPath);
+      else if (mtime > lastDate) files.modified.push(relPath);
+    });
 
-function getExtensionCounts(filePaths: string[]): Record<string, number>{
-  return filePaths.reduce(
-    (acc, file) => {
-      const ext = path.extname(file).toLowerCase() || 'none';
-      acc[ext] = (acc[ext] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
-}
-
-function batchFiles(filePaths: string[], batchSize: number = 8): string[][] {
-  // TODO: Optimize batching by directory to avoid duplicate directory summaries across agents
-  const batches: string[][] = [];
-  for (let i = 0; i < filePaths.length; i += batchSize) {
-    batches.push(filePaths.slice(i, i + batchSize));
+    const fsRelSet = new Set([...fsFiles.keys()].map(a => toRelative(a, projectRoot)));
+    const resolvedLocation = path.resolve(location);
+    summaryMap.forEach((_, relPath) => {
+      const absPath = path.resolve(projectRoot, relPath);
+      if (absPath.startsWith(resolvedLocation) && !fsRelSet.has(relPath)) {
+        files.deleted.push(relPath);
+      }
+    });
+    return files;
+  } catch {
+    return files;
   }
-  return batches;
 }
 
-function createOutput(filePaths: string[], filesInSummary: number, knowledgeDir: string): ScanResult{
-  return {
-    filesToScan: batchFiles(filePaths),
-    projectStats: {
-      knowledgeDir: knowledgeDir,
-      totalFilesInKnowledge: filesInSummary,
-      numberOfFilesToScan: filePaths.length,
-      extensionCountsOfFilesToScan: getExtensionCounts(filePaths)
+function searchForKnowledgeDir(dir: string): string | undefined {
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      const fullPath = path.join(dir, entry);
+      try {
+        if (!fs.statSync(fullPath).isDirectory()) continue;
+      } catch { continue; }
+      if (entry === KNOWLEDGE_DIRECTORY && fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
+        return path.normalize(fullPath);
+      }
+      const result = searchForKnowledgeDir(fullPath);
+      if (result) return result;
     }
-  };
+  } catch {}
+  return undefined;
 }
 
 export function findKnowledgeDir(location: string): string | undefined {
   if (isGitRepository()) {
     try {
-      const fileLocation = path.join(KNOWLEDGE_DIRECTORY, SUMMARIES_FILE);
-      const foundKnowledgeFile = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
-        .trim()
-        .split('\n')
-        .find(f => f.endsWith(fileLocation));
-
-      if(foundKnowledgeFile){
-        return path.normalize(path.dirname(path.join(location, foundKnowledgeFile)));
+      const gitRoot = getGitRoot();
+      const target = (KNOWLEDGE_DIRECTORY + '/' + SUMMARIES_FILE);
+      const found = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
+        .trim().split('\n')
+        .find(f => f.replace(/\\/g, '/').endsWith(target));
+      if (found) {
+        return path.normalize(path.dirname(path.resolve(gitRoot, found)));
       }
-    } catch { }
+    } catch {}
   }
-
-  const foundFile = searchFileSystemRecursive(location);
-  return foundFile ? path.dirname(foundFile) : undefined;
+  return searchForKnowledgeDir(location);
 }
 
 export async function scanProject(location: string, knowledgeDir: string): Promise<ScanResult> {
   const summaries = getOrCreateSummaries(knowledgeDir);
-  let filesInSummary = summaries.files.size;
+  const projectRoot = path.dirname(path.resolve(knowledgeDir));
+  const resolvedLocation = path.resolve(location);
 
-  if (!fs.existsSync(location)) {
-    return createOutput([], filesInSummary, knowledgeDir);
+  if (!fs.existsSync(resolvedLocation)) {
+    return {
+      filesToScan: [],
+      subKnowledge: summaries.subKnowledge,
+      projectStats: { knowledgeDir, totalFilesInKnowledge: summaries.files.size, numberOfFilesToScan: 0, extensionCountsOfFilesToScan: {} },
+    };
   }
 
-  const projectRoot = path.dirname(knowledgeDir);
-
+  // Sub-knowledge refs accumulate during filesystem walk
+  const detectedSubKnowledge: SubKnowledgeRef[] = [...summaries.subKnowledge];
   let files: Files;
-  if(isGitRepository()){
-    files = getFilesFromGit(location, summaries, projectRoot);
-  }
-  else{
-    files = getFilesFromFileSystem(location, summaries, projectRoot);
+
+  if (isGitRepository()) {
+    files = getFilesFromGit(resolvedLocation, summaries, projectRoot);
+  } else {
+    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge);
   }
 
-  if(files.deleted.length !== 0){
-    filesInSummary = deletedOldEntriesFromKnowledge(files.deleted, summaries, knowledgeDir);
+  if (files.deleted.length > 0) {
+    markFilesAsDeleted(files.deleted, summaries, knowledgeDir);
   }
 
-  const uniqueFiles = [...new Set<string>([...files.new, ...files.modified])];
-  return createOutput(uniqueFiles, filesInSummary, knowledgeDir);
+  // Persist any newly detected sub-knowledge refs
+  const existingRefKeys = new Set(summaries.subKnowledge.map(r => r.knowledgeDir));
+  const newRefs = detectedSubKnowledge.filter(r => !existingRefKeys.has(r.knowledgeDir));
+  if (newRefs.length > 0) {
+    summaries.subKnowledge.push(...newRefs);
+    writeSummaries(knowledgeDir, summaries);
+  }
+
+  const unique = [...new Set([...files.new, ...files.modified])];
+  const extCounts = unique.reduce((acc, f) => {
+    const ext = path.extname(f).toLowerCase() || 'none';
+    acc[ext] = (acc[ext] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return {
+    filesToScan: unique,
+    subKnowledge: summaries.subKnowledge,
+    projectStats: {
+      knowledgeDir,
+      totalFilesInKnowledge: [...summaries.files.values()].filter(f => !f.deleted).length,
+      numberOfFilesToScan: unique.length,
+      extensionCountsOfFilesToScan: extCounts,
+    },
+  };
 }
