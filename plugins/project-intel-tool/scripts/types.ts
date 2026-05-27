@@ -5,7 +5,7 @@ export const FORMAT_FLAT: string = 'flat';
 export const FORMAT_GROUPED: string = 'grouped';
 export const QUERY_RESULT_MAX: number = 25;
 export const SAMPLING_DELAY_MS: number = 1500;
-export const SAMPLING_TOKEN_BUDGET: number = 60000;
+export const SAMPLING_TOKEN_BUDGET: number = 100_000;
 
 export interface SubKnowledgeRef {
   location: string;

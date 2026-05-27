@@ -23,7 +23,7 @@ function buildDepGraph(files: string[], fileMap: Map<string, FileRefs>): Map<str
     const refs = fileMap.get(file);
     const deps = new Set<string>();
     if (refs) {
-      [...refs.imports, ...refs.refs]
+      refs.refs
         .filter(r => fileSet.has(r))
         .forEach(r => deps.add(r));
     }
@@ -53,7 +53,7 @@ function topoLayers(graph: Map<string, Set<string>>): string[][] {
 
 function estimateTokens(filePath: string, fileMap: Map<string, FileRefs>, numContextFiles: number): number {
   const refs = fileMap.get(filePath);
-  const contentTokens = refs ? Math.ceil(refs.sizeChars / 4) : 500;
+  const contentTokens = refs ? Math.ceil(refs.sizeChars / 2.5) : 500;
   return contentTokens + numContextFiles * 50 + 300; // 300 = response estimate per file
 }
 
@@ -68,7 +68,7 @@ function buildBatch(
   for (const file of files) {
     const refs = fileMap.get(file);
     // Use all refs from the file map (includes deps outside the scan set)
-    for (const dep of [...(refs?.imports ?? []), ...(refs?.refs ?? [])]) {
+    for (const dep of refs?.refs ?? []) {
       if (summarized.has(dep) && summaries.files.get(dep)?.summary) {
         contextPaths.add(dep);
       }
@@ -166,9 +166,7 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string): string | null {
   "summary": "<one sentence, max 150 chars>",
   "purpose": "<three sentences: what it does, key technical details, how it connects to the rest of the codebase — max 450 chars>",
   "role": "<implementation|documentation|configuration|test|build|script>",
-  "technologies": ["<2-5 key techs>"],
-  "exports": ["<2-5 exported names, code files only>"],
-  "imports": ["<2-5 key packages or namespaces>"]
+  "technologies": ["<2-5 key techs>"]
 }]
 ${contextSection}
 Files to analyze:
@@ -189,11 +187,6 @@ function parseResponse(text: string): SamplingFileSummary[] {
     if (objMatch) return [JSON.parse(objMatch[0])];
     throw new Error(`Cannot parse sampling response: ${text.substring(0, 200)}`);
   }
-}
-
-function mergeDedup(a: string[] | undefined, b: string[] | undefined): string[] | undefined {
-  const combined = [...(a || []), ...(b || [])];
-  return combined.length > 0 ? [...new Set(combined)] : undefined;
 }
 
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
@@ -240,14 +233,13 @@ export async function runSamplingBackground(
 
       if (response?.content?.type === 'text') {
         const results = parseResponse(response.content.text);
-        // Enrich with deterministic file-map data: refs, sizes, merged exports
+        // Enrich with deterministic file-map data (exports/imports/refs already pre-populated; re-apply for safety)
         const enriched = results.map(r => {
           const fm = fileMap.get(r.path);
           if (!fm) return r;
           const entry: SamplingFileSummary = { ...r, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
           if (fm.refs.length > 0) entry.refs = fm.refs;
-          const merged = mergeDedup(fm.exports, r.exports);
-          if (merged) entry.exports = merged;
+          if (fm.exports.length > 0) entry.exports = fm.exports;
           return entry;
         });
         mergeSamplingResults(knowledgeDir, enriched);

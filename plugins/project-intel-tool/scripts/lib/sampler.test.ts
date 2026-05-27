@@ -32,7 +32,7 @@ describe('buildSamplingBatches — ordering', () => {
     // a.ts imports b.ts → b.ts must be processed first
     const files = ['a.ts', 'b.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ imports: ['b.ts'] })],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
       ['b.ts', makeFileRefs()],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
@@ -44,8 +44,8 @@ describe('buildSamplingBatches — ordering', () => {
   it('handles a chain A → B → C across three layers', () => {
     const files = ['a.ts', 'b.ts', 'c.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ imports: ['b.ts'] })],
-      ['b.ts', makeFileRefs({ imports: ['c.ts'] })],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
+      ['b.ts', makeFileRefs({ refs: ['c.ts'] })],
       ['c.ts', makeFileRefs()],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
@@ -59,8 +59,8 @@ describe('buildSamplingBatches — ordering', () => {
   it('handles circular dependencies without infinite loop', () => {
     const files = ['a.ts', 'b.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ imports: ['b.ts'] })],
-      ['b.ts', makeFileRefs({ imports: ['a.ts'] })],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
+      ['b.ts', makeFileRefs({ refs: ['a.ts'] })],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
     const allFiles = batches.flatMap(b => b.files);
@@ -71,7 +71,7 @@ describe('buildSamplingBatches — ordering', () => {
   it('excludes already-summarized files from scan set deps', () => {
     // b.ts is already summarized — a.ts imports it but b.ts is not in filesToScan
     const files = ['a.ts'];
-    const fileMap = new Map([['a.ts', makeFileRefs({ imports: ['b.ts'] })]]);
+    const fileMap = new Map([['a.ts', makeFileRefs({ refs: ['b.ts'] })]]);
     const summaries = emptySummaries();
     summaries.files.set('b.ts', { summary: 'existing summary', lastUpdated: new Date().toISOString() });
 
@@ -85,7 +85,7 @@ describe('buildSamplingBatches — ordering', () => {
 describe('buildSamplingBatches — context files', () => {
   it('includes summary of already-summarized dep as context', () => {
     const files = ['a.ts'];
-    const fileMap = new Map([['a.ts', makeFileRefs({ imports: ['b.ts'] })]]);
+    const fileMap = new Map([['a.ts', makeFileRefs({ refs: ['b.ts'] })]]);
     const summaries = emptySummaries();
     summaries.files.set('b.ts', { summary: 'B does something useful', lastUpdated: new Date().toISOString() });
 
@@ -96,7 +96,7 @@ describe('buildSamplingBatches — context files', () => {
 
   it('does not include deleted files as context', () => {
     const files = ['a.ts'];
-    const fileMap = new Map([['a.ts', makeFileRefs({ imports: ['b.ts'] })]]);
+    const fileMap = new Map([['a.ts', makeFileRefs({ refs: ['b.ts'] })]]);
     const summaries = emptySummaries();
     summaries.files.set('b.ts', { summary: 'B summary', deleted: true, lastUpdated: new Date().toISOString() });
 
@@ -135,8 +135,8 @@ describe('buildSamplingBatches — token budget', () => {
   it('every file in filesToScan appears in exactly one batch', () => {
     const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ imports: ['b.ts'] })],
-      ['b.ts', makeFileRefs({ imports: ['c.ts'] })],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
+      ['b.ts', makeFileRefs({ refs: ['c.ts'] })],
       ['c.ts', makeFileRefs()],
       ['d.ts', makeFileRefs()],
     ]);

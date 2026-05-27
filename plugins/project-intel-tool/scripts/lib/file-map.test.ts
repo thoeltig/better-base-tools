@@ -15,8 +15,8 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/main.ts', 'src/utils.ts'),
       ROOT
     );
-    expect(result.imports).toEqual(['src/utils.ts']);
-    expect(result.refs).toContain('src/utils.ts');
+    expect(result.imports).toEqual([]);
+    expect(result.refs).toEqual(['src/utils.ts']);
   });
 
   it('resolves relative import via index.ts fallback', () => {
@@ -26,7 +26,8 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/main.ts', 'src/services/auth/index.ts'),
       ROOT
     );
-    expect(result.imports).toContain('src/services/auth/index.ts');
+    expect(result.refs).toContain('src/services/auth/index.ts');
+    expect(result.imports).toHaveLength(0);
   });
 
   it('resolves parent directory import', () => {
@@ -36,10 +37,11 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/features/login.ts', 'src/shared/helper.ts'),
       ROOT
     );
-    expect(result.imports).toContain('src/shared/helper.ts');
+    expect(result.refs).toContain('src/shared/helper.ts');
+    expect(result.imports).toHaveLength(0);
   });
 
-  it('ignores external package imports', () => {
+  it('extracts external package names from non-relative imports', () => {
     const result = parseFileRefs(
       'src/main.ts',
       `import React from 'react';
@@ -47,7 +49,20 @@ import { z } from 'zod';`,
       makeSet('src/main.ts'),
       ROOT
     );
-    expect(result.imports).toHaveLength(0);
+    expect(result.imports).toContain('react');
+    expect(result.imports).toContain('zod');
+    expect(result.refs).toHaveLength(0);
+  });
+
+  it('extracts scoped package names from non-relative imports', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import Anthropic from '@anthropic-ai/sdk'; import { Server } from '@modelcontextprotocol/sdk/server/index.js';`,
+      makeSet('src/main.ts'),
+      ROOT
+    );
+    expect(result.imports).toContain('@anthropic-ai/sdk');
+    expect(result.imports).toContain('@modelcontextprotocol/sdk');
   });
 
   it('ignores import not found in project file set', () => {
@@ -97,7 +112,8 @@ export type UserId = string;`,
       makeSet('src/legacy.js', 'src/utils.ts'),
       ROOT
     );
-    expect(result.imports).toContain('src/utils.ts');
+    expect(result.refs).toContain('src/utils.ts');
+    expect(result.imports).toHaveLength(0);
   });
 
   it('handles dynamic import()', () => {
@@ -107,7 +123,8 @@ export type UserId = string;`,
       makeSet('src/main.ts', 'src/lazy.ts'),
       ROOT
     );
-    expect(result.imports).toContain('src/lazy.ts');
+    expect(result.refs).toContain('src/lazy.ts');
+    expect(result.imports).toHaveLength(0);
   });
 
   it('returns correct sizeChars and lineCount', () => {
@@ -117,7 +134,7 @@ export type UserId = string;`,
     expect(result.lineCount).toBe(3);
   });
 
-  it('deduplicates imports and exports', () => {
+  it('deduplicates refs', () => {
     const result = parseFileRefs(
       'src/main.ts',
       `import { a } from './shared';
@@ -125,7 +142,8 @@ import { b } from './shared';`,
       makeSet('src/main.ts', 'src/shared.ts'),
       ROOT
     );
-    expect(result.imports.filter(i => i === 'src/shared.ts')).toHaveLength(1);
+    expect(result.refs.filter(r => r === 'src/shared.ts')).toHaveLength(1);
+    expect(result.imports).toHaveLength(0);
   });
 });
 

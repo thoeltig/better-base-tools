@@ -59,16 +59,22 @@ function parseTsJs(
   projectFileSet: Set<string>,
   projectRoot: string
 ): Pick<FileRefs, 'imports' | 'exports' | 'refs'> {
-  const imports: string[] = [];
+  const imports: string[] = []; // external package names
   const exports: string[] = [];
+  const refs: string[] = [];   // resolved intra-project file paths
 
   TS_IMPORT_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = TS_IMPORT_RE.exec(content)) !== null) {
     const cap = m[1];
     if (!cap) continue;
-    const resolved = resolveImport(cap, filePath, projectFileSet, projectRoot);
-    if (resolved && !imports.includes(resolved)) imports.push(resolved);
+    if (cap.startsWith('.')) {
+      const resolved = resolveImport(cap, filePath, projectFileSet, projectRoot);
+      if (resolved && !refs.includes(resolved)) refs.push(resolved);
+    } else {
+      const pkg = cap.startsWith('@') ? cap.split('/').slice(0, 2).join('/') : cap.split('/')[0]!;
+      if (pkg && !imports.includes(pkg)) imports.push(pkg);
+    }
   }
 
   TS_EXPORT_NAMED_RE.lastIndex = 0;
@@ -88,7 +94,7 @@ function parseTsJs(
     }
   }
 
-  return { imports, exports, refs: [...imports] };
+  return { imports, exports, refs };
 }
 
 function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'refs'> {
