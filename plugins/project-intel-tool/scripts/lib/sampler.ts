@@ -140,7 +140,7 @@ function compactContent(content: string, ext: string): string {
   return content.replace(/\s+/g, ' ').trim();
 }
 
-function buildPrompt(batch: SamplingBatch, projectRoot: string): string | null {
+function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog): string | null {
   const fileSections: string[] = [];
 
   for (const filePath of batch.files) {
@@ -150,7 +150,7 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string): string | null {
       const content = compactContent(raw, path.extname(filePath).toLowerCase());
       fileSections.push(`<file path="${filePath}">\n${content}\n</file>`);
     } catch {
-      console.error(`[sampler] Cannot read ${filePath}, skipping`);
+      log('warning', `Cannot read ${filePath}, skipping`);
     }
   }
 
@@ -206,7 +206,7 @@ export async function runSamplingBackground(
     if (signal.aborted) { log('info', 'Aborted'); return; }
 
     try {
-      const prompt = buildPrompt(batch, projectRoot);
+      const prompt = buildPrompt(batch, projectRoot, log);
       if (!prompt) { log('warning', `Batch ${i + 1} has no readable files, skipping`); continue; }
       log('info', `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s) (~${batch.estimatedTokens} tokens)`);
 

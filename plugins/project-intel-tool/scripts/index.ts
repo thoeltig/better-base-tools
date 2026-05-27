@@ -21,8 +21,6 @@ import {
   ScoredFileSummary,
 } from './types.js';
 
-// TODO: scanProject already loads summaries internally; returning them would avoid the second getOrCreateSummaries call.
-
 const server = new McpServer(
   { name: 'project-intel-mcp-server', version: '2.0.0' },
   { capabilities: { tools: {}, logging: {} } }
@@ -109,10 +107,9 @@ async function runFullScanBackground(
       if (fm.refs.length > 0) entry.refs = fm.refs;
       return entry;
     });
-    mergeSamplingResults(knowledgeDir, structuralEntries);
+    const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
     writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
 
-    const summaries = getOrCreateSummaries(knowledgeDir);
     const batches = buildSamplingBatches(filesToScan, fileMap, summaries);
 
     await runSamplingBackground(
