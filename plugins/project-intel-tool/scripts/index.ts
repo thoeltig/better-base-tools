@@ -121,7 +121,6 @@ async function runFullScanBackground(
       knowledgeDir,
       projectRoot,
       shutdownController.signal,
-      fileMap,
       samplerLog
     );
   } catch (err) {

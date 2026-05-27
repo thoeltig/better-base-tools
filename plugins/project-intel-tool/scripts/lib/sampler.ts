@@ -197,7 +197,6 @@ export async function runSamplingBackground(
   knowledgeDir: string,
   projectRoot: string,
   signal: AbortSignal,
-  fileMap: Map<string, FileRefs>,
   log: SamplerLog = () => {},
   delayMs: number = SAMPLING_DELAY_MS
 ): Promise<void> {
@@ -233,17 +232,8 @@ export async function runSamplingBackground(
 
       if (response?.content?.type === 'text') {
         const results = parseResponse(response.content.text);
-        // Enrich with deterministic file-map data (exports/imports/refs already pre-populated; re-apply for safety)
-        const enriched = results.map(r => {
-          const fm = fileMap.get(r.path);
-          if (!fm) return r;
-          const entry: SamplingFileSummary = { ...r, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
-          if (fm.refs.length > 0) entry.refs = fm.refs;
-          if (fm.exports.length > 0) entry.exports = fm.exports;
-          return entry;
-        });
-        mergeSamplingResults(knowledgeDir, enriched);
-        log('info', `Batch ${i + 1} saved: ${enriched.length} file(s)`);
+        mergeSamplingResults(knowledgeDir, results);
+        log('info', `Batch ${i + 1} saved: ${results.length} file(s)`);
       }
     } catch (err) {
       log('error', `Batch ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
