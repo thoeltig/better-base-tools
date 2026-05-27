@@ -196,6 +196,8 @@ function mergeDedup(a: string[] | undefined, b: string[] | undefined): string[] 
   return combined.length > 0 ? [...new Set(combined)] : undefined;
 }
 
+export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
+
 export async function runSamplingBackground(
   batches: SamplingBatch[],
   server: SamplingServer,
@@ -203,17 +205,18 @@ export async function runSamplingBackground(
   projectRoot: string,
   signal: AbortSignal,
   fileMap: Map<string, FileRefs>,
+  log: SamplerLog = () => {},
   delayMs: number = SAMPLING_DELAY_MS
 ): Promise<void> {
-  console.error(`[sampler] Starting: ${batches.length} batches`);
+  log('info', `Starting: ${batches.length} batch(es)`);
 
   for (const [i, batch] of batches.entries()) {
-    if (signal.aborted) { console.error('[sampler] Aborted'); return; }
+    if (signal.aborted) { log('info', 'Aborted'); return; }
 
     try {
       const prompt = buildPrompt(batch, projectRoot);
-      if (!prompt) { console.error(`[sampler] Batch ${i + 1} has no readable files, skipping`); continue; }
-      console.error(`[sampler] Batch ${i + 1}/${batches.length}: ${batch.files.length} files (~${batch.estimatedTokens} tokens)`);
+      if (!prompt) { log('warning', `Batch ${i + 1} has no readable files, skipping`); continue; }
+      log('info', `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s) (~${batch.estimatedTokens} tokens)`);
 
       const response = await server.request(
         {
@@ -233,7 +236,7 @@ export async function runSamplingBackground(
         undefined
       );
 
-      if (signal.aborted) { console.error('[sampler] Aborted after response, discarding'); return; }
+      if (signal.aborted) { log('info', 'Aborted after response, discarding'); return; }
 
       if (response?.content?.type === 'text') {
         const results = parseResponse(response.content.text);
@@ -248,10 +251,10 @@ export async function runSamplingBackground(
           return entry;
         });
         mergeSamplingResults(knowledgeDir, enriched);
-        console.error(`[sampler] Batch ${i + 1} saved: ${enriched.length} files`);
+        log('info', `Batch ${i + 1} saved: ${enriched.length} file(s)`);
       }
     } catch (err) {
-      console.error(`[sampler] Batch ${i + 1} failed:`, err);
+      log('error', `Batch ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     if (i < batches.length - 1) {
@@ -261,5 +264,5 @@ export async function runSamplingBackground(
       });
     }
   }
-  console.error('[sampler] Complete');
+  log('info', 'Complete');
 }
