@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { LoggingLevel } from '@modelcontextprotocol/sdk/types.js';
+import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -136,8 +137,13 @@ async function updateValidRootDirectories(): Promise<void> {
     const response = await server.server.listRoots();
     if (response?.roots) {
       validRootDirectories = response.roots
-        .map(r => r.uri.replace('file://', ''))
-        .filter(Boolean);
+        .map(r => {
+          try {
+            const p = r.uri.startsWith('file://') ? fileURLToPath(r.uri) : r.uri;
+            return path.resolve(p);
+          } catch { return null; }
+        })
+        .filter((p): p is string => p !== null && p.length > 0);
     }
   } catch (err) {
     writeMcpLogLine('warning', `Failed to fetch roots: ${err instanceof Error ? err.message : String(err)}`, 'roots');
@@ -166,6 +172,11 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
     writeMcpLogLine('info', `Roots updated: ${validRootDirectories[0]}`, 'roots');
   }
 });
+
+function safeRealpathSync(p: string): string {
+  try { return fs.realpathSync(path.resolve(p)); }
+  catch { return path.resolve(p); }
+}
 
 function assertRoots(): string | null {
   if (validRootDirectories.length === 0) return null;
@@ -210,7 +221,7 @@ server.registerTool(
 
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const scanLocation = args.scanLocation ? path.resolve(root, args.scanLocation) : root;
-      if (!scanLocation.startsWith(root)) {
+      if (!safeRealpathSync(scanLocation).startsWith(safeRealpathSync(root))) {
         return { isError: true, content: [{ type: 'text', text: `scanLocation must be within the project root: ${root}` }] };
       }
       const scanResult = await scanProject(scanLocation, knowledgeDir);
