@@ -10,6 +10,8 @@ import {
   SAMPLING_TOKEN_BUDGET,
 } from '../types.js';
 
+const SAMPLING_MIN_BATCH_CHARS = 8_000;
+
 // Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
 export type SamplingServer = {
   request(req: unknown, schema: unknown): Promise<{ content: { type: string; text: string } }>;
@@ -93,32 +95,51 @@ export function buildSamplingBatches(
   const graph = buildDepGraph(filesToScan, fileMap);
   const layers = topoLayers(graph);
   const batches: SamplingBatch[] = [];
-  // Already-summarized files are available as context from the start
+
   const summarized = new Set<string>(
     [...summaries.files.entries()].filter(([, v]) => !v.deleted && v.summary).map(([k]) => k)
   );
 
-  for (const layer of layers) {
-    let currentFiles: string[] = [];
-    let currentTokens = 200; // overhead
+  let carryFiles: string[] = [];
+  let carryTokens = 200;
 
-    for (const file of layer) {
-      const deps = [...(graph.get(file) || [])].filter(d => summarized.has(d));
-      const fileTokens = estimateTokens(file, fileMap, deps.length);
+  const flush = () => {
+    if (carryFiles.length === 0) return;
+    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized));
+    carryFiles.forEach(f => summarized.add(f));
+    carryFiles = [];
+    carryTokens = 200;
+  };
 
-      if (currentTokens + fileTokens > SAMPLING_TOKEN_BUDGET && currentFiles.length > 0) {
-        batches.push(buildBatch(currentFiles, fileMap, graph, summaries, summarized));
-        currentFiles = [];
-        currentTokens = 200;
+  for (let li = 0; li < layers.length; li++) {
+    // Sort within each layer by folder path for affinity grouping
+    const sorted = [...layers[li]!].sort((a, b) => {
+      const da = path.dirname(a);
+      const db = path.dirname(b);
+      return da !== db ? da.localeCompare(db) : a.localeCompare(b);
+    });
+
+    for (const file of sorted) {
+      const fileTokens = estimateTokens(
+        file, fileMap,
+        [...(graph.get(file) || [])].filter(d => summarized.has(d)).length
+      );
+      if (carryTokens + fileTokens > SAMPLING_TOKEN_BUDGET && carryFiles.length > 0) {
+        flush();
       }
-      currentFiles.push(file);
-      currentTokens += fileTokens;
+      carryFiles.push(file);
+      carryTokens += fileTokens;
     }
-    if (currentFiles.length > 0) {
-      batches.push(buildBatch(currentFiles, fileMap, graph, summaries, summarized));
+
+    // Flush at layer boundary only when enough content accumulated; else carry into next layer
+    const isLastLayer = li === layers.length - 1;
+    const totalChars = carryFiles.reduce((s, f) => s + (fileMap.get(f)?.sizeChars ?? 0), 0);
+    if (isLastLayer || totalChars >= SAMPLING_MIN_BATCH_CHARS) {
+      flush();
     }
-    layer.forEach(f => summarized.add(f));
   }
+  flush(); // safety net
+
   return batches;
 }
 
