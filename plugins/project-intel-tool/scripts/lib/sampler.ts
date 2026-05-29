@@ -7,10 +7,9 @@ import {
   SamplingFileSummary,
   SummariesData,
   SAMPLING_DELAY_MS,
-  SAMPLING_TOKEN_BUDGET,
+  ScanConfig,
+  DEFAULT_SCAN_CONFIG,
 } from '../types.js';
-
-const SAMPLING_MIN_BATCH_CHARS = 8_000;
 
 // Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
 export type SamplingServer = {
@@ -53,9 +52,9 @@ function topoLayers(graph: Map<string, Set<string>>): string[][] {
   return layers;
 }
 
-function estimateTokens(filePath: string, fileMap: Map<string, FileRefs>, numContextFiles: number): number {
+function estimateTokens(filePath: string, fileMap: Map<string, FileRefs>, numContextFiles: number, charsPerToken: number): number {
   const refs = fileMap.get(filePath);
-  const contentTokens = refs ? Math.ceil(refs.sizeChars / 2.5) : 500;
+  const contentTokens = refs ? Math.ceil(refs.sizeChars / charsPerToken) : 500;
   return contentTokens + numContextFiles * 50 + 300; // 300 = response estimate per file
 }
 
@@ -64,7 +63,8 @@ function buildBatch(
   fileMap: Map<string, FileRefs>,
   _graph: Map<string, Set<string>>,
   summaries: SummariesData,
-  summarized: Set<string>
+  summarized: Set<string>,
+  charsPerToken: number
 ): SamplingBatch {
   const contextPaths = new Set<string>();
   for (const file of files) {
@@ -81,7 +81,7 @@ function buildBatch(
     summary: summaries.files.get(p)?.summary || '',
   }));
   const estimatedTokens = 200 + files.reduce(
-    (sum, f) => sum + estimateTokens(f, fileMap, contextFiles.length),
+    (sum, f) => sum + estimateTokens(f, fileMap, contextFiles.length, charsPerToken),
     0
   );
   return { files, contextFiles, estimatedTokens };
@@ -90,7 +90,8 @@ function buildBatch(
 export function buildSamplingBatches(
   filesToScan: string[],
   fileMap: Map<string, FileRefs>,
-  summaries: SummariesData
+  summaries: SummariesData,
+  config: ScanConfig = DEFAULT_SCAN_CONFIG
 ): SamplingBatch[] {
   const graph = buildDepGraph(filesToScan, fileMap);
   const layers = topoLayers(graph);
@@ -105,7 +106,7 @@ export function buildSamplingBatches(
 
   const flush = () => {
     if (carryFiles.length === 0) return;
-    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized));
+    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized, config.charsPerToken));
     carryFiles.forEach(f => summarized.add(f));
     carryFiles = [];
     carryTokens = 200;
@@ -122,9 +123,10 @@ export function buildSamplingBatches(
     for (const file of sorted) {
       const fileTokens = estimateTokens(
         file, fileMap,
-        [...(graph.get(file) || [])].filter(d => summarized.has(d)).length
+        [...(graph.get(file) || [])].filter(d => summarized.has(d)).length,
+        config.charsPerToken
       );
-      if (carryTokens + fileTokens > SAMPLING_TOKEN_BUDGET && carryFiles.length > 0) {
+      if (carryTokens + fileTokens > config.maxTokensPerBatch && carryFiles.length > 0) {
         flush();
       }
       carryFiles.push(file);
@@ -133,8 +135,7 @@ export function buildSamplingBatches(
 
     // Flush at layer boundary only when enough content accumulated; else carry into next layer
     const isLastLayer = li === layers.length - 1;
-    const totalChars = carryFiles.reduce((s, f) => s + (fileMap.get(f)?.sizeChars ?? 0), 0);
-    if (isLastLayer || totalChars >= SAMPLING_MIN_BATCH_CHARS) {
+    if (isLastLayer || carryTokens >= config.minBatchTokens) {
       flush();
     }
   }

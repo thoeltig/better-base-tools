@@ -7,6 +7,18 @@ export const QUERY_RESULT_MAX: number = 25;
 export const SAMPLING_DELAY_MS: number = 1500;
 export const SAMPLING_TOKEN_BUDGET: number = 50_000;
 
+export interface ScanConfig {
+  maxTokensPerBatch: number;
+  minBatchTokens: number;
+  charsPerToken: number;
+}
+
+export const DEFAULT_SCAN_CONFIG: ScanConfig = {
+  maxTokensPerBatch: SAMPLING_TOKEN_BUDGET,
+  minBatchTokens: 3_200,
+  charsPerToken: 2.5,
+};
+
 export interface SubKnowledgeRef {
   location: string;
   knowledgeDir: string;
@@ -83,12 +95,11 @@ export interface AdditionalContext {
   assistant_instruction: string;
   user_message: string;
   filesNeedingUpdate?: number;
+  filesDetected?: number;
 }
 
 export interface HookResponse {
   continue: boolean;
-  suppressOutput: boolean;
-  systemMessage: string;
   hookSpecificOutput: {
     hookEventName: string;
     additionalContext: string;

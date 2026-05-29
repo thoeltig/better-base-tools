@@ -17,7 +17,10 @@ import {
   HierarchicalGrouping,
   KNOWLEDGE_DIRECTORY,
   QUERY_RESULT_MAX,
+  SAMPLING_TOKEN_BUDGET,
   SamplingFileSummary,
+  ScanConfig,
+  DEFAULT_SCAN_CONFIG,
   ScoredFileSummary,
 } from './types.js';
 
@@ -37,8 +40,29 @@ let isScanning = false;
 // Sampling is replaced by a subagent workaround and logging falls back to console.error for errors only.
 // Both are disabled by default so the server works out of the box in any harness.
 // Enable only when the harness is known to support the respective MCP capability.
-const USE_MCP_SAMPLING = process.env['MCP_SAMPLING'] === 'true' || process.argv.includes('--mcp-sampling');
-const USE_MCP_LOGGING = process.env['MCP_LOGGING'] === 'true' || process.argv.includes('--mcp-logging');
+const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'MCP_SAMPLING', 'false') === 'true';
+const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'MCP_LOGGING', 'false') === 'true';
+
+const scanConfig: ScanConfig = {
+  maxTokensPerBatch: parseInt(parseConfigArg('max-tokens', 'INTEL_MAX_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
+  minBatchTokens: parseInt(parseConfigArg('min-batch-tokens', 'INTEL_MIN_BATCH_TOKENS', String(DEFAULT_SCAN_CONFIG.minBatchTokens)), 10) || DEFAULT_SCAN_CONFIG.minBatchTokens,
+  charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'INTEL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
+};
+
+function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
+  const envVal = process.env[envName];
+  if (envVal !== undefined && envVal !== '') return envVal;
+  const prefix = `--${argName}=`;
+  const exact = process.argv.find(a => a.startsWith(prefix));
+  if (exact) return exact.slice(prefix.length);
+  const idx = process.argv.indexOf(`--${argName}`);
+  if (idx >= 0) {
+    if (process.argv[idx + 1] && !process.argv[idx + 1]!.startsWith('--')) return process.argv[idx + 1]!;
+    return 'true';
+  }
+  return defaultVal;
+}
+
 let activeLockPath: string | null = null;
 
 const shutdownController = new AbortController();
@@ -114,6 +138,7 @@ function prepareAnalysisBatches(
   filesToScan: string[],
   knowledgeDir: string,
   projectRoot: string,
+  config: ScanConfig,
 ): ReturnType<typeof buildSamplingBatches> {
   const fileMap = buildFileMap(filesToScan, projectRoot);
   const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
@@ -126,7 +151,7 @@ function prepareAnalysisBatches(
   });
   const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
   writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
-  return buildSamplingBatches(filesToScan, fileMap, summaries);
+  return buildSamplingBatches(filesToScan, fileMap, summaries, config);
 }
 
 async function runFullScanBackground(
@@ -135,7 +160,7 @@ async function runFullScanBackground(
   projectRoot: string,
 ): Promise<void> {
   try {
-    const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot);
+    const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
 
     await runSamplingBackground(
       batches,
@@ -283,7 +308,7 @@ server.registerTool(
       }
 
       // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
-      const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot);
+      const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
       const batchFiles = writeBatchFiles(batches, knowledgeDir, projectRoot);
       writeMcpLogLine('info', `scan — wrote ${batches.length} batch file(s) for subagent analysis`, 'scan');
       return {
