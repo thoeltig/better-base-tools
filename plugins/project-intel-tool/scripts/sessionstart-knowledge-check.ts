@@ -3,14 +3,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries } from './lib/summary-merger.js';
-import { AdditionalContext, HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig, ENV_INCLUDE_PATHS, ENV_EXCLUDE_PATHS } from './types.js';
+import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig, ENV_INCLUDE_PATHS, ENV_EXCLUDE_PATHS } from './types.js';
 
-function outputHookResponse(additionalContext: AdditionalContext): void {
+function outputHookResponse(systemMessage: string, additionalContext: string): void {
   const response: HookResponse = {
     continue: true,
+    suppressOutput: false,
+    systemMessage: systemMessage,
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: JSON.stringify(additionalContext),
+      additionalContext: additionalContext,
     },
   };
   process.stdout.write(JSON.stringify(response) + '\n');
@@ -29,25 +31,22 @@ async function main(): Promise<void> {
 
   if (!knowledgeDir || !fs.existsSync(knowledgeDir)) {
     const potentialKnowledgeDir = knowledgeDir ?? path.join(cwd, KNOWLEDGE_DIRECTORY);
+    const suggestionMessage = 'Suggest scanning the project to generate a file map which will help you find files and connections between files faster.';
     try {
       const scanResult = await scanProject(cwd, potentialKnowledgeDir, config);
       const totalFiles = scanResult.filesToScan.length;
-      outputHookResponse({
-        severity: 'info',
-        assistant_action: 'suggest_action',
-        assistant_instruction: 'Inform the user no project knowledge exists. Mention how many files were detected and suggest calling the scan tool.',
-        user_message: totalFiles > 0
-          ? `No project knowledge found. ${totalFiles} file(s) detected. Call the scan tool to generate summaries.`
-          : 'No project knowledge found. Call the scan tool to generate summaries.',
-        filesDetected: totalFiles,
-      });
+
+      let systemMessage = 'Project knowledge not yet generated';
+      let additionalContext = 'Suggestion: Inform the user no project knowledge exists';
+      if(totalFiles > 0) {
+        const filesToScanMessagePart = ` but found ${totalFiles} file(s) to scan`;
+        systemMessage += filesToScanMessagePart;
+        additionalContext += filesToScanMessagePart;
+      }
+      additionalContext += '. ' + suggestionMessage;
+      outputHookResponse(systemMessage, additionalContext);
     } catch {
-      outputHookResponse({
-        severity: 'info',
-        assistant_action: 'suggest_action',
-        assistant_instruction: 'Inform the user no project knowledge exists and suggest calling the scan tool.',
-        user_message: 'No project knowledge found. Call the scan tool to generate summaries.',
-      });
+      outputHookResponse('Project knowledge not yet generated', suggestionMessage);
     }
     return;
   }
@@ -65,34 +64,21 @@ async function main(): Promise<void> {
     }
   }
 
-  const totalNeedsUpdate = numberOfFilesToScan + unanalyzedCount;
-  const parts: string[] = [];
-  if (numberOfFilesToScan > 0) parts.push(`${numberOfFilesToScan} file(s) changed`);
-  if (unanalyzedCount > 0) parts.push(`${unanalyzedCount} file(s) without AI analysis`);
+  let statusMessage = `${totalFilesInKnowledge} file summaries available`;
+  if (numberOfFilesToScan > 0) statusMessage + `, ${numberOfFilesToScan} file(s) changed`;
+  if (unanalyzedCount > 0) statusMessage + `, ${unanalyzedCount} file(s) without AI analysis`;
+  statusMessage += '.';
 
-  const userMessage = totalNeedsUpdate > 0
-    ? `${totalFilesInKnowledge} file summaries available, ${parts.join(', ')}. Call the scan tool to update.`
-    : `${totalFilesInKnowledge} file summaries available. Use the query tool to search the project.`;
-
-  outputHookResponse({
-    severity: 'info',
-    assistant_action: totalNeedsUpdate > 0 ? 'suggest_action' : 'inform_only',
-    assistant_instruction: totalNeedsUpdate > 0
-      ? 'Inform the user about detected file changes or missing AI analysis and suggest calling the scan tool.'
-      : 'Inform the user that project knowledge is available for queries.',
-    user_message: userMessage,
-    filesNeedingUpdate: totalNeedsUpdate,
-  });
+  const additionaContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +
+  `The result will also provide you a quick overview of the used technologies, imports and exports, purpose, role and description of each file.` +
+  `The tool is designed to provide you an efficent way to know what files you need for a task without reading the full files.` +
+  `\nFile map and structural information are always up to date, descriptions and purpose might need a reevaluation after file changes to check if the content still matches the summaries: ${statusMessage}`;
+  outputHookResponse(statusMessage, additionaContext);
 }
 
 main()
   .then(() => process.exit(0))
   .catch(() => {
-    outputHookResponse({
-      severity: 'warning',
-      assistant_action: 'inform_only',
-      assistant_instruction: 'Knowledge check failed. Proceed normally.',
-      user_message: 'Could not check project knowledge status.',
-    });
+    outputHookResponse('Knowledge check failed', 'Could not check project knowledge status. Most likely an issue with the MCP sever.');
     process.exit(0);
   });

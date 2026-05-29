@@ -95,17 +95,10 @@ export interface GroupedScoredFileSummary extends FileSummary {
 }
 
 // Session start hook
-export interface AdditionalContext {
-  severity: string;
-  assistant_action: string;
-  assistant_instruction: string;
-  user_message: string;
-  filesNeedingUpdate?: number;
-  filesDetected?: number;
-}
-
 export interface HookResponse {
   continue: boolean;
+  suppressOutput: boolean;
+  systemMessage: string;
   hookSpecificOutput: {
     hookEventName: string;
     additionalContext: string;
