@@ -24,7 +24,6 @@ import {
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
   ScoredFileSummary,
-  SUMMARIES_FILE,
 } from './types.js';
 
 const server = new McpServer(
@@ -151,20 +150,8 @@ function prepareAnalysisBatches(
     ...[...existingSummaries.files.entries()].filter(([, v]) => !v.deleted)
       .map(([abs]) => path.relative(toAbsReal(projectRoot, '.'), abs).replace(/\\/g, '/')),
   ])];
-  const summariesRelPath = path.relative(toAbsReal(projectRoot, '.'), toAbsReal(knowledgeDir, SUMMARIES_FILE)).replace(/\\/g, '/');
   const fileMap = buildFileMap(filesToScan, projectRoot, allProjectFiles);
-  const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
-    const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
-    const entry: SamplingFileSummary = { path: filePath, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
-    if (fm.exports.length > 0) entry.exports = fm.exports;
-    if (fm.imports.length > 0) entry.imports = fm.imports;
-    const refs = fm.refs.filter(r => r !== summariesRelPath);
-    if (refs.length > 0) entry.refs = refs;
-    return entry;
-  });
-  const summaries = mergeSamplingResults(knowledgeDir, structuralEntries, projectRoot);
-  writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
-  return buildSamplingBatches(filesToScan, fileMap, summaries, config, projectRoot);
+  return buildSamplingBatches(filesToScan, fileMap, existingSummaries, config, projectRoot);
 }
 
 async function runFullScanBackground(
