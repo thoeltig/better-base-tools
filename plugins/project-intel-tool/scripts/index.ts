@@ -47,6 +47,8 @@ const scanConfig: ScanConfig = {
   maxTokensPerBatch: parseInt(parseConfigArg('max-tokens', 'INTEL_MAX_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
   minBatchTokens: parseInt(parseConfigArg('min-batch-tokens', 'INTEL_MIN_BATCH_TOKENS', String(DEFAULT_SCAN_CONFIG.minBatchTokens)), 10) || DEFAULT_SCAN_CONFIG.minBatchTokens,
   charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'INTEL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
+  includePaths: parseConfigArg('include', 'INTEL_INCLUDE_PATHS', '').split(',').filter(Boolean),
+  excludePaths: parseConfigArg('exclude', 'INTEL_EXCLUDE_PATHS', '').split(',').filter(Boolean),
 };
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
@@ -270,7 +272,7 @@ server.registerTool(
       if (!safeRealpathSync(scanLocation).startsWith(safeRealpathSync(root))) {
         return { isError: true, content: [{ type: 'text', text: `scanLocation must be within the project root: ${root}` }] };
       }
-      const scanResult = await scanProject(scanLocation, knowledgeDir);
+      const scanResult = await scanProject(scanLocation, knowledgeDir, scanConfig);
       const { filesToScan } = scanResult;
 
       if (filesToScan.length === 0) {

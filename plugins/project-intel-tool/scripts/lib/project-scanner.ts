@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted } from './summary-merger.js';
-import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, SubKnowledgeRef, SummariesData } from '../types.js';
+import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
 
 export interface ScanResult {
   filesToScan: string[];
@@ -32,6 +32,31 @@ function shouldIgnore(name: string): boolean {
   return IGNORED_DIRS.has(name);
 }
 
+function isWithinDir(filePath: string, dir: string): boolean {
+  const rel = path.relative(dir, filePath);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+function isPathExcluded(absPath: string, excludeAbsPaths: string[]): boolean {
+  return excludeAbsPaths.some(excl => isWithinDir(absPath, excl));
+}
+
+function resolveConfigPaths(
+  includePaths: string[],
+  excludePaths: string[],
+  location: string
+): { includes: string[]; excludes: string[] } {
+  const base = path.resolve(location);
+  const excludes = excludePaths
+    .map(p => path.resolve(base, p))
+    .filter(p => isWithinDir(p, base));
+  const includes = includePaths
+    .map(p => path.resolve(base, p))
+    .filter(p => isWithinDir(p, base))
+    .filter(p => !excludes.some(excl => isWithinDir(p, excl)));
+  return { includes, excludes };
+}
+
 function isGitRepository(): boolean {
   try { execSync('git rev-parse --git-dir', { stdio: 'ignore' }); return true; }
   catch { return false; }
@@ -54,7 +79,7 @@ function getSummaryFileMap(summaries: SummariesData): Map<string, Date> {
   return map;
 }
 
-function getFilesFromGit(location: string, summaries: SummariesData, projectRoot: string): Files {
+function getFilesFromGit(location: string, summaries: SummariesData, projectRoot: string, excludeAbsPaths: string[]): Files {
   const files: Files = { new: [], modified: [], deleted: [] };
   try {
     const gitRoot = getGitRoot();
@@ -62,7 +87,8 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
       .trim().split('\n').filter(Boolean)
       .filter(f => !f.split('/').some(shouldIgnore))
       // git ls-files --full-name returns paths relative to git root
-      .map(f => toRelative(path.resolve(gitRoot, f), projectRoot));
+      .map(f => toRelative(path.resolve(gitRoot, f), projectRoot))
+      .filter(relPath => !isPathExcluded(path.resolve(projectRoot, relPath), excludeAbsPaths));
 
     const summaryMap = getSummaryFileMap(summaries);
     if (summaryMap.size === 0) {
@@ -86,6 +112,7 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
         currentDate = new Date(line);
       } else if (currentDate && !line.split('/').some(shouldIgnore)) {
         const absPath = path.resolve(gitRoot, line);
+        if (isPathExcluded(absPath, excludeAbsPaths)) continue;
         const relPath = toRelative(absPath, projectRoot);
         const lastUpdated = summaryMap.get(relPath);
         if ((!lastUpdated || lastUpdated < currentDate) && !modifiedMap.has(relPath) && fs.existsSync(absPath)) {
@@ -116,7 +143,8 @@ function scanDirRecursive(
   dir: string,
   filePaths: Map<string, Date>,
   subKnowledge: SubKnowledgeRef[],
-  projectRoot: string
+  projectRoot: string,
+  excludeAbsPaths: string[] = []
 ): void {
   try {
     for (const entry of fs.readdirSync(dir)) {
@@ -134,7 +162,8 @@ function scanDirRecursive(
           }
           continue;
         }
-        scanDirRecursive(fullPath, filePaths, subKnowledge, projectRoot);
+        if (isPathExcluded(fullPath, excludeAbsPaths)) continue;
+        scanDirRecursive(fullPath, filePaths, subKnowledge, projectRoot, excludeAbsPaths);
       } else if (stat.isFile()) {
         filePaths.set(fullPath, stat.mtime);
       }
@@ -146,12 +175,13 @@ function getFilesFromFileSystem(
   location: string,
   summaries: SummariesData,
   projectRoot: string,
-  subKnowledge: SubKnowledgeRef[]
+  subKnowledge: SubKnowledgeRef[],
+  excludeAbsPaths: string[] = []
 ): Files {
   const files: Files = { new: [], modified: [], deleted: [] };
   try {
     const fsFiles = new Map<string, Date>();
-    scanDirRecursive(location, fsFiles, subKnowledge, projectRoot);
+    scanDirRecursive(location, fsFiles, subKnowledge, projectRoot, excludeAbsPaths);
 
     const summaryMap = getSummaryFileMap(summaries);
     if (summaryMap.size === 0) {
@@ -213,7 +243,7 @@ export function findKnowledgeDir(location: string): string | undefined {
   return searchForKnowledgeDir(location);
 }
 
-export async function scanProject(location: string, knowledgeDir: string): Promise<ScanResult> {
+export async function scanProject(location: string, knowledgeDir: string, scanConfig: ScanConfig): Promise<ScanResult> {
   const summaries = getOrCreateSummaries(knowledgeDir);
   const projectRoot = path.dirname(path.resolve(knowledgeDir));
   const resolvedLocation = path.resolve(location);
@@ -230,11 +260,25 @@ export async function scanProject(location: string, knowledgeDir: string): Promi
   const detectedSubKnowledge: SubKnowledgeRef[] = [...summaries.subKnowledge];
   let files: Files;
 
+  const { includes: includeAbsPaths, excludes: excludeAbsPaths } = resolveConfigPaths(
+    scanConfig.includePaths, scanConfig.excludePaths, resolvedLocation
+  );
+
   if (isGitRepository()) {
-    files = getFilesFromGit(resolvedLocation, summaries, projectRoot);
+    files = getFilesFromGit(resolvedLocation, summaries, projectRoot, excludeAbsPaths);
+    for (const inclPath of includeAbsPaths) {
+      if (fs.existsSync(inclPath)) {
+        const inclFiles = getFilesFromFileSystem(inclPath, summaries, projectRoot, detectedSubKnowledge, excludeAbsPaths);
+        files.new.push(...inclFiles.new);
+        files.modified.push(...inclFiles.modified);
+        files.deleted.push(...inclFiles.deleted);
+      }
+    }
   } else {
-    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge);
+    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge, excludeAbsPaths);
   }
+
+  files.deleted = [...new Set(files.deleted)];
 
   if (files.deleted.length > 0) {
     markFilesAsDeleted(files.deleted, summaries, knowledgeDir);

@@ -11,12 +11,16 @@ export interface ScanConfig {
   maxTokensPerBatch: number;
   minBatchTokens: number;
   charsPerToken: number;
+  includePaths: string[];
+  excludePaths: string[];
 }
 
 export const DEFAULT_SCAN_CONFIG: ScanConfig = {
   maxTokensPerBatch: SAMPLING_TOKEN_BUDGET,
   minBatchTokens: 3_200,
   charsPerToken: 2.5,
+  includePaths: [],
+  excludePaths: [],
 };
 
 export interface SubKnowledgeRef {
