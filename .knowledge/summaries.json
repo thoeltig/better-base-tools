@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-28T13:59:27.416Z",
+  "generated": "2026-05-29T17:45:05.611Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "path": ".claude-plugin/marketplace.json",
@@ -884,7 +884,7 @@
     },
     "plugins/project-intel-tool/hooks/hooks.json": {
       "path": "plugins/project-intel-tool/hooks/hooks.json",
-      "sizeChars": 264,
+      "sizeChars": 241,
       "lineCount": 15,
       "deleted": false,
       "lastUpdated": "2026-05-28T08:41:38.916Z",
@@ -894,6 +894,17 @@
       "technologies": [
         "JSON"
       ]
+    },
+    "plugins/project-intel-tool/hooks/sessionstart.js": {
+      "sizeChars": 1182,
+      "lineCount": 45,
+      "imports": [
+        "fs",
+        "path",
+        "child_process"
+      ],
+      "deleted": false,
+      "lastUpdated": "2026-05-29T15:02:24.194Z"
     },
     "plugins/project-intel-tool/LICENSE": {
       "path": "plugins/project-intel-tool/LICENSE",
@@ -923,8 +934,8 @@
     },
     "plugins/project-intel-tool/scripts/index.ts": {
       "path": "plugins/project-intel-tool/scripts/index.ts",
-      "sizeChars": 19911,
-      "lineCount": 509,
+      "sizeChars": 22544,
+      "lineCount": 548,
       "imports": [
         "@modelcontextprotocol/sdk",
         "url",
@@ -973,7 +984,7 @@
     },
     "plugins/project-intel-tool/scripts/lib/file-map.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/file-map.ts",
-      "sizeChars": 6173,
+      "sizeChars": 6220,
       "lineCount": 182,
       "exports": [
         "FileRefs",
@@ -998,8 +1009,8 @@
     },
     "plugins/project-intel-tool/scripts/lib/project-scanner.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
-      "sizeChars": 9152,
-      "lineCount": 269,
+      "sizeChars": 13057,
+      "lineCount": 344,
       "exports": [
         "ScanResult",
         "findKnowledgeDir"
@@ -1022,8 +1033,8 @@
     },
     "plugins/project-intel-tool/scripts/lib/sampler.test.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/sampler.test.ts",
-      "sizeChars": 6250,
-      "lineCount": 150,
+      "sizeChars": 6496,
+      "lineCount": 152,
       "imports": [
         "vitest"
       ],
@@ -1040,8 +1051,8 @@
     },
     "plugins/project-intel-tool/scripts/lib/sampler.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/sampler.ts",
-      "sizeChars": 9621,
-      "lineCount": 269,
+      "sizeChars": 10193,
+      "lineCount": 291,
       "exports": [
         "SamplingServer",
         "buildSamplingBatches",
@@ -1088,9 +1099,10 @@
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/summary-merger.ts",
-      "sizeChars": 2311,
-      "lineCount": 69,
+      "sizeChars": 2908,
+      "lineCount": 84,
       "exports": [
+        "isSummariesFile",
         "getOrCreateSummaries",
         "writeSummaries",
         "mergeSamplingResults",
@@ -1144,10 +1156,11 @@
     },
     "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts": {
       "path": "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts",
-      "sizeChars": 2480,
-      "lineCount": 68,
+      "sizeChars": 3864,
+      "lineCount": 84,
       "imports": [
-        "fs"
+        "fs",
+        "path"
       ],
       "deleted": false,
       "lastUpdated": "2026-05-28T08:41:19.295Z",
@@ -1175,8 +1188,8 @@
     },
     "plugins/project-intel-tool/scripts/types.ts": {
       "path": "plugins/project-intel-tool/scripts/types.ts",
-      "sizeChars": 2326,
-      "lineCount": 97,
+      "sizeChars": 2743,
+      "lineCount": 107,
       "exports": [
         "KNOWLEDGE_DIRECTORY",
         "SUMMARIES_FILE",
@@ -1186,6 +1199,10 @@
         "QUERY_RESULT_MAX",
         "SAMPLING_DELAY_MS",
         "SAMPLING_TOKEN_BUDGET",
+        "ENV_INCLUDE_PATHS",
+        "ENV_EXCLUDE_PATHS",
+        "ScanConfig",
+        "DEFAULT_SCAN_CONFIG",
         "SubKnowledgeRef",
         "FileSummary",
         "SummariesDataStorage",
@@ -1195,7 +1212,6 @@
         "HierarchicalGrouping",
         "ScoredFileSummary",
         "GroupedScoredFileSummary",
-        "AdditionalContext",
         "HookResponse"
       ],
       "deleted": false,
