@@ -65,9 +65,8 @@ async function main(): Promise<void> {
   }
 
   let statusMessage = `${totalFilesInKnowledge} file summaries available`;
-  if (numberOfFilesToScan > 0) statusMessage + `, ${numberOfFilesToScan} file(s) changed`;
-  if (unanalyzedCount > 0) statusMessage + `, ${unanalyzedCount} file(s) without AI analysis`;
-  statusMessage += '.';
+  if (numberOfFilesToScan > 0) statusMessage += `, ${numberOfFilesToScan} file(s) changed`;
+  if (unanalyzedCount > 0) statusMessage += `, ${unanalyzedCount} file(s) without AI analysis`;
 
   const additionaContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +
   `The result will also provide you a quick overview of the used technologies, imports and exports, purpose, role and description of each file.` +
