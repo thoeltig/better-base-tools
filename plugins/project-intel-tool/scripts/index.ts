@@ -12,6 +12,8 @@ import { getOrCreateSummaries, mergeSamplingResults } from './lib/summary-merger
 import { buildFileMap } from './lib/file-map.js';
 import { buildSamplingBatches, runSamplingBackground, writeBatchFiles, SamplingServer } from './lib/sampler.js';
 import {
+  ENV_INCLUDE_PATHS,
+  ENV_EXCLUDE_PATHS,
   FORMAT_GROUPED,
   GroupedScoredFileSummary,
   HierarchicalGrouping,
@@ -47,8 +49,8 @@ const scanConfig: ScanConfig = {
   maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
   minBatchTokens: parseInt(parseConfigArg('min-batch-tokens', 'PROJECT_INTEL_TOOL_MIN_BATCH_TOKENS', String(DEFAULT_SCAN_CONFIG.minBatchTokens)), 10) || DEFAULT_SCAN_CONFIG.minBatchTokens,
   charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'PROJECT_INTEL_TOOL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
-  includePaths: parseConfigArg('include', 'PROJECT_INTEL_TOOL_INCLUDE_PATHS', '').split(',').filter(Boolean),
-  excludePaths: parseConfigArg('exclude', 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS', '').split(',').filter(Boolean),
+  includePaths: parseConfigArg('include', ENV_INCLUDE_PATHS, '').split(',').filter(Boolean),
+  excludePaths: parseConfigArg('exclude', ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean),
 };
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {

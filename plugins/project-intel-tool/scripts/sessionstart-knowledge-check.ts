@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries } from './lib/summary-merger.js';
-import { AdditionalContext, HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig } from './types.js';
+import { AdditionalContext, HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig, ENV_INCLUDE_PATHS, ENV_EXCLUDE_PATHS } from './types.js';
 
 function outputHookResponse(additionalContext: AdditionalContext): void {
   const response: HookResponse = {
@@ -21,8 +21,8 @@ async function main(): Promise<void> {
 
   const config: ScanConfig = {
     ...DEFAULT_SCAN_CONFIG,
-    includePaths: (process.env['INTEL_INCLUDE_PATHS'] ?? '').split(',').filter(Boolean),
-    excludePaths: (process.env['INTEL_EXCLUDE_PATHS'] ?? '').split(',').filter(Boolean),
+    includePaths: (process.env[ENV_INCLUDE_PATHS] ?? '').split(',').filter(Boolean),
+    excludePaths: (process.env[ENV_EXCLUDE_PATHS] ?? '').split(',').filter(Boolean),
   };
 
   const knowledgeDir = findKnowledgeDir(cwd);
