@@ -295,13 +295,11 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     ])];
     const summariesRelPath = toRelative(toAbsReal(knowledgeDir, SUMMARIES_FILE), projectRoot);
     const fileMap = buildFileMap(unique, projectRoot, allProjectFiles);
-    const now = new Date().toISOString();
     for (let i = 0; i < unique.length; i++) {
       const relPath = unique[i]!;
       const absPath = uniqueAbs[i]!;
       const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
       const existing = summaries.files.get(absPath) ?? {};
-      const isEffectivelyNew = !existing.lastUpdated || existing.deleted;
       const refs = fm.refs.filter(r => r !== summariesRelPath);
       summaries.files.set(absPath, {
         ...existing,
@@ -311,7 +309,6 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
         ...(fm.imports.length > 0 ? { imports: fm.imports } : {}),
         ...(refs.length > 0 ? { refs } : {}),
         deleted: false,
-        lastUpdated: isEffectivelyNew ? now : (existing.lastUpdated ?? now),
       });
     }
     writeSummaries(knowledgeDir, summaries, projectRoot);
