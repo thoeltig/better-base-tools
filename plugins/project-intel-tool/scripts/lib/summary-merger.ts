@@ -15,21 +15,26 @@ export function isSummariesFile(filePath: string): boolean {
   return idx !== -1 && parts[idx + 1] === SUMMARIES_FILE;
 }
 
-export function getOrCreateSummaries(knowledgeDir: string): SummariesData {
+export function toAbsReal(base: string, p: string): string {
+  const abs = path.isAbsolute(p) ? p : path.resolve(base, p);
+  try { return fs.realpathSync(abs); } catch { return abs; }
+}
+
+export function getOrCreateSummaries(knowledgeDir: string, projectRoot: string): SummariesData {
   const summariesPath = path.join(knowledgeDir, SUMMARIES_FILE);
   if (fs.existsSync(summariesPath)) {
     try {
       const storage = JSON.parse(fs.readFileSync(summariesPath, 'utf8')) as SummariesDataStorage;
       const files = new Map<string, FileSummary>();
       for (const [key, value] of Object.entries(storage.files)) {
-        const normalizedKey = normalizePath(key);
-        const existing = files.get(normalizedKey);
+        const absKey = toAbsReal(projectRoot, key);
+        const existing = files.get(absKey);
         if (
           !existing ||
           (existing.deleted && !value.deleted) ||
           (existing.deleted === value.deleted && !!value.lastUpdated && (!existing.lastUpdated || value.lastUpdated > existing.lastUpdated))
         ) {
-          files.set(normalizedKey, value);
+          files.set(absKey, value);
         }
       }
       return {
@@ -48,45 +53,46 @@ export function getOrCreateSummaries(knowledgeDir: string): SummariesData {
   };
 }
 
-export function writeSummaries(knowledgeDir: string, data: SummariesData): void {
+export function writeSummaries(knowledgeDir: string, data: SummariesData, projectRoot: string): void {
   const summariesPath = path.join(knowledgeDir, SUMMARIES_FILE);
   const tempPath = summariesPath + '.tmp';
+  const absRoot = toAbsReal(projectRoot, '.');
   const storage: SummariesDataStorage = {
     generated: new Date().toISOString(),
-    // Sort by file path for stable git diffs
-    files: Object.fromEntries([...data.files.entries()].filter(([k]) => !isSummariesFile(k)).sort(([a], [b]) => a.localeCompare(b))),
+    files: Object.fromEntries(
+      [...data.files.entries()]
+        .map(([absKey, v]) => [path.relative(absRoot, absKey).replace(/\\/g, '/'), v] as const)
+        .filter(([relKey]) => !isSummariesFile(relKey))
+        .sort(([a], [b]) => a.localeCompare(b))
+    ),
     ...(data.subKnowledge.length > 0 ? { subKnowledge: data.subKnowledge } : {}),
   };
   fs.writeFileSync(tempPath, JSON.stringify(storage, null, 2));
   fs.renameSync(tempPath, summariesPath);
 }
 
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '').trim();
-}
-
-export function mergeSamplingResults(knowledgeDir: string, results: SamplingFileSummary[]): SummariesData {
-  const summaries = getOrCreateSummaries(knowledgeDir);
+export function mergeSamplingResults(knowledgeDir: string, results: SamplingFileSummary[], projectRoot: string): SummariesData {
+  const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
   for (const result of results) {
-    const normalizedPath = normalizePath(result.path);
-    const existing = summaries.files.get(normalizedPath) || {};
-    summaries.files.set(normalizedPath, {
+    const absPath = toAbsReal(projectRoot, result.path);
+    const existing = summaries.files.get(absPath) || {};
+    summaries.files.set(absPath, {
       ...existing,
       ...result,
       deleted: false,
       lastUpdated: new Date().toISOString(),
     });
   }
-  writeSummaries(knowledgeDir, summaries);
+  writeSummaries(knowledgeDir, summaries, projectRoot);
   return summaries;
 }
 
-export function markFilesAsDeleted(filePaths: string[], summaries: SummariesData, knowledgeDir: string): void {
+export function markFilesAsDeleted(filePaths: string[], summaries: SummariesData, knowledgeDir: string, projectRoot: string): void {
   for (const filePath of filePaths) {
     const existing = summaries.files.get(filePath);
     if (existing) {
       summaries.files.set(filePath, { ...existing, deleted: true });
     }
   }
-  writeSummaries(knowledgeDir, summaries);
+  writeSummaries(knowledgeDir, summaries, projectRoot);
 }

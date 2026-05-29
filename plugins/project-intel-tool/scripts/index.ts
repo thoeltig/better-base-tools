@@ -8,7 +8,7 @@ import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
-import { getOrCreateSummaries, mergeSamplingResults } from './lib/summary-merger.js';
+import { getOrCreateSummaries, mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
 import { buildSamplingBatches, runSamplingBackground, writeBatchFiles, SamplingServer } from './lib/sampler.js';
 import {
@@ -145,13 +145,13 @@ function prepareAnalysisBatches(
   projectRoot: string,
   config: ScanConfig,
 ): ReturnType<typeof buildSamplingBatches> {
-  const existingSummaries = getOrCreateSummaries(knowledgeDir);
+  const existingSummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
   const allProjectFiles = [...new Set([
     ...filesToScan,
-    ...[...existingSummaries.files.entries()].filter(([, v]) => !v.deleted).map(([k]) => k),
+    ...[...existingSummaries.files.entries()].filter(([, v]) => !v.deleted)
+      .map(([abs]) => path.relative(toAbsReal(projectRoot, '.'), abs).replace(/\\/g, '/')),
   ])];
-  const realpath = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
-  const summariesRelPath = path.relative(realpath(projectRoot), realpath(path.join(knowledgeDir, SUMMARIES_FILE))).split(path.sep).join('/');
+  const summariesRelPath = path.relative(toAbsReal(projectRoot, '.'), toAbsReal(knowledgeDir, SUMMARIES_FILE)).replace(/\\/g, '/');
   const fileMap = buildFileMap(filesToScan, projectRoot, allProjectFiles);
   const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
     const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
@@ -162,9 +162,9 @@ function prepareAnalysisBatches(
     if (refs.length > 0) entry.refs = refs;
     return entry;
   });
-  const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
+  const summaries = mergeSamplingResults(knowledgeDir, structuralEntries, projectRoot);
   writeMcpLogLine('info', `Pre-populated ${filesToScan.length} file(s) with structural data`, 'scan');
-  return buildSamplingBatches(filesToScan, fileMap, summaries, config);
+  return buildSamplingBatches(filesToScan, fileMap, summaries, config, projectRoot);
 }
 
 async function runFullScanBackground(
@@ -232,10 +232,7 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
   }
 });
 
-function safeRealpathSync(p: string): string {
-  try { return fs.realpathSync(path.resolve(p)); }
-  catch { return path.resolve(p); }
-}
+
 
 function assertRoots(): string | null {
   if (validRootDirectories.length === 0) return null;
@@ -280,7 +277,7 @@ server.registerTool(
 
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const scanLocation = args.scanLocation ? path.resolve(root, args.scanLocation) : root;
-      if (!safeRealpathSync(scanLocation).startsWith(safeRealpathSync(root))) {
+      if (!toAbsReal(scanLocation, '.').startsWith(toAbsReal(root, '.'))) {
         return { isError: true, content: [{ type: 'text', text: `scanLocation must be within the project root: ${root}` }] };
       }
       const scanResult = await scanProject(scanLocation, knowledgeDir, scanConfig);
@@ -385,7 +382,8 @@ if (!USE_MCP_SAMPLING) {
         return { isError: true, content: [{ type: 'text', text: 'submit_analysis: timed out waiting for write lock' }] };
       }
       try {
-        mergeSamplingResults(knowledgeDir, args.results as SamplingFileSummary[]);
+        const projectRoot = path.dirname(path.resolve(knowledgeDir));
+        mergeSamplingResults(knowledgeDir, args.results as SamplingFileSummary[], projectRoot);
         writeMcpLogLine('info', `submit_analysis — merged ${args.results.length} file(s)`, 'submit');
         return {
           content: [{ type: 'text', text: JSON.stringify({ status: 'success', filesProcessed: args.results.length }) }],
@@ -446,13 +444,15 @@ server.registerTool(
       const maxResults = args.max || QUERY_RESULT_MAX;
       const format = args.format || FORMAT_GROUPED;
 
-      const primarySummaries = getOrCreateSummaries(knowledgeDir);
+      const projectRoot = path.dirname(path.resolve(knowledgeDir));
+      const primarySummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
       const scored: ScoredFileSummary[] = [];
 
-      const scoreFiles = (summaries: ReturnType<typeof getOrCreateSummaries>, pathPrefix: string) => {
-        summaries.files.forEach((summary, filePath) => {
+      const scoreFiles = (summaries: ReturnType<typeof getOrCreateSummaries>, pathPrefix: string, summaryProjectRoot: string) => {
+        summaries.files.forEach((summary, absPath) => {
           if (summary.deleted) return;
-          const prefixedPath = pathPrefix ? `${pathPrefix}/${filePath}`.replace(/\/\//g, '/') : filePath;
+          const relPath = path.relative(summaryProjectRoot, absPath).replace(/\\/g, '/');
+          const prefixedPath = pathPrefix ? `${pathPrefix}/${relPath}`.replace(/\/\//g, '/') : relPath;
           if (scope && !prefixedPath.startsWith(scope)) return;
           const score = calculateConfidence(keywords, prefixedPath, summary);
           if (score > 0) {
@@ -462,13 +462,14 @@ server.registerTool(
         });
       };
 
-      scoreFiles(primarySummaries, '');
+      scoreFiles(primarySummaries, '', projectRoot);
 
       for (const ref of primarySummaries.subKnowledge) {
-        const subDir = path.resolve(path.dirname(path.resolve(knowledgeDir)), ref.knowledgeDir);
+        const subDir = path.resolve(projectRoot, ref.knowledgeDir);
         if (fs.existsSync(subDir)) {
-          const subSummaries = getOrCreateSummaries(subDir);
-          scoreFiles(subSummaries, ref.location);
+          const subProjectRoot = path.dirname(path.resolve(subDir));
+          const subSummaries = getOrCreateSummaries(subDir, subProjectRoot);
+          scoreFiles(subSummaries, ref.location, subProjectRoot);
         }
       }
 

@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { buildSamplingBatches } from './sampler.js';
+import { toAbsReal } from './summary-merger.js';
 import type { FileRefs } from './file-map.js';
 import type { SummariesData } from '../types.js';
+
+const TEST_ROOT = '.';
+const abs = (p: string) => toAbsReal(TEST_ROOT, p);
 
 function makeFileRefs(overrides: Partial<FileRefs> = {}): FileRefs {
   return { imports: [], exports: [], refs: [], sizeChars: 1000, lineCount: 40, ...overrides };
@@ -89,9 +93,9 @@ describe('buildSamplingBatches — context files', () => {
     const files = ['a.ts'];
     const fileMap = new Map([['a.ts', makeFileRefs({ refs: ['b.ts'] })]]);
     const summaries = emptySummaries();
-    summaries.files.set('b.ts', { summary: 'B does something useful', lastUpdated: new Date().toISOString() });
+    summaries.files.set(abs('b.ts'), { summary: 'B does something useful', lastUpdated: new Date().toISOString() });
 
-    const batches = buildSamplingBatches(files, fileMap, summaries);
+    const batches = buildSamplingBatches(files, fileMap, summaries, undefined, TEST_ROOT);
     const ctx = batches[0]?.contextFiles ?? [];
     expect(ctx.some(c => c.path === 'b.ts' && c.summary === 'B does something useful')).toBe(true);
   });
@@ -100,9 +104,9 @@ describe('buildSamplingBatches — context files', () => {
     const files = ['a.ts'];
     const fileMap = new Map([['a.ts', makeFileRefs({ refs: ['b.ts'] })]]);
     const summaries = emptySummaries();
-    summaries.files.set('b.ts', { summary: 'B summary', deleted: true, lastUpdated: new Date().toISOString() });
+    summaries.files.set(abs('b.ts'), { summary: 'B summary', deleted: true, lastUpdated: new Date().toISOString() });
 
-    const batches = buildSamplingBatches(files, fileMap, summaries);
+    const batches = buildSamplingBatches(files, fileMap, summaries, undefined, TEST_ROOT);
     const ctx = batches[0]?.contextFiles ?? [];
     expect(ctx.some(c => c.path === 'b.ts')).toBe(false);
   });

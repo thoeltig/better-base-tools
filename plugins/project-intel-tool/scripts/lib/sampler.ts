@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { FileRefs } from './file-map.js';
-import { mergeSamplingResults } from './summary-merger.js';
+import { mergeSamplingResults, toAbsReal } from './summary-merger.js';
 import {
   SamplingBatch,
   SamplingFileSummary,
@@ -64,21 +64,21 @@ function buildBatch(
   _graph: Map<string, Set<string>>,
   summaries: SummariesData,
   summarized: Set<string>,
-  charsPerToken: number
+  charsPerToken: number,
+  toAbs: (p: string) => string
 ): SamplingBatch {
   const contextPaths = new Set<string>();
   for (const file of files) {
     const refs = fileMap.get(file);
-    // Use all refs from the file map (includes deps outside the scan set)
     for (const dep of refs?.refs ?? []) {
-      if (summarized.has(dep) && summaries.files.get(dep)?.summary) {
+      if (summarized.has(toAbs(dep)) && summaries.files.get(toAbs(dep))?.summary) {
         contextPaths.add(dep);
       }
     }
   }
   const contextFiles = [...contextPaths].map(p => ({
     path: p,
-    summary: summaries.files.get(p)?.summary || '',
+    summary: summaries.files.get(toAbs(p))?.summary || '',
   }));
   const estimatedTokens = 200 + files.reduce(
     (sum, f) => sum + estimateTokens(f, fileMap, contextFiles.length, charsPerToken),
@@ -91,12 +91,15 @@ export function buildSamplingBatches(
   filesToScan: string[],
   fileMap: Map<string, FileRefs>,
   summaries: SummariesData,
-  config: ScanConfig = DEFAULT_SCAN_CONFIG
+  config: ScanConfig = DEFAULT_SCAN_CONFIG,
+  projectRoot: string = '.'
 ): SamplingBatch[] {
   const graph = buildDepGraph(filesToScan, fileMap);
   const layers = topoLayers(graph);
   const batches: SamplingBatch[] = [];
 
+  // summaries.files has abs keys; convert to relative for comparison with filesToScan/refs
+  const toAbs = (p: string) => toAbsReal(projectRoot, p);
   const summarized = new Set<string>(
     [...summaries.files.entries()].filter(([, v]) => !v.deleted && v.summary).map(([k]) => k)
   );
@@ -106,14 +109,13 @@ export function buildSamplingBatches(
 
   const flush = () => {
     if (carryFiles.length === 0) return;
-    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized, config.charsPerToken));
-    carryFiles.forEach(f => summarized.add(f));
+    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized, config.charsPerToken, toAbs));
+    carryFiles.forEach(f => summarized.add(toAbs(f)));
     carryFiles = [];
     carryTokens = 200;
   };
 
   for (let li = 0; li < layers.length; li++) {
-    // Sort within each layer by folder path for affinity grouping
     const sorted = [...layers[li]!].sort((a, b) => {
       const da = path.dirname(a);
       const db = path.dirname(b);
@@ -123,7 +125,7 @@ export function buildSamplingBatches(
     for (const file of sorted) {
       const fileTokens = estimateTokens(
         file, fileMap,
-        [...(graph.get(file) || [])].filter(d => summarized.has(d)).length,
+        [...(graph.get(file) || [])].filter(d => summarized.has(toAbs(d))).length,
         config.charsPerToken
       );
       if (carryTokens + fileTokens > config.maxTokensPerBatch && carryFiles.length > 0) {
@@ -133,13 +135,12 @@ export function buildSamplingBatches(
       carryTokens += fileTokens;
     }
 
-    // Flush at layer boundary only when enough content accumulated; else carry into next layer
     const isLastLayer = li === layers.length - 1;
     if (isLastLayer || carryTokens >= config.minBatchTokens) {
       flush();
     }
   }
-  flush(); // safety net
+  flush();
 
   return batches;
 }
@@ -254,7 +255,7 @@ export async function runSamplingBackground(
 
       if (response?.content?.type === 'text') {
         const results = parseResponse(response.content.text);
-        mergeSamplingResults(knowledgeDir, results);
+        mergeSamplingResults(knowledgeDir, results, projectRoot);
         log('info', `Batch ${i + 1} saved: ${results.length} file(s)`);
       }
     } catch (err) {

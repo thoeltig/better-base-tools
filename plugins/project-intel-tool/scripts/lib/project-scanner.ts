@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted, isSummariesFile } from './summary-merger.js';
+import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted, isSummariesFile, toAbsReal } from './summary-merger.js';
 import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
 import { buildFileMap } from './file-map.js';
 
@@ -42,20 +42,17 @@ function isPathExcluded(absPath: string, excludeAbsPaths: string[]): boolean {
   return excludeAbsPaths.some(excl => isWithinDir(absPath, excl));
 }
 
-// NOTE: path.resolve normalizes but does not dereference symlinks. If location or config paths
-// contain symlink components, resolved strings may not match filesystem walk paths. Fixing this
-// requires fs.realpathSync across the entire scanner (toRelative, scanDirRecursive, etc.).
 function resolveConfigPaths(
   includePaths: string[],
   excludePaths: string[],
   location: string
 ): { includes: string[]; excludes: string[] } {
-  const base = path.resolve(location);
+  const base = toAbsReal(location, '.');
   const excludes = excludePaths
-    .map(p => path.resolve(base, p))
+    .map(p => toAbsReal(base, p))
     .filter(p => isWithinDir(p, base));
   const includes = includePaths
-    .map(p => path.resolve(base, p))
+    .map(p => toAbsReal(base, p))
     .filter(p => isWithinDir(p, base))
     .filter(p => !excludes.some(excl => isWithinDir(p, excl)));
   return { includes, excludes };
@@ -70,9 +67,8 @@ function getGitRoot(): string {
   return execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
 }
 
-// Normalize to forward-slash relative path from projectRoot using path.resolve to handle casing/symlinks
-function toRelative(absOrGitPath: string, projectRoot: string): string {
-  return path.relative(path.resolve(projectRoot), path.resolve(absOrGitPath)).replace(/\\/g, '/');
+function toRelative(absPath: string, projectRoot: string): string {
+  return path.relative(toAbsReal(projectRoot, '.'), absPath).replace(/\\/g, '/');
 }
 
 function getSummaryFileMap(summaries: SummariesData): Map<string, Date> {
@@ -87,12 +83,12 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
   const files: Files = { new: [], modified: [], deleted: [] };
   try {
     const gitRoot = getGitRoot();
-    const tracked = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
+    const gitLocation = location.replace(/\\/g, '/');
+    const tracked = execSync(`git ls-files --full-name -- "${gitLocation}"`, { encoding: 'utf-8' })
       .trim().split('\n').filter(Boolean)
       .filter(f => !f.split('/').some(shouldIgnore))
-      // git ls-files --full-name returns paths relative to git root
-      .map(f => toRelative(path.resolve(gitRoot, f), projectRoot))
-      .filter(relPath => !isPathExcluded(path.resolve(projectRoot, relPath), excludeAbsPaths));
+      .map(f => toAbsReal(projectRoot, path.resolve(gitRoot, f)))
+      .filter(absPath => !isPathExcluded(absPath, excludeAbsPaths));
 
     const summaryMap = getSummaryFileMap(summaries);
     if (summaryMap.size === 0) {
@@ -104,7 +100,7 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
     summaryMap.forEach(d => { if (d < since) since = d; });
 
     const output = execSync(
-      `git log --format=%ai --name-only --since="${since.toISOString()}" -- "${location}"`,
+      `git log --format=%ai --name-only --since="${since.toISOString()}" -- "${gitLocation}"`,
       { encoding: 'utf-8' }
     );
 
@@ -115,24 +111,21 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
       if (line.match(/^\d{4}-\d{2}-\d{2}/)) {
         currentDate = new Date(line);
       } else if (currentDate && !line.split('/').some(shouldIgnore)) {
-        const absPath = path.resolve(gitRoot, line);
+        const absPath = toAbsReal(projectRoot, path.resolve(gitRoot, line));
         if (isPathExcluded(absPath, excludeAbsPaths)) continue;
-        const relPath = toRelative(absPath, projectRoot);
-        const lastUpdated = summaryMap.get(relPath);
-        if ((!lastUpdated || lastUpdated < currentDate) && !modifiedMap.has(relPath) && fs.existsSync(absPath)) {
-          modifiedMap.set(relPath, currentDate);
+        const lastUpdated = summaryMap.get(absPath);
+        if ((!lastUpdated || lastUpdated < currentDate) && !modifiedMap.has(absPath) && fs.existsSync(absPath)) {
+          modifiedMap.set(absPath, currentDate);
         }
       }
     }
 
     const trackedSet = new Set(tracked);
-    tracked.forEach(relPath => { if (!summaryMap.has(relPath)) files.new.push(relPath); });
+    tracked.forEach(absPath => { if (!summaryMap.has(absPath)) files.new.push(absPath); });
 
-    const resolvedLocation = path.resolve(location);
-    summaryMap.forEach((_, relPath) => {
-      const absPath = path.resolve(projectRoot, relPath);
-      if (absPath.startsWith(resolvedLocation) && !trackedSet.has(relPath) && !fs.existsSync(absPath)) {
-        files.deleted.push(relPath);
+    summaryMap.forEach((_, absPath) => {
+      if (isWithinDir(absPath, location) && !trackedSet.has(absPath) && !fs.existsSync(absPath)) {
+        files.deleted.push(absPath);
       }
     });
 
@@ -156,7 +149,6 @@ function scanDirRecursive(
       const fullPath = path.join(dir, entry);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) {
-        // Detect nested .knowledge with summaries.json → skip subtree, record ref
         if (entry === KNOWLEDGE_DIRECTORY) {
           if (fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
             subKnowledge.push({
@@ -169,7 +161,7 @@ function scanDirRecursive(
         if (isPathExcluded(fullPath, excludeAbsPaths)) continue;
         scanDirRecursive(fullPath, filePaths, subKnowledge, projectRoot, excludeAbsPaths);
       } else if (stat.isFile()) {
-        filePaths.set(fullPath, stat.mtime);
+        filePaths.set(toAbsReal(projectRoot, fullPath), stat.mtime);
       }
     }
   } catch {}
@@ -189,23 +181,20 @@ function getFilesFromFileSystem(
 
     const summaryMap = getSummaryFileMap(summaries);
     if (summaryMap.size === 0) {
-      fsFiles.forEach((_, absPath) => files.new.push(toRelative(absPath, projectRoot)));
+      fsFiles.forEach((_, absPath) => files.new.push(absPath));
       return files;
     }
 
     fsFiles.forEach((mtime, absPath) => {
-      const relPath = toRelative(absPath, projectRoot);
-      const lastDate = summaryMap.get(relPath);
-      if (!lastDate) files.new.push(relPath);
-      else if (mtime > lastDate) files.modified.push(relPath);
+      const lastDate = summaryMap.get(absPath);
+      if (!lastDate) files.new.push(absPath);
+      else if (mtime > lastDate) files.modified.push(absPath);
     });
 
-    const fsRelSet = new Set([...fsFiles.keys()].map(a => toRelative(a, projectRoot)));
-    const resolvedLocation = path.resolve(location);
-    summaryMap.forEach((_, relPath) => {
-      const absPath = path.resolve(projectRoot, relPath);
-      if (absPath.startsWith(resolvedLocation) && !fsRelSet.has(relPath)) {
-        files.deleted.push(relPath);
+    const fsAbsSet = new Set(fsFiles.keys());
+    summaryMap.forEach((_, absPath) => {
+      if (isWithinDir(absPath, location) && !fsAbsSet.has(absPath)) {
+        files.deleted.push(absPath);
       }
     });
     return files;
@@ -222,7 +211,7 @@ function searchForKnowledgeDir(dir: string): string | undefined {
         if (!fs.statSync(fullPath).isDirectory()) continue;
       } catch { continue; }
       if (entry === KNOWLEDGE_DIRECTORY && fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
-        return path.normalize(fullPath);
+        return toAbsReal(dir, fullPath);
       }
       const result = searchForKnowledgeDir(fullPath);
       if (result) return result;
@@ -240,7 +229,7 @@ export function findKnowledgeDir(location: string): string | undefined {
         .trim().split('\n')
         .find(f => f.replace(/\\/g, '/').endsWith(target));
       if (found) {
-        return path.normalize(path.dirname(path.resolve(gitRoot, found)));
+        return toAbsReal(gitRoot, path.dirname(path.resolve(gitRoot, found)));
       }
     } catch {}
   }
@@ -248,9 +237,9 @@ export function findKnowledgeDir(location: string): string | undefined {
 }
 
 export async function scanProject(location: string, knowledgeDir: string, scanConfig: ScanConfig): Promise<ScanResult> {
-  const summaries = getOrCreateSummaries(knowledgeDir);
-  const projectRoot = path.dirname(path.resolve(knowledgeDir));
-  const resolvedLocation = path.resolve(location);
+  const projectRoot = toAbsReal(path.dirname(knowledgeDir), '.');
+  const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
+  const resolvedLocation = toAbsReal(location, '.');
 
   if (!fs.existsSync(resolvedLocation)) {
     return {
@@ -260,7 +249,6 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     };
   }
 
-  // Sub-knowledge refs accumulate during filesystem walk
   const detectedSubKnowledge: SubKnowledgeRef[] = [...summaries.subKnowledge];
   let files: Files;
 
@@ -285,33 +273,37 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   files.deleted = [...new Set(files.deleted)];
 
   if (files.deleted.length > 0) {
-    markFilesAsDeleted(files.deleted, summaries, knowledgeDir);
+    markFilesAsDeleted(files.deleted, summaries, knowledgeDir, projectRoot);
   }
 
-  // Persist any newly detected sub-knowledge refs
   const existingRefKeys = new Set(summaries.subKnowledge.map(r => r.knowledgeDir));
   const newRefs = detectedSubKnowledge.filter(r => !existingRefKeys.has(r.knowledgeDir));
   if (newRefs.length > 0) {
     summaries.subKnowledge.push(...newRefs);
-    writeSummaries(knowledgeDir, summaries);
+    writeSummaries(knowledgeDir, summaries, projectRoot);
   }
 
-  const unique = [...new Set([...files.new, ...files.modified])].filter(f => !isSummariesFile(f));
+  // Files arrays hold abs paths; convert to relative for buildFileMap and output
+  const uniqueAbs = [...new Set([...files.new, ...files.modified])].filter(f => !isSummariesFile(f));
+  const unique = uniqueAbs.map(abs => toRelative(abs, projectRoot));
+
   if (unique.length > 0) {
     const allProjectFiles = [...new Set([
       ...unique,
-      ...[...summaries.files.entries()].filter(([, v]) => !v.deleted).map(([k]) => k),
+      ...[...summaries.files.entries()].filter(([, v]) => !v.deleted)
+        .map(([abs]) => toRelative(abs, projectRoot)),
     ])];
-    const realpath = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
-    const summariesRelPath = path.relative(realpath(projectRoot), realpath(path.join(knowledgeDir, SUMMARIES_FILE))).split(path.sep).join('/');
+    const summariesRelPath = toRelative(toAbsReal(knowledgeDir, SUMMARIES_FILE), projectRoot);
     const fileMap = buildFileMap(unique, projectRoot, allProjectFiles);
     const now = new Date().toISOString();
-    for (const relPath of unique) {
+    for (let i = 0; i < unique.length; i++) {
+      const relPath = unique[i]!;
+      const absPath = uniqueAbs[i]!;
       const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
-      const existing = summaries.files.get(relPath) ?? {};
+      const existing = summaries.files.get(absPath) ?? {};
       const isEffectivelyNew = !existing.lastUpdated || existing.deleted;
       const refs = fm.refs.filter(r => r !== summariesRelPath);
-      summaries.files.set(relPath, {
+      summaries.files.set(absPath, {
         ...existing,
         sizeChars: fm.sizeChars,
         lineCount: fm.lineCount,
@@ -322,8 +314,9 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
         lastUpdated: isEffectivelyNew ? now : (existing.lastUpdated ?? now),
       });
     }
-    writeSummaries(knowledgeDir, summaries);
+    writeSummaries(knowledgeDir, summaries, projectRoot);
   }
+
   const extCounts = unique.reduce((acc, f) => {
     const ext = path.extname(f).toLowerCase() || 'none';
     acc[ext] = (acc[ext] || 0) + 1;

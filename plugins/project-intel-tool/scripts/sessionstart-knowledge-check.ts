@@ -52,7 +52,8 @@ async function main(): Promise<void> {
   }
 
   const scanResult = await scanProject(cwd, knowledgeDir, config);
-  const summaries = getOrCreateSummaries(knowledgeDir);
+  const projectRoot = path.dirname(path.resolve(knowledgeDir));
+  const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
 
   const { totalFilesInKnowledge, numberOfFilesToScan } = scanResult.projectStats;
 
