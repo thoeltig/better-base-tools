@@ -51,10 +51,10 @@ async function main(): Promise<void> {
   }
 
   const scanResult = await scanProject(cwd, knowledgeDir, config);
-  const { totalFilesInKnowledge, numberOfFilesToScan, unanalyzedFilesCount } = scanResult.projectStats;
+  const { totalFilesInKnowledge, changedFilesCount, unanalyzedFilesCount } = scanResult.projectStats;
 
   let statusMessage = `${totalFilesInKnowledge} file summaries available`;
-  if (numberOfFilesToScan > 0) statusMessage += `, ${numberOfFilesToScan} file(s) changed`;
+  if (changedFilesCount > 0) statusMessage += `, ${changedFilesCount} file(s) changed`;
   if (unanalyzedFilesCount > 0) statusMessage += `, ${unanalyzedFilesCount} file(s) without AI analysis`;
 
   const additionaContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +

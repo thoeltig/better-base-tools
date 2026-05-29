@@ -12,6 +12,7 @@ export interface ScanResult {
     knowledgeDir: string;
     totalFilesInKnowledge: number;
     numberOfFilesToScan: number;
+    changedFilesCount: number;
     unanalyzedFilesCount: number;
     extensionCountsOfFilesToScan: Record<string, number>;
   };
@@ -246,7 +247,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     return {
       filesToScan: [],
       subKnowledge: summaries.subKnowledge,
-      projectStats: { knowledgeDir, totalFilesInKnowledge: summaries.files.size, numberOfFilesToScan: 0, unanalyzedFilesCount: 0, extensionCountsOfFilesToScan: {} },
+      projectStats: { knowledgeDir, totalFilesInKnowledge: summaries.files.size, numberOfFilesToScan: 0, changedFilesCount: 0, unanalyzedFilesCount: 0, extensionCountsOfFilesToScan: {} },
     };
   }
 
@@ -291,6 +292,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     .map(([absPath]) => absPath);
   const unanalyzedFilesCount = unanalyzedAbs.filter(abs => !changedSet.has(abs)).length;
   const uniqueAbs = [...new Set([...files.new, ...files.modified, ...unanalyzedAbs])].filter(f => !isSummariesFile(f));
+  const changedFilesCount = uniqueAbs.filter(abs => changedSet.has(abs)).length;
   const unique = uniqueAbs.map(abs => toRelative(abs, projectRoot));
 
   if (unique.length > 0) {
@@ -333,6 +335,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
       knowledgeDir,
       totalFilesInKnowledge: [...summaries.files.values()].filter(f => !f.deleted).length,
       numberOfFilesToScan: unique.length,
+      changedFilesCount,
       unanalyzedFilesCount,
       extensionCountsOfFilesToScan: extCounts,
     },
