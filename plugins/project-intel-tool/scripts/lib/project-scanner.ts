@@ -41,6 +41,9 @@ function isPathExcluded(absPath: string, excludeAbsPaths: string[]): boolean {
   return excludeAbsPaths.some(excl => isWithinDir(absPath, excl));
 }
 
+// NOTE: path.resolve normalizes but does not dereference symlinks. If location or config paths
+// contain symlink components, resolved strings may not match filesystem walk paths. Fixing this
+// requires fs.realpathSync across the entire scanner (toRelative, scanDirRecursive, etc.).
 function resolveConfigPaths(
   includePaths: string[],
   excludePaths: string[],

@@ -40,15 +40,15 @@ let isScanning = false;
 // Sampling is replaced by a subagent workaround and logging falls back to console.error for errors only.
 // Both are disabled by default so the server works out of the box in any harness.
 // Enable only when the harness is known to support the respective MCP capability.
-const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'MCP_SAMPLING', 'false') === 'true';
-const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'MCP_LOGGING', 'false') === 'true';
+const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
+const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
 
 const scanConfig: ScanConfig = {
-  maxTokensPerBatch: parseInt(parseConfigArg('max-tokens', 'INTEL_MAX_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
-  minBatchTokens: parseInt(parseConfigArg('min-batch-tokens', 'INTEL_MIN_BATCH_TOKENS', String(DEFAULT_SCAN_CONFIG.minBatchTokens)), 10) || DEFAULT_SCAN_CONFIG.minBatchTokens,
-  charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'INTEL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
-  includePaths: parseConfigArg('include', 'INTEL_INCLUDE_PATHS', '').split(',').filter(Boolean),
-  excludePaths: parseConfigArg('exclude', 'INTEL_EXCLUDE_PATHS', '').split(',').filter(Boolean),
+  maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
+  minBatchTokens: parseInt(parseConfigArg('min-batch-tokens', 'PROJECT_INTEL_TOOL_MIN_BATCH_TOKENS', String(DEFAULT_SCAN_CONFIG.minBatchTokens)), 10) || DEFAULT_SCAN_CONFIG.minBatchTokens,
+  charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'PROJECT_INTEL_TOOL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
+  includePaths: parseConfigArg('include', 'PROJECT_INTEL_TOOL_INCLUDE_PATHS', '').split(',').filter(Boolean),
+  excludePaths: parseConfigArg('exclude', 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS', '').split(',').filter(Boolean),
 };
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
@@ -360,10 +360,7 @@ if (!USE_MCP_SAMPLING) {
         destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false,
-      },
-      _meta:{
-        "anthropic/maxResultSizeChars": 500000
-      },
+      }
     },
     async (args) => {
       writeMcpLogLine('info', `submit_analysis — ${args.results.length} file(s) queued`, 'submit');
@@ -413,6 +410,10 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
+    _meta:{
+      "anthropic/maxResultSizeChars": 500000,
+      "anthropic/alwaysLoad": true
+    }
   },
   async (args) => {
     writeMcpLogLine('info', `query — keywords: "${args.keywords}"`, 'query');
