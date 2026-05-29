@@ -282,7 +282,7 @@ export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, 
     const prompt = basePrompt
       ? basePrompt.replace(
           'Return only the JSON array. No markdown, no explanation.',
-          'Call the submit_analysis MCP tool with the results array. No other output needed.'
+          `Load the 'submit_analysis' tool and submit your analysis with the tool. When you are finished return only 'Done' as output.`
         )
       : '';
     fs.writeFileSync(fp, prompt);
