@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-29T17:45:05.611Z",
+  "generated": "2026-05-29T21:10:40.074Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "path": ".claude-plugin/marketplace.json",
@@ -887,12 +887,13 @@
       "sizeChars": 241,
       "lineCount": 15,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "SessionStart hook configuration for automatic knowledge status checks.",
-      "purpose": "Registers SessionStart hook that automatically executes sessionstart-knowledge-check.js on session initialization. Hook type is 'command' that runs Node.js script from plugin scripts/dist directory. Provides automatic session notifications about project knowledge status (files analyzed, staleness detection, scan suggestions).",
+      "lastUpdated": "2026-05-29T21:10:40.072Z",
+      "summary": "Hook configuration that triggers a SessionStart event calling the sessionstart.js script.",
+      "purpose": "Defines MCP plugin hooks for the project-intel-tool. When Claude Code initializes a session, it invokes the SessionStart hook which runs sessionstart.js to check project knowledge status. This allows the tool to provide real-time feedback about available file summaries and project structure.",
       "role": "configuration",
       "technologies": [
-        "JSON"
+        "JSON",
+        "MCP hooks"
       ]
     },
     "plugins/project-intel-tool/hooks/sessionstart.js": {
@@ -904,7 +905,16 @@
         "child_process"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T15:02:24.194Z"
+      "lastUpdated": "2026-05-29T21:10:40.072Z",
+      "path": "plugins/project-intel-tool/hooks/sessionstart.js",
+      "summary": "Entry point script that spawns the TypeScript sessionstart-knowledge-check module and pipes output.",
+      "purpose": "Wraps the compiled TypeScript knowledge check script for execution as a Node.js hook. Validates that the plugin is correctly installed by checking for the compiled dist file, provides helpful error messages if the build is missing, and spawns the actual checker with inherited stdio to pass responses back to the parent MCP harness.",
+      "role": "script",
+      "technologies": [
+        "Node.js",
+        "child_process",
+        "shelljs"
+      ]
     },
     "plugins/project-intel-tool/LICENSE": {
       "path": "plugins/project-intel-tool/LICENSE",
@@ -934,8 +944,8 @@
     },
     "plugins/project-intel-tool/scripts/index.ts": {
       "path": "plugins/project-intel-tool/scripts/index.ts",
-      "sizeChars": 22544,
-      "lineCount": 548,
+      "sizeChars": 22042,
+      "lineCount": 536,
       "imports": [
         "@modelcontextprotocol/sdk",
         "url",
@@ -944,14 +954,16 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "MCP server implementation for project-intel-tool with scan, query, and submit_analysis tools.",
-      "purpose": "Main MCP server entry point implementing three tools: scan (analyzes files, pre-populates structural data, coordinates batching and subagent orchestration), query (semantic search of summaries.json with keyword matching on purpose/summary/exports/imports/technologies/role), and submit_analysis (merges subagent results into knowledge database with locking). Manages lock files for concurrent writes, handles git-based root discovery, supports fallback to subagent batch file mode when MCP sampling unavailable, tracks valid directories from client roots.",
+      "lastUpdated": "2026-05-29T21:10:40.072Z",
+      "summary": "Main MCP server implementation for project knowledge scanning, querying, and file analysis.",
+      "purpose": "Implements the core MCP server that exposes three tools: scan (for background file analysis), submit_analysis (for subagents to submit results), and query (for keyword-based search). Manages file discovery, dependency ordering, token budgets, and coordinates with subagents via batch files when MCP sampling is unavailable. Handles locking, shutdown signals, and provides logging support.",
       "role": "implementation",
       "technologies": [
         "TypeScript",
-        "MCP",
-        "Node.js"
+        "MCP SDK",
+        "Node.js",
+        "file system",
+        "process management"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/file-map.test.ts": {
@@ -998,18 +1010,19 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "File reference extraction and mapping for TypeScript, JavaScript, C#, and text files.",
-      "purpose": "Exports FileRefs interface and parseFileRefs function that analyzes code files to extract: imports (external package names), exports (named declarations), refs (intra-project file references), plus sizeChars and lineCount. Implements separate parsers for TS/JS (regex-based import/export detection with relative path resolution), C# (using directives and public type names), and text files (path mention detection). Provides buildFileMap that processes entire file lists and caches results in a Map.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Parses source files to extract imports, exports, and inter-file references.",
+      "purpose": "Analyzes code files (TypeScript/JavaScript, C#, and plain text) to build a dependency graph. Resolves relative imports to actual file paths, extracts public type/class exports, and identifies all mentions of project files. Computes file metrics like character count and line count. This structural data is used to order files for analysis and provide context when summarizing dependencies.",
       "role": "implementation",
       "technologies": [
         "TypeScript",
-        "Node.js"
+        "regex parsing",
+        "file I/O"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/project-scanner.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
-      "sizeChars": 13057,
+      "sizeChars": 12325,
       "lineCount": 344,
       "exports": [
         "ScanResult",
@@ -1021,38 +1034,39 @@
         "child_process"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Project filesystem scanning with git integration, change detection, and sub-knowledge discovery.",
-      "purpose": "Implements scanProject that detects new/modified/deleted files across a location using git history (when available) or filesystem mtime comparison as fallback. Discovers nested .knowledge/summaries.json as sub-projects via recursive filesystem walk. Normalizes file paths to forward-slash relative format. Manages ignored directories (node_modules, dist, build, etc.). Returns ScanResult with filesToScan list, subKnowledge refs, and extension counts. Provides findKnowledgeDir utility for auto-detection up directory tree or via git.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Scans the project to identify new, modified, and deleted files for analysis.",
+      "purpose": "Discovers project files using git or filesystem traversal, detects changes via git history or mtime comparison, and compares against existing summaries to determine what needs scanning. Handles include/exclude paths, respects ignore directories, detects sub-projects with their own knowledge bases, and returns statistics about project structure and analysis coverage.",
       "role": "implementation",
       "technologies": [
         "TypeScript",
         "Node.js",
-        "Git"
+        "git",
+        "file system"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/sampler.test.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/sampler.test.ts",
-      "sizeChars": 6496,
-      "lineCount": 152,
+      "sizeChars": 6675,
+      "lineCount": 156,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:18.640Z",
-      "summary": "Unit tests for batch sampling logic covering dependency ordering, circular deps, token budgeting, and context file inclusion.",
-      "purpose": "Tests the buildSamplingBatches function which organizes files into topologically-ordered batches respecting token budgets and dependency graphs. Verifies edge cases like circular dependencies, already-summarized dependencies as context, and correct batch splitting when token limits are exceeded. Ensures files from the scan set appear exactly once in output batches.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Unit tests for the sampling batch builder covering ordering, dependencies, and token budgets.",
+      "purpose": "Tests the buildSamplingBatches function to ensure files are ordered correctly by topological dependency layers, that token budgets are respected across batches, and that context from already-analyzed files is included. Verifies circular dependency handling and ensures every file appears exactly once in the output.",
       "role": "test",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Unit Testing"
+        "Vitest",
+        "unit testing"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/sampler.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/sampler.ts",
-      "sizeChars": 10193,
-      "lineCount": 291,
+      "sizeChars": 10260,
+      "lineCount": 292,
       "exports": [
         "SamplingServer",
         "buildSamplingBatches",
@@ -1064,21 +1078,21 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:18.640Z",
-      "summary": "Implements batch generation, prompt building, and async sampling execution for project file analysis with token budget constraints.",
-      "purpose": "Core orchestration module that builds dependency graphs from file references, creates topologically-ordered sampling batches respecting token budgets, compacts file content, generates analysis prompts, and executes async batch requests to the MCP sampling server. Parses structured JSON responses and merges results. Handles indent-sensitive languages and provides file writing utilities for batch persistence.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Orchestrates batching, prompting, and subagent coordination for file analysis.",
+      "purpose": "Groups files into efficient batches respecting token budgets and topological ordering of dependencies. Builds analysis prompts with inline file content and context references, parses JSON responses, and coordinates with subagents via MCP sampling requests or pre-written batch files. Handles background execution with abort signals and provides logging for progress tracking.",
       "role": "implementation",
       "technologies": [
         "TypeScript",
-        "Node.js fs/path",
-        "Async/await",
+        "MCP SDK",
+        "token estimation",
         "JSON parsing"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts",
-      "sizeChars": 8145,
-      "lineCount": 225,
+      "sizeChars": 11606,
+      "lineCount": 291,
       "imports": [
         "vitest",
         "fs",
@@ -1086,23 +1100,24 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:18.640Z",
-      "summary": "Tests for file summary persistence, merging, and deletion marking with round-trip serialization validation.",
-      "purpose": "Validates the summary-merger module which reads/writes minified JSON summaries, merges sampling results into persistent storage, and marks files as deleted. Tests cover serialization round-trips, field preservation during updates, sorted output for git diffs, and proper handling of the deleted flag. Ensures subKnowledge array is omitted when empty.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Unit tests for summary storage, merging, and path normalization logic.",
+      "purpose": "Tests the persistence and retrieval of file summaries including path normalization (handling ./ prefixes, backslashes), collision resolution on duplicate keys, and merging of new/updated analysis results. Verifies that deleted files are marked without removal, that fields are preserved across updates, and that JSON storage is sorted for stable diffs.",
       "role": "test",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Temp filesystem",
-        "JSON serialization"
+        "Vitest",
+        "unit testing",
+        "file I/O"
       ]
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.ts": {
       "path": "plugins/project-intel-tool/scripts/lib/summary-merger.ts",
-      "sizeChars": 2908,
-      "lineCount": 84,
+      "sizeChars": 3584,
+      "lineCount": 99,
       "exports": [
         "isSummariesFile",
+        "toAbsReal",
         "getOrCreateSummaries",
         "writeSummaries",
         "mergeSamplingResults",
@@ -1113,14 +1128,16 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:18.640Z",
-      "summary": "Handles persistence of file summaries to minified JSON, merges new analysis results, and tracks deleted files.",
-      "purpose": "Persistence layer that loads/saves summaries.json in minified format for efficient storage. Merges new sampling results while preserving existing metadata not touched by analysis. Maintains sorted file order for stable git diffs and provides deletion tracking via a deleted flag. Handles corrupted files gracefully by returning empty state.",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "Manages persistent storage, retrieval, and merging of file summary metadata.",
+      "purpose": "Handles reading/writing the summaries.json file with proper path normalization and collision resolution. Provides utilities for merging sampling results into the knowledge base, marking files as deleted, and serializing the in-memory summary map back to disk. Ensures stable JSON format with sorted keys for clean git diffs and supports sub-project knowledge references.",
       "role": "implementation",
       "technologies": [
         "TypeScript",
-        "Node.js fs/path",
-        "JSON serialization"
+        "Node.js",
+        "file I/O",
+        "JSON",
+        "path normalization"
       ]
     },
     "plugins/project-intel-tool/scripts/package-lock.json": {
@@ -1156,21 +1173,21 @@
     },
     "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts": {
       "path": "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts",
-      "sizeChars": 3864,
-      "lineCount": 84,
+      "sizeChars": 3496,
+      "lineCount": 73,
       "imports": [
         "fs",
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.295Z",
-      "summary": "SessionStart hook that checks project knowledge status and suggests updates.",
-      "purpose": "Runs at session start to verify if project knowledge exists and is current. Checks for new/changed files requiring scan tool updates. Outputs hook response with user message indicating knowledge availability and update needs to guide user actions.",
-      "role": "implementation",
+      "lastUpdated": "2026-05-29T21:10:40.072Z",
+      "summary": "Hook script that checks if project knowledge exists and suggests scanning if needed.",
+      "purpose": "Runs at session start to evaluate the project's knowledge base status. Reports file summary counts, changed files, and unanalyzed files via hook response. Provides user-facing messages about project structure and recommends using the query tool for efficient project exploration. Guides users toward scanning when knowledge doesn't exist or is incomplete.",
+      "role": "script",
       "technologies": [
         "TypeScript",
         "Node.js",
-        "MCP hooks"
+        "project-scanner"
       ]
     },
     "plugins/project-intel-tool/scripts/tsconfig.json": {
@@ -1215,12 +1232,13 @@
         "HookResponse"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.295Z",
-      "summary": "Type definitions and interfaces for project-intel MCP server.",
-      "purpose": "Exports 20+ TypeScript interfaces and constants for file summaries, sampling batches, query results, and session hooks. Core types: FileSummary, SummariesData, SamplingBatch, AdditionalContext. Defines knowledge storage structure and MCP hook response formats.",
-      "role": "implementation",
+      "lastUpdated": "2026-05-29T21:10:40.073Z",
+      "summary": "TypeScript type definitions and constants for the project-intel-tool MCP plugin.",
+      "purpose": "Centralizes all shared types, interfaces, and configuration constants used across the project-intel-tool. Defines data structures for scan results, file summaries, sampling batches, query outputs, and hook responses. Establishes configuration defaults and environment variable names for token budgets, batch sizes, and include/exclude paths.",
+      "role": "configuration",
       "technologies": [
-        "TypeScript"
+        "TypeScript",
+        "type definitions"
       ]
     },
     "README.md": {
