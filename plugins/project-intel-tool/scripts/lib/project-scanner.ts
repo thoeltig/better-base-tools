@@ -3,6 +3,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted } from './summary-merger.js';
 import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
+import { buildFileMap } from './file-map.js';
 
 export interface ScanResult {
   filesToScan: string[];
@@ -296,6 +297,26 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   }
 
   const unique = [...new Set([...files.new, ...files.modified])];
+  if (unique.length > 0) {
+    const fileMap = buildFileMap(unique, projectRoot);
+    const now = new Date().toISOString();
+    for (const relPath of unique) {
+      const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
+      const existing = summaries.files.get(relPath) ?? {};
+      const isEffectivelyNew = !existing.lastUpdated || existing.deleted;
+      summaries.files.set(relPath, {
+        ...existing,
+        sizeChars: fm.sizeChars,
+        lineCount: fm.lineCount,
+        ...(fm.exports.length > 0 ? { exports: fm.exports } : {}),
+        ...(fm.imports.length > 0 ? { imports: fm.imports } : {}),
+        ...(fm.refs.length > 0 ? { refs: fm.refs } : {}),
+        deleted: false,
+        lastUpdated: isEffectivelyNew ? now : (existing.lastUpdated ?? now),
+      });
+    }
+    writeSummaries(knowledgeDir, summaries);
+  }
   const extCounts = unique.reduce((acc, f) => {
     const ext = path.extname(f).toLowerCase() || 'none';
     acc[ext] = (acc[ext] || 0) + 1;
