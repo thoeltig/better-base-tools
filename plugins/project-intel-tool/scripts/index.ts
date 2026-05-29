@@ -318,8 +318,7 @@ server.registerTool(
             instruction:
               `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
               'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
-              'Subagent task: read the file — it contains the full analysis prompt with embedded file contents and instructions. Follow the instructions in it. ' +
-              'Return a short completion message when done.',
+              'Subagent task: read the batch file at the given path — it contains the analysis prompt, file contents, and all required instructions including tool calls.',
           }),
         }],
       };
