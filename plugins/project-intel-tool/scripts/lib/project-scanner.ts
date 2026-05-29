@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted } from './summary-merger.js';
+import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted, isSummariesFile } from './summary-merger.js';
 import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
 import { buildFileMap } from './file-map.js';
 
@@ -296,21 +296,28 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     writeSummaries(knowledgeDir, summaries);
   }
 
-  const unique = [...new Set([...files.new, ...files.modified])];
+  const unique = [...new Set([...files.new, ...files.modified])].filter(f => !isSummariesFile(f));
   if (unique.length > 0) {
-    const fileMap = buildFileMap(unique, projectRoot);
+    const allProjectFiles = [...new Set([
+      ...unique,
+      ...[...summaries.files.entries()].filter(([, v]) => !v.deleted).map(([k]) => k),
+    ])];
+    const realpath = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    const summariesRelPath = path.relative(realpath(projectRoot), realpath(path.join(knowledgeDir, SUMMARIES_FILE))).split(path.sep).join('/');
+    const fileMap = buildFileMap(unique, projectRoot, allProjectFiles);
     const now = new Date().toISOString();
     for (const relPath of unique) {
       const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
       const existing = summaries.files.get(relPath) ?? {};
       const isEffectivelyNew = !existing.lastUpdated || existing.deleted;
+      const refs = fm.refs.filter(r => r !== summariesRelPath);
       summaries.files.set(relPath, {
         ...existing,
         sizeChars: fm.sizeChars,
         lineCount: fm.lineCount,
         ...(fm.exports.length > 0 ? { exports: fm.exports } : {}),
         ...(fm.imports.length > 0 ? { imports: fm.imports } : {}),
-        ...(fm.refs.length > 0 ? { refs: fm.refs } : {}),
+        ...(refs.length > 0 ? { refs } : {}),
         deleted: false,
         lastUpdated: isEffectivelyNew ? now : (existing.lastUpdated ?? now),
       });

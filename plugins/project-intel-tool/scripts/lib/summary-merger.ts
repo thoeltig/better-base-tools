@@ -2,11 +2,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   FileSummary,
+  KNOWLEDGE_DIRECTORY,
   SamplingFileSummary,
   SUMMARIES_FILE,
   SummariesData,
   SummariesDataStorage,
 } from '../types.js';
+
+export function isSummariesFile(filePath: string): boolean {
+  const parts = filePath.split('/').flatMap(p => p.split('\\'));
+  const idx = parts.lastIndexOf(KNOWLEDGE_DIRECTORY);
+  return idx !== -1 && parts[idx + 1] === SUMMARIES_FILE;
+}
 
 export function getOrCreateSummaries(knowledgeDir: string): SummariesData {
   const summariesPath = path.join(knowledgeDir, SUMMARIES_FILE);
@@ -35,7 +42,7 @@ export function writeSummaries(knowledgeDir: string, data: SummariesData): void 
   const storage: SummariesDataStorage = {
     generated: new Date().toISOString(),
     // Sort by file path for stable git diffs
-    files: Object.fromEntries([...data.files.entries()].sort(([a], [b]) => a.localeCompare(b))),
+    files: Object.fromEntries([...data.files.entries()].filter(([k]) => !isSummariesFile(k)).sort(([a], [b]) => a.localeCompare(b))),
     ...(data.subKnowledge.length > 0 ? { subKnowledge: data.subKnowledge } : {}),
   };
   fs.writeFileSync(tempPath, JSON.stringify(storage));

@@ -163,8 +163,8 @@ export function parseFileRefs(
   return { ...parsed, sizeChars, lineCount };
 }
 
-export function buildFileMap(files: string[], projectRoot: string): Map<string, FileRefs> {
-  const projectFileSet = new Set(files);
+export function buildFileMap(files: string[], projectRoot: string, allProjectFiles?: string[]): Map<string, FileRefs> {
+  const projectFileSet = new Set(allProjectFiles ?? files);
   const map = new Map<string, FileRefs>();
 
   for (const filePath of files) {

@@ -24,6 +24,7 @@ import {
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
   ScoredFileSummary,
+  SUMMARIES_FILE,
 } from './types.js';
 
 const server = new McpServer(
@@ -144,13 +145,21 @@ function prepareAnalysisBatches(
   projectRoot: string,
   config: ScanConfig,
 ): ReturnType<typeof buildSamplingBatches> {
-  const fileMap = buildFileMap(filesToScan, projectRoot);
+  const existingSummaries = getOrCreateSummaries(knowledgeDir);
+  const allProjectFiles = [...new Set([
+    ...filesToScan,
+    ...[...existingSummaries.files.entries()].filter(([, v]) => !v.deleted).map(([k]) => k),
+  ])];
+  const realpath = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+  const summariesRelPath = path.relative(realpath(projectRoot), realpath(path.join(knowledgeDir, SUMMARIES_FILE))).split(path.sep).join('/');
+  const fileMap = buildFileMap(filesToScan, projectRoot, allProjectFiles);
   const structuralEntries: SamplingFileSummary[] = filesToScan.map(filePath => {
     const fm = fileMap.get(filePath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
     const entry: SamplingFileSummary = { path: filePath, sizeChars: fm.sizeChars, lineCount: fm.lineCount };
     if (fm.exports.length > 0) entry.exports = fm.exports;
     if (fm.imports.length > 0) entry.imports = fm.imports;
-    if (fm.refs.length > 0) entry.refs = fm.refs;
+    const refs = fm.refs.filter(r => r !== summariesRelPath);
+    if (refs.length > 0) entry.refs = refs;
     return entry;
   });
   const summaries = mergeSamplingResults(knowledgeDir, structuralEntries);
