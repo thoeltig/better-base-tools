@@ -12,6 +12,7 @@ export interface ScanResult {
     knowledgeDir: string;
     totalFilesInKnowledge: number;
     numberOfFilesToScan: number;
+    unanalyzedFilesCount: number;
     extensionCountsOfFilesToScan: Record<string, number>;
   };
 }
@@ -245,7 +246,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     return {
       filesToScan: [],
       subKnowledge: summaries.subKnowledge,
-      projectStats: { knowledgeDir, totalFilesInKnowledge: summaries.files.size, numberOfFilesToScan: 0, extensionCountsOfFilesToScan: {} },
+      projectStats: { knowledgeDir, totalFilesInKnowledge: summaries.files.size, numberOfFilesToScan: 0, unanalyzedFilesCount: 0, extensionCountsOfFilesToScan: {} },
     };
   }
 
@@ -284,7 +285,12 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   }
 
   // Files arrays hold abs paths; convert to relative for buildFileMap and output
-  const uniqueAbs = [...new Set([...files.new, ...files.modified])].filter(f => !isSummariesFile(f));
+  const changedSet = new Set([...files.new, ...files.modified]);
+  const unanalyzedAbs = [...summaries.files.entries()]
+    .filter(([absPath, v]) => !v.deleted && !v.summary && !v.purpose && fs.existsSync(absPath))
+    .map(([absPath]) => absPath);
+  const unanalyzedFilesCount = unanalyzedAbs.filter(abs => !changedSet.has(abs)).length;
+  const uniqueAbs = [...new Set([...files.new, ...files.modified, ...unanalyzedAbs])].filter(f => !isSummariesFile(f));
   const unique = uniqueAbs.map(abs => toRelative(abs, projectRoot));
 
   if (unique.length > 0) {
@@ -327,6 +333,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
       knowledgeDir,
       totalFilesInKnowledge: [...summaries.files.values()].filter(f => !f.deleted).length,
       numberOfFilesToScan: unique.length,
+      unanalyzedFilesCount,
       extensionCountsOfFilesToScan: extCounts,
     },
   };
