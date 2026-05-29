@@ -25,6 +25,57 @@ function readStoredJson() {
 }
 
 describe('getOrCreateSummaries', () => {
+  it('normalizes ./ prefix keys on load', () => {
+    const stored = {
+      generated: '2024-01-01T00:00:00.000Z',
+      files: { './src/file.ts': { summary: 'has prefix', lastUpdated: '2024-01-01T00:00:00.000Z' } },
+    };
+    fs.writeFileSync(path.join(tmpDir, 'summaries.json'), JSON.stringify(stored));
+    const data = getOrCreateSummaries(tmpDir);
+    expect(data.files.has('./src/file.ts')).toBe(false);
+    expect(data.files.get('src/file.ts')?.summary).toBe('has prefix');
+  });
+
+  it('normalizes backslash paths on load', () => {
+    const stored = {
+      generated: '2024-01-01T00:00:00.000Z',
+      files: { 'src\\sub\\file.ts': { summary: 'backslash path', lastUpdated: '2024-01-01T00:00:00.000Z' } },
+    };
+    fs.writeFileSync(path.join(tmpDir, 'summaries.json'), JSON.stringify(stored));
+    const data = getOrCreateSummaries(tmpDir);
+    expect(data.files.has('src\\sub\\file.ts')).toBe(false);
+    expect(data.files.get('src/sub/file.ts')?.summary).toBe('backslash path');
+  });
+
+  it('on key collision keeps non-deleted over deleted', () => {
+    const stored = {
+      generated: '2024-01-01T00:00:00.000Z',
+      files: {
+        './src/a.ts': { summary: 'deleted version', deleted: true, lastUpdated: '2024-06-01T00:00:00.000Z' },
+        'src/a.ts': { summary: 'live version', deleted: false, lastUpdated: '2024-01-01T00:00:00.000Z' },
+      },
+    };
+    fs.writeFileSync(path.join(tmpDir, 'summaries.json'), JSON.stringify(stored));
+    const data = getOrCreateSummaries(tmpDir);
+    expect(data.files.size).toBe(1);
+    expect(data.files.get('src/a.ts')?.deleted).toBe(false);
+    expect(data.files.get('src/a.ts')?.summary).toBe('live version');
+  });
+
+  it('on key collision keeps more recent lastUpdated when both non-deleted', () => {
+    const stored = {
+      generated: '2024-01-01T00:00:00.000Z',
+      files: {
+        './src/b.ts': { summary: 'newer', deleted: false, lastUpdated: '2024-06-01T00:00:00.000Z' },
+        'src/b.ts': { summary: 'older', deleted: false, lastUpdated: '2024-01-01T00:00:00.000Z' },
+      },
+    };
+    fs.writeFileSync(path.join(tmpDir, 'summaries.json'), JSON.stringify(stored));
+    const data = getOrCreateSummaries(tmpDir);
+    expect(data.files.size).toBe(1);
+    expect(data.files.get('src/b.ts')?.summary).toBe('newer');
+  });
+
   it('returns empty data when no summaries file exists', () => {
     const data = getOrCreateSummaries(tmpDir);
     expect(data.files.size).toBe(0);
@@ -53,7 +104,7 @@ describe('getOrCreateSummaries', () => {
 });
 
 describe('writeSummaries', () => {
-  it('writes minified JSON (no newlines or extra spaces)', () => {
+  it('writes pretty-printed JSON with 2-space indent', () => {
     const data: SummariesData = {
       generated: '2024-01-01T00:00:00.000Z',
       files: new Map([['src/a.ts', { summary: 'file a' }]]),
@@ -61,8 +112,8 @@ describe('writeSummaries', () => {
     };
     writeSummaries(tmpDir, data);
     const raw = fs.readFileSync(path.join(tmpDir, 'summaries.json'), 'utf-8');
-    expect(raw).not.toMatch(/\n/);
-    expect(raw).not.toMatch(/  /);
+    expect(raw).toMatch(/\n/);
+    expect(raw).toMatch(/  /);
   });
 
   it('round-trips through getOrCreateSummaries', () => {

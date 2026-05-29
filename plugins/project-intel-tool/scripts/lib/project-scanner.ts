@@ -131,7 +131,7 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
     const resolvedLocation = path.resolve(location);
     summaryMap.forEach((_, relPath) => {
       const absPath = path.resolve(projectRoot, relPath);
-      if (absPath.startsWith(resolvedLocation) && !trackedSet.has(relPath)) {
+      if (absPath.startsWith(resolvedLocation) && !trackedSet.has(relPath) && !fs.existsSync(absPath)) {
         files.deleted.push(relPath);
       }
     });

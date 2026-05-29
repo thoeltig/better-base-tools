@@ -20,9 +20,21 @@ export function getOrCreateSummaries(knowledgeDir: string): SummariesData {
   if (fs.existsSync(summariesPath)) {
     try {
       const storage = JSON.parse(fs.readFileSync(summariesPath, 'utf8')) as SummariesDataStorage;
+      const files = new Map<string, FileSummary>();
+      for (const [key, value] of Object.entries(storage.files)) {
+        const normalizedKey = normalizePath(key);
+        const existing = files.get(normalizedKey);
+        if (
+          !existing ||
+          (existing.deleted && !value.deleted) ||
+          (existing.deleted === value.deleted && !!value.lastUpdated && (!existing.lastUpdated || value.lastUpdated > existing.lastUpdated))
+        ) {
+          files.set(normalizedKey, value);
+        }
+      }
       return {
         generated: storage.generated,
-        files: new Map(Object.entries(storage.files)),
+        files,
         subKnowledge: storage.subKnowledge || [],
       };
     } catch (e) {
@@ -45,15 +57,20 @@ export function writeSummaries(knowledgeDir: string, data: SummariesData): void 
     files: Object.fromEntries([...data.files.entries()].filter(([k]) => !isSummariesFile(k)).sort(([a], [b]) => a.localeCompare(b))),
     ...(data.subKnowledge.length > 0 ? { subKnowledge: data.subKnowledge } : {}),
   };
-  fs.writeFileSync(tempPath, JSON.stringify(storage));
+  fs.writeFileSync(tempPath, JSON.stringify(storage, null, 2));
   fs.renameSync(tempPath, summariesPath);
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '').trim();
 }
 
 export function mergeSamplingResults(knowledgeDir: string, results: SamplingFileSummary[]): SummariesData {
   const summaries = getOrCreateSummaries(knowledgeDir);
   for (const result of results) {
-    const existing = summaries.files.get(result.path) || {};
-    summaries.files.set(result.path, {
+    const normalizedPath = normalizePath(result.path);
+    const existing = summaries.files.get(normalizedPath) || {};
+    summaries.files.set(normalizedPath, {
       ...existing,
       ...result,
       deleted: false,
