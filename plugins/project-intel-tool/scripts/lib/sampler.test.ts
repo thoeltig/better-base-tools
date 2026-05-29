@@ -30,10 +30,11 @@ describe('buildSamplingBatches — ordering', () => {
 
   it('dependent file appears in a later batch than its dependency', () => {
     // a.ts imports b.ts → b.ts must be processed first
+    // Files must exceed minBatchTokens so each layer flushes independently
     const files = ['a.ts', 'b.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
-      ['b.ts', makeFileRefs()],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'], sizeChars: 8_000 })],
+      ['b.ts', makeFileRefs({ sizeChars: 8_000 })],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
     const batchWithB = batches.findIndex(b => b.files.includes('b.ts'));
@@ -42,11 +43,12 @@ describe('buildSamplingBatches — ordering', () => {
   });
 
   it('handles a chain A → B → C across three layers', () => {
+    // Files must exceed minBatchTokens so each layer flushes independently
     const files = ['a.ts', 'b.ts', 'c.ts'];
     const fileMap = new Map([
-      ['a.ts', makeFileRefs({ refs: ['b.ts'] })],
-      ['b.ts', makeFileRefs({ refs: ['c.ts'] })],
-      ['c.ts', makeFileRefs()],
+      ['a.ts', makeFileRefs({ refs: ['b.ts'], sizeChars: 8_000 })],
+      ['b.ts', makeFileRefs({ refs: ['c.ts'], sizeChars: 8_000 })],
+      ['c.ts', makeFileRefs({ sizeChars: 8_000 })],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
     const idxC = batches.findIndex(b => b.files.includes('c.ts'));
