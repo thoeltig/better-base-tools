@@ -27,7 +27,7 @@ import {
 } from './types.js';
 
 const server = new McpServer(
-  { name: 'project-intel-mcp-server', version: '2.0.0' },
+  { name: 'project-intel-mcp-server', version: '1.0.0' },
   { capabilities: { tools: {}, logging: {} } }
 );
 

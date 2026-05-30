@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "More efficient base tools to reduce turns, duplicate tool calls and reduce tokens.",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "plugins": [
     {

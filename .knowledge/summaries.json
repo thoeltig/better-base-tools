@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-29T21:10:40.074Z",
+  "generated": "2026-05-30T01:25:12.636Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "path": ".claude-plugin/marketplace.json",
@@ -149,8 +149,8 @@
     },
     "plugins/batch_file_tools/README.md": {
       "path": "plugins/batch_file_tools/README.md",
-      "sizeChars": 6218,
-      "lineCount": 131,
+      "sizeChars": 6047,
+      "lineCount": 122,
       "deleted": false,
       "lastUpdated": "2026-05-28T08:41:26.877Z",
       "summary": "Complete documentation for batch_file_tools covering benefits, tool modes, operations, requirements, and usage examples.",
@@ -931,8 +931,8 @@
     },
     "plugins/project-intel-tool/README.md": {
       "path": "plugins/project-intel-tool/README.md",
-      "sizeChars": 18747,
-      "lineCount": 547,
+      "sizeChars": 17175,
+      "lineCount": 288,
       "deleted": false,
       "lastUpdated": "2026-05-28T08:41:38.916Z",
       "summary": "Comprehensive documentation for project-intel reconnaissance system covering architecture, usage, performance, and design decisions.",
@@ -1243,10 +1243,11 @@
     },
     "README.md": {
       "path": "README.md",
-      "sizeChars": 813,
-      "lineCount": 27,
+      "sizeChars": 1552,
+      "lineCount": 39,
       "refs": [
-        "plugins/batch_file_tools/README.md"
+        "plugins/batch_file_tools/README.md",
+        "plugins/project-intel-tool/README.md"
       ],
       "deleted": false,
       "lastUpdated": "2026-05-28T08:41:13.590Z",
