@@ -87,29 +87,20 @@ The following example applies three changes across two files in a single call.
 ]}
 ```
 
+---
+
 ## Requirements
 
-Requires Node.js 22 or later. Install and build once before first use.
+This project requires **Node.js >= v22** and the following dependencies:
 
-```bash
-cd scripts && npm install && npm run build
-```
+### Production Dependencies
+* `@modelcontextprotocol/sdk` (`1.29.0`) — Model Context Protocol SDK
+* `zod` (`3.25.76`) — Schema validation
 
-## Installation
-
-Install via the Claude Code plugin system. When the plugin loads and the build is present the `SessionStart` hook injects tool-preference guidance automatically.
-To register the MCP server manually add the following to your MCP configuration.
-
-```json
-{
-  "mcpServers": {
-    "batch_file_tools": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/dist/index.js"]
-    }
-  }
-}
-```
+### Development Dependencies
+* `typescript` (`5.9.3`) — Static typing
+* `vitest` (`4.1.5`) — Testing framework
+* `@types/node` (`25.0.1`) — Type definitions for Node
 
 ---
 
