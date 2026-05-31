@@ -172,44 +172,6 @@ server.registerTool(
   }
 );
 
-/* 
-Commented out for now to let the model focus on a single edit tool. Test if behavior changes.
-Lately the model switches between edit tools and sometimes it confuses which schema each tool needs. If JSON only is easier it might be enough benefit.
-
-server.registerTool(
-  "batch_edit_text",
-  {
-    title: "Line-based text-format variant of batch_edit (no JSON envelope per op)",
-    description: "Same semantics as batch_edit but accepts edits as one line-based text blob — avoids per-op JSON envelopes. Prefer when ops are content-heavy (≥~15 lines per op); for small/many ops (≤~5 lines per op) prefer batch_edit. GRAMMAR (line-based, column-0 sensitive): root scalars (optional, before first File:) — `stopOnError: true|false`, `dryRun: true|false`, `verbose: true|false`. Each file block starts with `File: <absolute path or glob>` followed by optional `stopOnError:`/`verbose:` (file-level overrides), then one or more Action blocks. ACTIONS: `replace` (OLD+NEW fences) | `replace_all` (OLD+NEW fences) | `insert_at_line` (`line: N` + NEW fence) | `replace_range` (`start: N` + `end: M` + NEW fence) | `write` (`mode: append|overwrite` + NEW fence). Each Action accepts optional `verbose: true|false` and `stopOnError: true|false`. FENCES: content between `<<<OLD` / `OLD>>>` and `<<<NEW` / `NEW>>>` is verbatim. Sentinels are recognized only at column 0. COLLISION: if content contains `OLD>>>` or `NEW>>>` at column 0, use a unique suffix on both open and close — e.g. `<<<OLD#k1` ... `OLD#k1>>>`. Any indented line is content even if it looks like a header/fence. RESOLUTION: verbose op > file > root > false; stopOnError op > file > root > false. EXAMPLE:\n```\nstopOnError: true\nFile: C:/proj/src/foo.ts\nAction: replace\n<<<OLD\nconst x = 1;\nOLD>>>\n<<<NEW\nconst x = 42;\nNEW>>>\nAction: insert_at_line\nline: 1\n<<<NEW\n// top of file\nNEW>>>\nFile: C:/proj/src/bar.ts\nAction: write\nmode: append\n<<<NEW\n// appended\nNEW>>>\n```\nERRORS: parser errors surface as `reason: \"unparseable\"` with line number in `message`. Recovery is per-Action via opening-fence + Action lookback; an unparseable Action does not abort the file unless stopOnError is set. Files with no parseable ops emit as a single `unparseable` file error. Runtime errors (anchor not found, file not writable, etc.) match batch_edit including `nearest_anchor` hints. Output shape matches batch_edit (one text block per file).",
-    inputSchema: { param: EditTextInput },
-    annotations: {
-      title: 'Line-based text-format variant of batch_edit (no JSON envelope per op)',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: false
-    }
-  },
-  async ({ param }) => {
-  try {
-      const parsed = EditTextInput.parse(param);
-      const allowedDirectories = getAllowedDirectoriesToUse();
-      const result = await handleBatchEditText(parsed, allowedDirectories);
-      return {
-        content: formatEditContent(result)
-      };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
-    }
-  }
-); */
-
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => await updateValidRootDirectories());
 
 server.server.oninitialized = async () => {
@@ -329,33 +291,3 @@ main().catch((err: unknown) => {
   writeLogLine(`batch-tools-mcp-server fatal: ${message}`);
   process.exit(1);
 });
-
-/*
-JSON repair — assessment 2026-05-14
-Issue: ~1 in 30-50 batch_edit calls fail on malformed JSON (unescaped newlines / missing brackets
-in LLM-generated old/new/content fields). Mostly complex nested edits.
-
-Previous draft (handleMessage override) is wrong: by the time handleMessage fires, the SDK
-transport has already called JSON.parse on the raw NDJSON line. `arguments` is an object,
-not a string, so `typeof rawArgs === 'string'` is always false and repair is never invoked.
-
-Correct intercept: Transform stream on raw stdin BEFORE transport creation.
-- Buffer each NDJSON line, run `jsonrepair` (npm), re-emit the repaired line.
-- Use `jsonrepair` npm package — well-tested against LLM output patterns (unescaped \n,
-  dangling quotes, missing brackets). Build custom only if per-op/per-file recovery is needed
-  (parse outer structure, mark individual broken ops as "unparseable" without failing the call).
-
-TODO: implement stdin Transform wrapper; add `jsonrepair` dependency.
-
-import { jsonrepair } from "jsonrepair";
-import { Transform } from "node:stream";
-
-const repairer = new Transform({
-  transform(chunk, _enc, cb) {
-    try { cb(null, jsonrepair(chunk.toString())); } catch { cb(null, chunk); }
-  }
-});
-process.stdin.pipe(repairer);
-const transport = new StdioServerTransport({ stdin: repairer as any, stdout: process.stdout });
-await server.connect(transport);
-*/
