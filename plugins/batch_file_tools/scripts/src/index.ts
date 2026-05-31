@@ -10,13 +10,29 @@ import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { writeLogLine } from "./lib/log.js";
 
 const args = process.argv.slice(2);
 const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
 let validRootDirectories: string[] = [];
 const sessionAllowedReadPaths: string[] = [];
 const sessionAllowedEditPaths: string[] = [];
+
+// MCP harnesses like Claude Code do not support some features of the MCP protocol. Logging falls back to console.error for errors only which is the default.
+const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'BATCH_TOOLS_MCP_LOGGING', 'false') === 'true';
+
+function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
+  const envVal = process.env[envName];
+  if (envVal !== undefined && envVal !== '') return envVal;
+  const prefix = `--${argName}=`;
+  const exact = process.argv.find(a => a.startsWith(prefix));
+  if (exact) return exact.slice(prefix.length);
+  const idx = process.argv.indexOf(`--${argName}`);
+  if (idx >= 0) {
+    if (process.argv[idx + 1] && !process.argv[idx + 1]!.startsWith('--')) return process.argv[idx + 1]!;
+    return 'true';
+  }
+  return defaultVal;
+}
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
 // DO NOT set on either tool. Claude Code's harness surfaces
@@ -37,14 +53,18 @@ const server = new McpServer(
   },
 );
 
+
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
-  try {
-    server.sendLoggingMessage({ 
-      level, 
-      data,
-      logger 
-    });
-  } catch { /* ignore if client doesn't support logging */ }
+  if (USE_MCP_LOGGING) {
+    try {
+      server.sendLoggingMessage({ level, data, logger });
+    } catch {
+      console.error(`[${logger ?? 'server'}] ${data}`);
+    }
+  } else if (level === 'error') {
+    console.error(`[${logger ?? 'server'}] ${data}`);
+  }
+}
 }
 
 async function reportProgress(
@@ -110,8 +130,6 @@ server.registerTool(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_read error — ${message}`, "batch_read");
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
       return {
         isError: true,
         content: [{ type: "text", text: logLine }],
@@ -162,8 +180,6 @@ server.registerTool(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
       return {
         isError: true,
         content: [{ type: "text", text: logLine }],
@@ -181,25 +197,25 @@ server.server.oninitialized = async () => {
   }
 
   if (getAllowedDirectoriesToUse("read").length === 0) {
-    writeLogLine(`No allowed directories provided via args or MCP roots. Server will be shut down.`);
+    writeMcpLogLine("error", `No allowed directories provided via args or MCP roots. Server will be shut down.`, 'permissions');
     process.exit(1);
   }
 
   const parts: string[] = [];
   if (validRootDirectories.length > 0) parts.push(`roots=[${validRootDirectories.join(', ')}]`);
   if (allowedDirectoriesFromArgs.length > 0) parts.push(`args=[${allowedDirectoriesFromArgs.join(', ')}]`);
-  writeLogLine(`Allowed directories — ${parts.join(' + ')}`);
+  writeMcpLogLine("info", `Allowed directories — ${parts.join(' + ')}`, 'permissions');
 };
 
 async function updateValidRootDirectories() {
   try {
     const response = await server.server.listRoots();
     if (response && 'roots' in response) {
-      validRootDirectories = await getValidRootDirectories(response.roots);
+      validRootDirectories = await getValidRootDirectories(response.roots, writeMcpLogLine);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    writeLogLine(`Failed to request roots from client: ${message}`);
+    writeMcpLogLine("error", `Failed to request roots from client: ${message}`, 'permissions');
   }
 }
 
@@ -226,7 +242,7 @@ async function elicitPaths(
 
   for (const p of unauthorized) {
     if (isPathAllowed(p, sessionList)) {
-      writeMcpLogLine("info", `elicit skip (session-allowed) — ${p}`, "elicit");
+      writeMcpLogLine("info", `elicit skip (session-allowed) — ${p}`, 'permissions');
       acceptedPaths.push(p);
       continue;
     }
@@ -256,7 +272,7 @@ async function elicitPaths(
       });
 
       if (r.action !== "accept") {
-        writeMcpLogLine("info", `elicit deny — ${p}`, "elicit");
+        writeMcpLogLine("info", `elicit deny — ${p}`, 'permissions');
         continue;
       }
 
@@ -266,7 +282,7 @@ async function elicitPaths(
       const sessionAllow = Array.isArray(content['session_allow']) ? content['session_allow'] as string[] : [];
 
       const sessionScope = sessionAllow.includes("folder") ? "folder" : sessionAllow.includes("file") ? "file" : "none";
-      writeMcpLogLine("info", `elicit accept — ${p} (session: ${sessionScope})`, "elicit");
+      writeMcpLogLine("info", `elicit accept — ${p} (session: ${sessionScope})`, 'permissions');
 
       if (sessionAllow.includes("folder")) {
         sessionList.push(folder);
@@ -274,7 +290,7 @@ async function elicitPaths(
         sessionList.push(p);
       }
     } catch (err) {
-      writeMcpLogLine("warning", `elicit error — ${p}: ${err instanceof Error ? err.message : String(err)}`, "elicit");
+      writeMcpLogLine("warning", `elicit error — ${p}: ${err instanceof Error ? err.message : String(err)}`, 'permissions');
     }
   }
 
@@ -288,6 +304,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  writeLogLine(`batch-tools-mcp-server fatal: ${message}`);
+  console.error(`batch-tools-mcp-server fatal: ${message}`);
   process.exit(1);
 });
