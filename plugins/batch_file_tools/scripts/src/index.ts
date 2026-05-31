@@ -20,6 +20,8 @@ const sessionAllowedEditPaths: string[] = [];
 // MCP harnesses like Claude Code do not support some features of the MCP protocol. Logging falls back to console.error for errors only which is the default.
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'BATCH_TOOLS_MCP_LOGGING', 'false') === 'true';
 const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
+const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
+const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -33,6 +35,19 @@ function parseConfigArg(argName: string, envName: string, defaultVal: string): s
     return 'true';
   }
   return defaultVal;
+}
+
+function parseConfigArgRecord(argName: string, envName: string): Record<string, unknown> {
+  const raw = parseConfigArg(argName, envName, '');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    console.error(`[config] ${envName}: expected a JSON object, ignoring`);
+  } catch {
+    console.error(`[config] ${envName}: invalid JSON, ignoring`);
+  }
+  return {};
 }
 
 // structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
@@ -119,10 +134,7 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: READ_META
   },
   async (param, extra) => {
   try {
@@ -164,10 +176,7 @@ server.registerTool(
       idempotentHint: false,
       openWorldHint: false
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: EDIT_META
   },
   async (param, extra) => {
   try {
