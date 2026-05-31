@@ -1,0 +1,49 @@
+{
+    "name": "project-intel-mcp-server",
+    "version": "1.0.0",
+    "license": "MIT",
+    "author": "Thore Höltig",
+    "description": "Lightweight reconnaissance system that provides direction before exploration. Query for relevant files before reading them - avoid expensive blind exploration and context pollution.",
+    "keywords": [
+        "context",
+        "knowledge",
+        "scan",
+        "project",
+        "files",
+        "llm"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/thoeltig/better-base-tools.git"
+    },
+    "bugs": {
+        "url": "https://github.com/thoeltig/better-base-tools/issues"
+    },
+    "type": "module",
+    "bin": {
+        "project-intel-mcp-server": "dist/index.js"
+    },
+    "main": "dist/index.js",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "1.29.0",
+        "zod": "3.25.76"
+    },
+    "devDependencies": {
+        "@types/node": "25.0.1",
+        "typescript": "5.9.3",
+        "vitest": "4.1.5"
+    },
+    "engines": {
+        "node": ">=22"
+    }
+}

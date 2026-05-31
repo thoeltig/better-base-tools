@@ -1,0 +1,14 @@
+{
+  "name": "project-intel-tool",
+  "description": "Lightweight reconnaissance system that provides direction before exploration. Query for relevant files before reading them - avoid expensive blind exploration and context pollution.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Thore Höltig",
+    "url": "https://github.com/thoeltig"
+  },
+  "homepage": "https://github.com/thoeltig/better-base-tools/tree/main/plugins/project-intel-tool",
+  "repository": "https://github.com/thoeltig/better-base-tools",
+  "license": "MIT",
+  "keywords": ["tokens", "efficiency", "file-reading", "context-optimization", "development", "exploration", "search", "codebase", "project", "reconnaissance", "semantic"],
+  "dependencies": []
+}
