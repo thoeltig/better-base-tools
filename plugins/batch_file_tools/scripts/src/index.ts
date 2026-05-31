@@ -7,7 +7,7 @@ import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
-import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import { RootsListChangedNotificationSchema, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 
@@ -23,6 +23,7 @@ const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOT
 const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
 const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
 const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
+const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -50,12 +51,6 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
   }
   return {};
 }
-
-// structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
-// DO NOT set on either tool. Claude Code's harness surfaces
-// structuredContent to the model in place of content[], which re-wraps
-// the per-file TextContent envelope in JSON and re-escapes every `\n` to
-// `\\n`. Emit unescaped raw text via content[] only.
 
 const server = new McpServer(
   {
@@ -155,7 +150,9 @@ server.registerTool(
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
-      return { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
+      const toolOutput: CallToolResult = { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_read error — ${message}`, "batch_read");
@@ -197,7 +194,9 @@ server.registerTool(
       const okCount = result.results.filter(r => r.status === "ok").length;
       const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
       writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
-      return { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, DRY_RUN) };
+      const toolOutput: CallToolResult = { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, DRY_RUN) };
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");

@@ -13,6 +13,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` / `--user-audience` env/arg — append a compact human-readable summary to tool results (e.g. `"Read 5 — compact: 3, fileinfo: 2"`); requires harness support for `annotations.audience` (default: `false`)
 - `BATCH_TOOLS_READ_META` / `--read-meta` and `BATCH_TOOLS_EDIT_META` / `--edit-meta` env/args — JSON objects merged into the `_meta` field of each tool registration; use for harness-specific flags such as `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}` (default: `{}`)
 - `BATCH_TOOLS_DRY_RUN` / `--dry-run` env/arg — run `batch_edit` without writing any files; all ops are validated and results reported as if applied (default: `false`)
+- `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` / `--mcp-structured-content` env/arg — include raw result objects as `structuredContent` in tool responses alongside `content[]`; for harnesses that support both correctly (default: `false`)
 
 ### Changed
 

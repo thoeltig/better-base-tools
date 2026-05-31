@@ -100,6 +100,7 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_READ_META` | `--read-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_read` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}`. |
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
+| `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 
 ## Requirements
 
