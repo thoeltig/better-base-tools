@@ -1,6 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { EditInput, ReadInput } from "./types.js";
+import { EditInput, ReadInput, ToolContentResult } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
@@ -19,6 +19,7 @@ const sessionAllowedEditPaths: string[] = [];
 
 // MCP harnesses like Claude Code do not support some features of the MCP protocol. Logging falls back to console.error for errors only which is the default.
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'BATCH_TOOLS_MCP_LOGGING', 'false') === 'true';
+const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -65,7 +66,24 @@ function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): vo
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
 }
+
+function createOutputMessage(msg: string, isError?: boolean | undefined): {
+  isError: boolean | undefined;
+  content: ToolContentResult[];
+}{
+  return { 
+    isError, 
+    content: [{ 
+      type: 'text', 
+      text: isError ? `Error: ${msg}` : msg,
+      annotations: {
+        audience: ["assistant", "user"],
+        priority: 0
+      }
+    }]
+  };
 }
+
 
 async function reportProgress(
   extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
@@ -124,16 +142,11 @@ server.registerTool(
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
-      return {
-        content: formatReadContent(result)
-      };
+      return { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_read error — ${message}`, "batch_read");
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
+      return createOutputMessage(message, true);
     }
   }
 );
@@ -174,16 +187,11 @@ server.registerTool(
       const okCount = result.results.filter(r => r.status === "ok").length;
       const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
       writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
-      return {
-        content: formatEditContent(result, parsed.dryRun)
-      };
+      return { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, parsed.dryRun) };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
+      return createOutputMessage(message, true);
     }
   }
 );

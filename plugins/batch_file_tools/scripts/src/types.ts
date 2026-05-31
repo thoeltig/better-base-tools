@@ -243,3 +243,22 @@ export const EditTextInput = z.object({
   })
   .strict();
 export type EditTextInput = z.infer<typeof EditTextInput>;
+
+export const AudienceType = z.enum([
+    'user',
+    'assistant'
+  ]);
+export type AudienceType = z.infer<typeof AudienceType>;
+
+export const ToolContentResult = z.object({
+    type: z.literal("text"),
+    text: z.string(),
+    annotations: z.object({
+        audience: z.array(AudienceType).optional(),
+        priority: z.number().min(0.0).max(1.0).optional(),
+        lastModified: z.string().optional()
+    }).strip().strict().optional(),
+    _meta: z.record(z.string(), z.unknown()).optional()
+  }).strip().strict();
+  
+export type ToolContentResult = z.infer<typeof ToolContentResult>;
