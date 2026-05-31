@@ -28,6 +28,7 @@ interface IndexedOp {
 export async function handleBatchEdit(
   input: EditInput,
   allowedDirectories: string[],
+  dryRun: boolean,
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<EditOutput> {
   const results: FileResult[] = [];
@@ -62,7 +63,7 @@ export async function handleBatchEdit(
     } else {
       const options: FileEditOptions = {
         stopOnError: entry.file.stopOnError ?? rootStop,
-        dryRun: input.dryRun,
+        dryRun,
       };
       const opsBefore = done;
       const onOpDone = onProgress ? async () => { await onProgress(++done, total); } : undefined;

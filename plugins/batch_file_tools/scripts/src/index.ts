@@ -22,6 +22,7 @@ const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'BATCH_TOOLS_MCP_LOGGING',
 const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
 const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
 const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
+const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -167,7 +168,7 @@ server.registerTool(
   "batch_edit",
   {
     title: "Improved edit tool which supports batching and different output modes",
-    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Op selection — match the op to how you read the file: compact or verbatim → replace/replace_all (use read content as anchor); verbatim_numbered+searchTerm/offset → replace_range/insert_at_line (use returned line numbers; do not use replace — it wastes the line anchors). Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) full-file edit — read compact or verbatim, use replace/replace_all; (2) targeted edit — read verbatim_numbered+searchTerm or +offset+count, use replace_range/insert_at_line with the returned line numbers; (3) multi-file refactor — replace_all+glob to rename a symbol across all matching files; (4) new file — write(overwrite) auto-creates file and any missing parent dirs; (5) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (6) multi-line content — prefer replace_range/insert_at_line over replace to avoid JSON-escaping newlines in old/new strings.",
+    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. Op selection — match the op to how you read the file: compact or verbatim → replace/replace_all (use read content as anchor); verbatim_numbered+searchTerm/offset → replace_range/insert_at_line (use returned line numbers; do not use replace — it wastes the line anchors). Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) full-file edit — read compact or verbatim, use replace/replace_all; (2) targeted edit — read verbatim_numbered+searchTerm or +offset+count, use replace_range/insert_at_line with the returned line numbers; (3) multi-file refactor — replace_all+glob to rename a symbol across all matching files; (4) new file — write(overwrite) auto-creates file and any missing parent dirs; (5) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (6) multi-line content — prefer replace_range/insert_at_line over replace to avoid JSON-escaping newlines in old/new strings.",
     inputSchema: EditInput,
     annotations: {
       title: 'Improved edit tool which supports batching and different output modes',
@@ -192,11 +193,11 @@ server.registerTool(
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchEdit(parsed, effectiveAllowed, (done, total) => reportProgress(extra, done, total));
+      const result = await handleBatchEdit(parsed, effectiveAllowed, DRY_RUN, (done, total) => reportProgress(extra, done, total));
       const okCount = result.results.filter(r => r.status === "ok").length;
       const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
       writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
-      return { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, parsed.dryRun) };
+      return { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, DRY_RUN) };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");
