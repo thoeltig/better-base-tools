@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import { RootsListChangedNotificationSchema, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { LoggingLevel } from '@modelcontextprotocol/sdk/types.js';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
@@ -52,6 +52,11 @@ let isScanning = false;
 // Enable only when the harness is known to support the respective MCP capability.
 const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
+const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
+const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT', 'false') === 'true';
+const SCAN_META = parseConfigArgRecord('scan-meta', 'PROJECT_INTEL_TOOL_SCAN_META');
+const QUERY_META = parseConfigArgRecord('query-meta', 'PROJECT_INTEL_TOOL_QUERY_META');
+const SUBMIT_ANALYSIS_META = parseConfigArgRecord('submit-analysis-meta', 'PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META');
 
 const scanConfig: ScanConfig = {
   maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
@@ -73,6 +78,19 @@ function parseConfigArg(argName: string, envName: string, defaultVal: string): s
     return 'true';
   }
   return defaultVal;
+}
+
+function parseConfigArgRecord(argName: string, envName: string): Record<string, unknown> {
+  const raw = parseConfigArg(argName, envName, '');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    console.error(`[config] ${envName}: expected a JSON object, ignoring`);
+  } catch {
+    console.error(`[config] ${envName}: invalid JSON, ignoring`);
+  }
+  return {};
 }
 
 let activeLockPath: string | null = null;
@@ -269,6 +287,7 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
+    _meta: SCAN_META,
   },
   async (args) => {
     writeMcpLogLine('info', `scan — called${args.scanLocation ? ` (scope: ${args.scanLocation})` : ''}`, 'scan');
@@ -312,24 +331,35 @@ server.registerTool(
       const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
       const batchFiles = writeBatchFiles(batches, knowledgeDir, projectRoot);
       writeMcpLogLine('info', `scan — wrote ${batches.length} batch file(s) for subagent analysis`, 'scan');
-      return {
+      const analysisInstructions = {
+        status: 'analysis_required',
+        batchCount: batches.length,
+        batchFiles,
+        instruction:
+          `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
+          'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
+          'Prompt for the subagent: Follow the instructions in the provided file.',
+      };
+      const scanToolResult: CallToolResult = {
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            status: 'analysis_required',
-            batchCount: batches.length,
-            batchFiles,
-            instruction:
-              `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
-              'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
-              'Prompt for the subagent: Follow the instructions in the provided file.',
-          }), 
+          text: JSON.stringify(analysisInstructions), 
           annotations: { 
             audience: ['assistant'], 
             priority: 0.1
           }
         }],
       };
+      if (USE_USER_AUDIENCE) scanToolResult.content.push({
+        type: 'text',
+        text: `File analysis by ${batches.length} subagents required`,
+        annotations: { 
+          audience: ['user'], 
+          priority: 0
+        }
+      });
+      if (USE_STRUCTURED_CONTENT) scanToolResult.structuredContent = analysisInstructions;
+      return scanToolResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `scan error — ${message}`, 'scan');
@@ -361,7 +391,8 @@ if (!USE_MCP_SAMPLING) {
         destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false,
-      }
+      },
+      _meta: SUBMIT_ANALYSIS_META,
     },
     async (args) => {
       writeMcpLogLine('info', `submit_analysis — ${args.results.length} file(s) queued`, 'submit');
@@ -408,10 +439,7 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: QUERY_META,
   },
   async (args) => {
     writeMcpLogLine('info', `query — keywords: "${args.keywords}"`, 'query');
@@ -501,7 +529,7 @@ server.registerTool(
       }
 
       writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
-      return { 
+      const queryResult: CallToolResult = { 
         content: [{ 
           type: 'text', 
           text: JSON.stringify(output), 
@@ -512,6 +540,16 @@ server.registerTool(
           }
         }]
       };
+      if (USE_USER_AUDIENCE) queryResult.content.push({
+        type: 'text',
+        text: `Found ${limited.length} knowledge entr${limited.length === 1 ? 'y' : 'ies'}`,
+        annotations: { 
+          audience: ['user'], 
+          priority: 0
+        }
+      });
+      if (USE_STRUCTURED_CONTENT) queryResult.structuredContent = output as Record<string, unknown>;
+      return queryResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `query error — ${message}`, 'query');
