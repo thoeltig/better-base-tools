@@ -7,6 +7,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-01
+
+_Query freshness awareness and ref extraction improvements._
+
+### Added
+
+- **Analysis delta**: Query results now include `analysisDelta` (e.g. `+2 lines +50 chars`) on file entries when a file has been modified since its last semantic analysis, giving an at-a-glance signal of how much the content has drifted.
+- **Semantic weight penalty**: Semantic match scores (purpose, summary, role, technologies) are scaled by the ratio of current to baseline file size. Factual fields (exports, imports, refs, path) are unaffected — heavily rewritten files rank lower on semantic matches but still surface on structural ones
+- **Folder-level technologies**: Grouped query output now aggregates a deduplicated `technologies` list at the folder level
+
+### Fixed
+
+- **Line count off by one**: `lineCount` in structural data now correctly handles trailing newlines, matching the count returned by `fileinfo` mode in batch_file_tools
+- **Extension-less file refs**: `parseText` now captures references to extension-less files (e.g. `LICENSE`) via markdown link syntax, consistent with batch_file_tools ref extraction
+
+### Changed
+
+- **`deleted` and `lastUpdated` removed from query output**: Both were redundant (`deleted` is always false since deleted files are excluded; `lastUpdated` is an internal timestamp superseded by `analysisDelta`)
+- **`technologies` moved from per-file to folder-level in grouped output**
+
 ## [1.0.0] - 2026-05-29
 
 _Stable release: Instruction clarity, scan accuracy, and display improvements._
@@ -125,7 +145,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.1.0...HEAD
+[1.1.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...ProjectIntelTools_v1.1.0
 [1.0.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.6.0...ProjectIntelTools_v1.0.0
 [0.6.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.5.0...ProjectIntelTools_v0.6.0
 [0.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.4.0...ProjectIntelTools_v0.5.0

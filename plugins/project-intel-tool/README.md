@@ -74,11 +74,13 @@ Searches the knowledge base by keywords and returns a ranked list of files and d
 | Technologies | +2 | No |
 | Role | +2 | No |
 
+When a file has been modified since its last semantic analysis, the scores for semantic fields (purpose, summary, role, technologies) are multiplied by `min(baseline, current) / max(baseline, current)` — the ratio of file size at analysis time to current size. A small edit barely affects ranking; a near-complete rewrite reduces semantic scores close to zero while leaving structural scores unchanged.
+
 Queries on package names, function names, file names, and import/export identifiers return useful results immediately. Purpose and summary scoring activates after running scan.
 
-The `grouped` format organizes results by directory, making it a good choice for understanding subsystems and architecture. The `flat` format returns a single ranked list sorted by relevance score, making it better suited for broad searches across unrelated parts of the project.
+The `grouped` format organizes results by directory, making it a good choice for understanding subsystems and architecture. Each directory group includes a deduplicated `technologies` list aggregated from all files in that group. The `flat` format returns a single ranked list sorted by relevance score, making it better suited for broad searches across unrelated parts of the project.
 
-Each result includes `sizeChars` and `lineCount`, which the model uses to decide how to read the file (full read, line-range slice, or targeted search) without opening it first.
+Each result includes `sizeChars` and `lineCount`, which the model uses to decide how to read the file (full read, line-range slice, or targeted search) without opening it first. When a file has changed since its last semantic analysis, results also include `analysisDelta` (e.g. `+12 lines +340 chars`) as an inline freshness indicator.
 
 ### `scan`
 
@@ -148,21 +150,22 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
     "summary": "Main authentication module entry point",
     "purpose": "Exports auth functions and middleware for the Express API. Handles JWT creation, bcrypt password comparison, and session attachment. Acts as the single integration point for all auth consumers.",
     "role": "implementation",
-    "technologies": ["TypeScript", "JWT", "bcrypt"]
+    "technologies": ["TypeScript", "JWT", "bcrypt"],
+    "analysisDelta": "+12 lines +340 chars"
   }
 }
 ```
 
-The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `refs` maps intra-project file connections. The remaining fields require scan.
+The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `refs` maps intra-project file connections. The semantic fields (`summary`, `purpose`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal baseline fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`) are stored in the knowledge base but never surfaced in query output.
 Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across all sub-project knowledge bases.
 
 ---
 
 ## Staleness
 
-Structural data is never stale. Session start always refreshes it for changed files.
+Structural data is never stale. Session start always refreshes `sizeChars`, `lineCount`, `exports`, `imports`, and `refs` for all changed files.
 
-Semantic data (summary, purpose, role, technologies) can become stale when files change. The session start reports `N file(s) changed` as a signal. Since complete rewrites of a file's purpose are uncommon, stale semantic data is an indicator to consider re-scanning rather than an error.
+Semantic data (summary, purpose, role, technologies) can become stale when files change. Two signals indicate this: the session start reports `N file(s) changed`, and individual query results include `analysisDelta` (e.g. `+12 lines +340 chars`) when a file has been modified since its last analysis. A small delta suggests the description is likely still accurate; a large delta suggests a re-scan. The semantic weight penalty in scoring automatically de-prioritizes heavily changed files in results.
 
 Good triggers for a re-scan are when session start reports a significant number of changed files, when query results feel outdated or miss recent additions, or after major structural changes such as a new subsystem or large refactor.
 
