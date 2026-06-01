@@ -138,6 +138,15 @@ function parseText(content: string, projectFileSet: Set<string>): Pick<FileRefs,
     if (projectFileSet.has(cap) && !refs.includes(cap)) refs.push(cap);
   }
 
+  // Markdown links: handles extension-less files (e.g. LICENSE) not matched by REL_PATH_RE
+  const MD_LINK_RE = /!?\[[^\]]*\]\(([^)\s#?]+)/g;
+  while ((m = MD_LINK_RE.exec(content)) !== null) {
+    const cap = m[1];
+    if (!cap) continue;
+    const p = cap.startsWith('./') ? cap.slice(2) : cap;
+    if (projectFileSet.has(p) && !refs.includes(p)) refs.push(p);
+  }
+
   return { imports: [], exports: [], refs };
 }
 
