@@ -246,8 +246,6 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
   }
 });
 
-
-
 function assertRoots(): string | null {
   if (validRootDirectories.length === 0) return null;
   return validRootDirectories[0]!;
@@ -259,13 +257,10 @@ server.registerTool(
   'scan',
   {
     title: 'Scan project and generate AI file summaries',
-    description:
-      'Scan the current project directory and generate AI summaries in the background. ' +
-      'Returns immediately with the number of files being processed. Use query after scanning.',
+    description: 'Scan the current project directory and generate AI summaries in the background. Returns immediately with the number of files being processed. Use query after scanning.',
     inputSchema: z.object({
-      scanLocation: z.string().optional().describe(
-        'Sub-folder to scan relative to the project root. Default: entire project.'
-      ),
+      scanLocation: z.string().optional()
+        .describe('Sub-folder to scan relative to the project root. Default: entire project.'),
     }).strict(),
     annotations: {
       title: 'Scan project and generate AI file summaries',
@@ -348,9 +343,7 @@ if (!USE_MCP_SAMPLING) {
     'submit_analysis',
     {
       title: 'Submit file analysis results from subagent',
-      description:
-        'Called by analysis subagents to submit file summaries into project knowledge. ' +
-        'Serializes concurrent writes — multiple subagents can safely call this in parallel.',
+      description: 'Called by analysis subagents to submit file summaries into project knowledge. Serializes concurrent writes — multiple subagents can safely call this in parallel.',
       inputSchema: z.object({
         results: z.array(z.object({
           path: z.string(),
@@ -401,9 +394,7 @@ server.registerTool(
   'query',
   {
     title: 'Search project file summaries by keywords',
-    description:
-      'Search project file summaries by keywords. Searches primary knowledge and any sub-project knowledge. ' +
-      'Returns ranked results. Deleted files are excluded.',
+    description: 'Search project file summaries by keywords. Searches primary knowledge and any sub-project knowledge. Returns ranked results. Deleted files are excluded.',
     inputSchema: z.object({
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),

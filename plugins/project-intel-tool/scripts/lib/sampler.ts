@@ -9,6 +9,7 @@ import {
   SAMPLING_DELAY_MS,
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
+  BATCHES_DIRECTORY,
 } from '../types.js';
 
 // Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
@@ -273,7 +274,7 @@ export async function runSamplingBackground(
 }
 
 export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, projectRoot: string): string[] {
-  const batchDir = path.join(knowledgeDir, 'batches');
+  const batchDir = path.join(knowledgeDir, BATCHES_DIRECTORY);
   if (!fs.existsSync(batchDir)) fs.mkdirSync(batchDir, { recursive: true });
   const noopLog: SamplerLog = () => {};
   return batches.map((batch, i) => {

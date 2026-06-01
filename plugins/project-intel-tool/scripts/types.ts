@@ -1,4 +1,7 @@
+import { z } from "zod";
+
 export const KNOWLEDGE_DIRECTORY: string = '.knowledge';
+export const BATCHES_DIRECTORY: string = 'batches';
 export const SUMMARIES_FILE: string = 'summaries.json';
 export const SCAN_FILE: string = 'scan.json';
 export const FORMAT_FLAT: string = 'flat';
@@ -108,3 +111,22 @@ export interface HookResponse {
     additionalContext: string;
   };
 }
+
+export const AudienceType = z.enum([
+    'user',
+    'assistant'
+  ]);
+export type AudienceType = z.infer<typeof AudienceType>;
+
+export const ToolContentResult = z.object({
+    type: z.literal("text"),
+    text: z.string(),
+    annotations: z.object({
+        audience: z.array(AudienceType).optional(),
+        priority: z.number().min(0.0).max(1.0).optional(),
+        lastModified: z.string().optional()
+    }).strip().strict().optional(),
+    _meta: z.record(z.string(), z.unknown()).optional()
+  }).strip().strict();
+  
+export type ToolContentResult = z.infer<typeof ToolContentResult>;
