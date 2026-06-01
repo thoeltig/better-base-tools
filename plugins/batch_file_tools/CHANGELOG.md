@@ -5,6 +5,14 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.7] - 2026-06-01
+
+### Changed
+- Move indent-normalization control from per-request `disableNormalizedFormatting` to server-level config — `BATCH_TOOLS_NORMALIZE_FORMATTING` / `--normalize-formatting` (default: `true`); normalization applies to all reads unless disabled globally; `deduplicatePath` simplified by removing the `normGroups` grouping map that existed only to key on that field
+
+### Removed
+- `disableNormalizedFormatting` from `ReadRequest` schema — per-call opt-out replaced by `BATCH_TOOLS_NORMALIZE_FORMATTING` server config
+
 ## [1.1.6] - 2026-05-31
 
 ### Added
@@ -226,6 +234,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.1.7]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.7
 [1.1.6]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.6
 [1.1.5]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.5
 [1.1.4]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.4

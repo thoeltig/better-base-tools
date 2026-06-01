@@ -56,7 +56,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.1.6",
+    version: "1.1.7",
   },
   {
     capabilities: {
