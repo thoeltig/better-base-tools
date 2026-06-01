@@ -12,6 +12,7 @@ type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadR
 export async function handleBatchRead(
   input: ReadInput,
   allowedDirectories: string[],
+  normalizeFormatting: boolean,
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
   const expanded = await expandReadRequests(input.requests, allowedDirectories);
@@ -21,7 +22,7 @@ export async function handleBatchRead(
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, normalizeFormatting);
       await onProgress?.(++done, total);
       return result;
     })
@@ -75,11 +76,11 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
     result.push({ kind: "ok", req: { path, mode: "fileinfo" } });
   }
 
-  // search: group by (searchTerm, count, disableNorm), coalesce mode (same→same, mixed→verbatim)
+  // search: group by (searchTerm, count), coalesce mode (same→same, mixed→verbatim)
   const searchGroups = new Map<string, ReadRequest[]>();
   for (const req of reqs) {
     if (req.searchTerm === undefined) continue;
-    const key = `${req.searchTerm}|${req.count ?? ""}|${req.disableNormalizedFormatting ?? ""}`;
+    const key = `${req.searchTerm}|${req.count ?? ""}`;
     if (!searchGroups.has(key)) searchGroups.set(key, []);
     searchGroups.get(key)!.push(req);
   }
@@ -89,56 +90,46 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
     result.push({ kind: "ok", req: { ...group[0]!, mode: coalescedMode } });
   }
 
-  // range/full: group by disableNorm, coalesce mode, merge overlapping ranges
+  // range/full: coalesce mode, merge overlapping ranges
   const rangeReqs = reqs.filter(r => r.mode !== "fileinfo" && r.searchTerm === undefined);
   if (rangeReqs.length === 0) return result;
 
-  const normGroups = new Map<boolean, ReadRequest[]>();
-  for (const req of rangeReqs) {
-    const dn = req.disableNormalizedFormatting ?? false;
-    if (!normGroups.has(dn)) normGroups.set(dn, []);
-    normGroups.get(dn)!.push(req);
+  const modes = new Set(rangeReqs.map(r => r.mode));
+  const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
+
+  type RangeEntry = { start: number; end: number; sources: number; originalReq: ReadRequest | undefined };
+  const ranges: RangeEntry[] = rangeReqs.map(req => ({
+    start: req.offset ?? 1,
+    end: req.count !== undefined ? (req.offset ?? 1) + req.count - 1 : Infinity,
+    sources: 1,
+    originalReq: req,
+  }));
+  ranges.sort((a, b) => a.start - b.start);
+
+  const merged: RangeEntry[] = [];
+  for (const r of ranges) {
+    const last = merged.at(-1);
+    if (!last || (last.end !== Infinity && r.start > last.end + 1)) {
+      merged.push({ ...r });
+    } else {
+      last.sources += r.sources;
+      last.originalReq = undefined;
+      last.end = last.end === Infinity || r.end === Infinity ? Infinity : Math.max(last.end, r.end);
+    }
   }
 
-  for (const [disableNorm, group] of normGroups) {
-    const modes = new Set(group.map(r => r.mode));
-    const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
-
-    type RangeEntry = { start: number; end: number; sources: number; originalReq: ReadRequest | undefined };
-    const ranges: RangeEntry[] = group.map(req => ({
-      start: req.offset ?? 1,
-      end: req.count !== undefined ? (req.offset ?? 1) + req.count - 1 : Infinity,
-      sources: 1,
-      originalReq: req,
-    }));
-    ranges.sort((a, b) => a.start - b.start);
-
-    const merged: RangeEntry[] = [];
-    for (const r of ranges) {
-      const last = merged.at(-1);
-      if (!last || (last.end !== Infinity && r.start > last.end + 1)) {
-        merged.push({ ...r });
-      } else {
-        last.sources += r.sources;
-        last.originalReq = undefined;
-        last.end = last.end === Infinity || r.end === Infinity ? Infinity : Math.max(last.end, r.end);
-      }
+  for (const range of merged) {
+    // Single source with no merging: pass through the original request unchanged
+    if (range.sources === 1 && range.originalReq) {
+      result.push({ kind: "ok", req: range.originalReq });
+      continue;
     }
-
-    for (const range of merged) {
-      // Single source with no merging: pass through the original request unchanged
-      if (range.sources === 1 && range.originalReq) {
-        result.push({ kind: "ok", req: range.originalReq });
-        continue;
-      }
-      const isFullFile = range.start === 1 && range.end === Infinity;
-      const finalMode = isFullFile && coalescedMode === "verbatim_numbered" ? "verbatim" : coalescedMode;
-      const req: ReadRequest = { path, mode: finalMode };
-      if (range.start > 1) req.offset = range.start;
-      if (range.end !== Infinity) req.count = range.end - range.start + 1;
-      if (disableNorm) req.disableNormalizedFormatting = true;
-      result.push({ kind: "ok", req });
-    }
+    const isFullFile = range.start === 1 && range.end === Infinity;
+    const finalMode = isFullFile && coalescedMode === "verbatim_numbered" ? "verbatim" : coalescedMode;
+    const req: ReadRequest = { path, mode: finalMode };
+    if (range.start > 1) req.offset = range.start;
+    if (range.end !== Infinity) req.count = range.end - range.start + 1;
+    result.push({ kind: "ok", req });
   }
 
   return result;
@@ -198,7 +189,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache): Promise<ReadResult> {
+async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, normalizeFormatting: boolean): Promise<ReadResult> {
   // fileinfo / fileinfo_refs: stat without full content processing
   if (req.mode === "fileinfo") {
     if (!isAbsolute(req.path)) req.path = resolve(req.path);
@@ -270,7 +261,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       const s = Math.max(0, idx - ctx);
       const e = Math.min(rawLines.length - 1, idx + ctx);
       returnedLines += e - s + 1;
-      const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, ...(req.disableNormalizedFormatting ? { disableNormalizedFormatting: true } : {}) });
+      const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
       blocks.push(`<!-- Match at line ${idx + 1} -->\n${formatted.content}`);
     }
 
@@ -292,7 +283,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     path: req.path,
     ...(req.offset !== undefined ? { offset: req.offset } : {}),
     ...(req.count !== undefined ? { limit: req.count } : {}),
-    ...(req.disableNormalizedFormatting ? { disableNormalizedFormatting: true } : {}),
+    normalizeFormatting,
   });
 
   return {

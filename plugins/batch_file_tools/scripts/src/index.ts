@@ -23,6 +23,7 @@ const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOT
 const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
 const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
 const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
+const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS_NORMALIZE_FORMATTING', 'true') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
@@ -55,7 +56,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.1.6",
+    version: "1.1.7",
   },
   {
     capabilities: {
@@ -121,7 +122,7 @@ server.registerTool(
   "batch_read",
   {
     title: "Improved read tool which supports batching and different read modes",
-    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content, no line numbers — full-file anchor for replace/replace_all when whitespace normalization would break the match. 'verbatim_numbered'= line-numbered (format: '{line}\\t{content}') — requires searchTerm or offset/count (enforced); returned line numbers anchor replace_range/insert_at_line ops. 'fileinfo'= metadata (size, lines, ISO mtime, isFile) plus refs[] of resolved file references. Mode→op pairing: compact → replace/replace_all | verbatim → replace/replace_all | verbatim_numbered+searchTerm/offset → replace_range/insert_at_line. Path: absolute or relative file, directory (expands to immediate children) or glob (e.g. proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: 'searchTerm' (case-insensitive) + 'count' (context lines around each match, default 0). Use cases — follow this cascade for unknown files: (1) fileinfo — check size+lines before reading content, map deps via refs[]; (2) compact — full-file overview or replace/replace_all anchor (lowest token cost); (3) verbatim — full-file replace anchor when compact whitespace stripping would break the match; (4) verbatim_numbered+searchTerm or +offset+count — targeted slice with line numbers for replace_range/insert_at_line. Other use cases: (5) multi-file scan — searchTerm+glob finds occurrences across files without full reads; (6) dependency map — fileinfo+glob returns metadata+refs[] per file; (7) safe global replace — compact+searchTerm to verify occurrences, then replace_all; (8) disableNormalizedFormatting=true — only when indentation is itself being edited (indent-style fixes, tab-to-space); leave false for all other reads.",
+    description: "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content, no line numbers — full-file anchor for replace/replace_all when whitespace normalization would break the match. 'verbatim_numbered'= line-numbered (format: '{line}\\t{content}') — requires searchTerm or offset/count (enforced); returned line numbers anchor replace_range/insert_at_line ops. 'fileinfo'= metadata (size, lines, ISO mtime, isFile) plus refs[] of resolved file references. Mode→op pairing: compact → replace/replace_all | verbatim → replace/replace_all | verbatim_numbered+searchTerm/offset → replace_range/insert_at_line. Path: absolute or relative file, directory (expands to immediate children) or glob (e.g. proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: 'searchTerm' (case-insensitive) + 'count' (context lines around each match, default 0). Use cases — follow this cascade for unknown files: (1) fileinfo — check size+lines before reading content, map deps via refs[]; (2) compact — full-file overview or replace/replace_all anchor (lowest token cost); (3) verbatim — full-file replace anchor when compact whitespace stripping would break the match; (4) verbatim_numbered+searchTerm or +offset+count — targeted slice with line numbers for replace_range/insert_at_line. Other use cases: (5) multi-file scan — searchTerm+glob finds occurrences across files without full reads; (6) dependency map — fileinfo+glob returns metadata+refs[] per file; (7) safe global replace — compact+searchTerm to verify occurrences, then replace_all;",
     inputSchema: ReadInput,
     annotations: {
       title: 'Improved read tool which supports batching and different read modes',
@@ -146,7 +147,7 @@ server.registerTool(
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchRead(parsed, effectiveAllowed, (done, total) => reportProgress(extra, done, total));
+      const result = await handleBatchRead(parsed, effectiveAllowed, NORMALIZE_FORMATTING, (done, total) => reportProgress(extra, done, total));
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");

@@ -22,7 +22,7 @@ async function fixture(name: string, content: string): Promise<string> {
 }
 
 async function read(input: ReadInput) {
-  return handleBatchRead(input, [workDir]);
+  return handleBatchRead(input, [workDir], true);
 }
 
 describe("handleBatchRead", () => {
@@ -453,17 +453,6 @@ describe("deduplication", () => {
       ],
     });
     expect(out.results).toHaveLength(1);
-  });
-
-  it("disableNormalizedFormatting: different values produce separate results", async () => {
-    const p = await fixture("dedup_norm.ts", "  const a = 1;\n");
-    const out = await read({
-      requests: [
-        { path: p, mode: "compact" },
-        { path: p, mode: "compact", disableNormalizedFormatting: true },
-      ],
-    });
-    expect(out.results).toHaveLength(2);
   });
 
   it("different files: not merged", async () => {

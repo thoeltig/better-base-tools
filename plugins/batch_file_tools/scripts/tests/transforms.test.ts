@@ -307,13 +307,13 @@ describe("formatForRead — verbatim indent normalization (Phase 4)", () => {
     expect(r.content).toBe("1\tif (x) {\n2\t  y();\n3\t}\n");
   });
 
-  it("disableNormalizedFormatting: true returns tabs as-is", () => {
-    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim", disableNormalizedFormatting: true });
+  it("normalizeFormatting: false returns tabs as-is", () => {
+    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim", normalizeFormatting: false });
     expect(r.content).toBe("function foo() {\n\treturn 1;\n}\n");
   });
 
-  it("disableNormalizedFormatting: true returns 4-space as-is", () => {
-    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts", disableNormalizedFormatting: true });
+  it("normalizeFormatting: false returns 4-space as-is", () => {
+    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts", normalizeFormatting: false });
     expect(r.content).toBe("function foo() {\n    return 1;\n}\n");
   });
 

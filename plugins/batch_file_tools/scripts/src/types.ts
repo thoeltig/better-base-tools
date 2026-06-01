@@ -40,8 +40,6 @@ export const ReadRequest = z.object({
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
       .describe("If set: search file(s) for this string (case-insensitive); returns match blocks formatted in the requested mode, each prefixed with <!-- Match at line N -->"),
-    disableNormalizedFormatting: z.boolean().optional()
-      .describe("Only set true when indentation is itself the subject of the edit (e.g. fixing indent style, tab-to-space conversion). For all other edits leave false — the default normalization to 2-space indent reduces token cost and does not affect content-anchor matching."),
   })
   .strict()
   .superRefine((val, ctx) => {

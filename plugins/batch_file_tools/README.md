@@ -38,12 +38,27 @@ _¹ Documentation analysis project — content-only workload, pure native. ² An
 
 | Mode | Output | Use for |
 |---|---|---|
-| `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering, cheapest read |
-| `verbatim` | Normalized indentation, no line numbers | Readable content and edit anchors |
+| `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
+| `verbatim` | Normalized indentation, no line numbers | Exact-match `replace`/`replace_all` anchor; use when whitespace must survive the match verbatim |
 | `verbatim_numbered` | Line-numbered (`{n}\t{content}`) | Targeted edits and `insert_at_line` or `replace_range` anchors |
 | `fileinfo` | Metadata (size, lines, mtime, isFile) plus optional `refs[]` | Dependency mapping and pre-read sizing |
 
-Requests also support glob and directory expansion, a `searchTerm` parameter that returns matching lines with `count` context lines around each hit, `offset` and `count` for pagination and a `disableNormalizedFormatting` flag to bypass the default indent normalization.
+Requests also support glob and directory expansion, a `searchTerm` parameter that returns matching lines with `count` context lines around each hit, and `offset` and `count` for pagination.
+
+#### Formatting normalization
+
+`batch_read` normalizes indentation in all modes by default. The goal is token efficiency and model accuracy: normalized output mirrors the style distribution most prevalent in code training data, keeping comprehension high at minimum token cost.
+
+Rules applied at read time:
+
+- **Most file types** (TypeScript, JavaScript, CSS, YAML, …): normalized to **2-space indentation**. Two spaces is the dominant style across popular open-source JS/TS repositories and public training datasets; it also halves token cost versus 4-space for deeply nested code.
+- **Tab-required file types** (Makefile, …): normalized to **1 tab per indent level**. Tabs carry semantic meaning in these formats and must be preserved.
+
+Project-specific styles — 4-space, 6-space, 3-tab, or any other variant — are normalized on read. Reformatting source files is a mechanical task that belongs to automated tools (Prettier, Black, rustfmt, EditorConfig). Delegating it to the model wastes tokens and context with no accuracy benefit.
+
+**Known tradeoff**: Python (PEP 8: 4 spaces) and Rust (rustfmt: 4 spaces) are canonical exceptions — their training data is majority 4-space, so normalizing to 2-space marginally deviates from their established style. Token savings outweigh the accuracy delta for most tasks.
+
+Disable globally via `BATCH_TOOLS_NORMALIZE_FORMATTING=false` (see [Configuration](#configuration)) when indentation is itself the subject of an edit.
 
 The following example reads three files in a single call, each with a different mode.
 
@@ -67,7 +82,7 @@ The following example reads three files in a single call, each with a different 
 | `replace_range` | Replaces a range of lines |
 | `write` | Overwrites or appends to a file, creating parent directories as needed |
 
-When an anchor is not found the error response includes a `nearest_anchor` block containing verbatim context around the closest match which can be pasted directly as the corrected `old` string.
+Anchor matching for `replace` and `replace_all` uses a two-step fallback: exact string match first; if not found, a whitespace-normalized match (tabs, spaces, and newlines collapsed) against the original file content — the matched original text becomes the replacement target. This is what makes `compact` mode output a reliable anchor despite its whitespace stripping. Only if both steps fail is a `nearest_anchor` error returned, containing verbatim context around the closest match pasteable directly as the corrected `old` string.
 
 `stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
 
@@ -99,6 +114,7 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | `false` | Append a compact human-readable summary to each tool result (e.g. `"Read 5 — compact: 3, fileinfo: 2"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. |
 | `BATCH_TOOLS_READ_META` | `--read-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_read` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}`. |
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
+| `BATCH_TOOLS_NORMALIZE_FORMATTING` | `--normalize-formatting` | `true` | Normalize indentation on read (see [Formatting normalization](#formatting-normalization)). Disable when indentation is itself being edited. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 
