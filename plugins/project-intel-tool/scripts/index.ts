@@ -27,8 +27,15 @@ import {
 } from './types.js';
 
 const server = new McpServer(
-  { name: 'project-intel-mcp-server', version: '1.1.0' },
-  { capabilities: { tools: {}, logging: {} } }
+  { 
+    name: 'project-intel-mcp-server', 
+    version: '1.1.0' },
+  { 
+    capabilities: { 
+      tools: {}, 
+      logging: {} 
+    }
+  }
 );
 
 let validRootDirectories: string[] = [];
@@ -128,7 +135,9 @@ function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): vo
   if (USE_MCP_LOGGING) {
     try {
       server.sendLoggingMessage({ level, data, logger });
-    } catch { /* ignore if client doesn't support logging */ }
+    } catch {
+      console.error(`[${logger ?? 'server'}] ${data}`);
+    }
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
@@ -192,7 +201,7 @@ async function updateValidRootDirectories(): Promise<void> {
         .filter((p): p is string => p !== null && p.length > 0);
     }
   } catch (err) {
-    writeMcpLogLine('warning', `Failed to fetch roots: ${err instanceof Error ? err.message : String(err)}`, 'roots');
+    writeMcpLogLine('warning', `Failed to fetch roots: ${err instanceof Error ? err.message : String(err)}`, 'permissions');
   }
 }
 
@@ -213,9 +222,9 @@ server.server.oninitialized = async () => {
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
   await updateValidRootDirectories();
   if (validRootDirectories.length === 0) {
-    writeMcpLogLine('warning', 'All roots removed. Tools will fail until roots are restored.', 'roots');
+    writeMcpLogLine('warning', 'All roots removed. Tools will fail until roots are restored.', 'permissions');
   } else {
-    writeMcpLogLine('info', `Roots updated: ${validRootDirectories[0]}`, 'roots');
+    writeMcpLogLine('info', `Roots updated: ${validRootDirectories[0]}`, 'permissions');
   }
 });
 
