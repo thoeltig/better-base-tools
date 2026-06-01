@@ -170,8 +170,6 @@ export type EditFile = z.infer<typeof EditFile>;
 export const EditInput = z.object({
     stopOnError: z.boolean().optional()
       .describe("Stop on first error. Default false (continue): a failed op or file does not skip remaining work. Set true to abort: in-file ops after a failure get status:'skipped'; subsequent files get status:'skipped' when set at root. Resolution within a file: op.stopOnError ?? file.stopOnError ?? root.stopOnError ?? false (first defined wins). Across-file abort uses the root flag only; file-level scopes within-file."),
-    dryRun: z.boolean().optional()
-      .describe("Use to test changes without actually applying them"),
     files: z.array(EditFile).min(1),
   })
   .strict();
@@ -243,3 +241,22 @@ export const EditTextInput = z.object({
   })
   .strict();
 export type EditTextInput = z.infer<typeof EditTextInput>;
+
+export const AudienceType = z.enum([
+    'user',
+    'assistant'
+  ]);
+export type AudienceType = z.infer<typeof AudienceType>;
+
+export const ToolContentResult = z.object({
+    type: z.literal("text"),
+    text: z.string(),
+    annotations: z.object({
+        audience: z.array(AudienceType).optional(),
+        priority: z.number().min(0.0).max(1.0).optional(),
+        lastModified: z.string().optional()
+    }).strip().strict().optional(),
+    _meta: z.record(z.string(), z.unknown()).optional()
+  }).strip().strict();
+  
+export type ToolContentResult = z.infer<typeof ToolContentResult>;

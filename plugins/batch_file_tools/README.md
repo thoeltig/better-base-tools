@@ -69,7 +69,7 @@ The following example reads three files in a single call, each with a different 
 
 When an anchor is not found the error response includes a `nearest_anchor` block containing verbatim context around the closest match which can be pasted directly as the corrected `old` string.
 
-`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Setting `dryRun` to true runs the full execution without writing any changes.
+`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
 
 When a path falls outside the allowed directories the tool prompts for authorization with per-file options to allow access once or for the remainder of the session.
 
@@ -88,6 +88,19 @@ The following example applies three changes across two files in a single call.
 ```
 
 ---
+
+## Configuration
+
+All options can be set via environment variable or command-line argument. Args accept `--<name>=<value>`, `--<name> <value>`, or bare `--<name>` (sets value to `true`). Environment variables take precedence over args.
+
+| Env var | Arg | Default | Description |
+|---|---|---|---|
+| `BATCH_TOOLS_MCP_LOGGING` | `--mcp-logging` | `false` | Route log output through the MCP logging protocol instead of `console.error`. Some harnesses do not support MCP logging; leave disabled unless yours does. |
+| `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | `false` | Append a compact human-readable summary to each tool result (e.g. `"Read 5 — compact: 3, fileinfo: 2"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. |
+| `BATCH_TOOLS_READ_META` | `--read-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_read` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}`. |
+| `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
+| `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
+| `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 
 ## Requirements
 

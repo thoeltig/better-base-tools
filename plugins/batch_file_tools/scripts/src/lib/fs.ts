@@ -3,8 +3,7 @@ import { basename, dirname, isAbsolute, relative, resolve, join } from "node:pat
 import { homedir } from "node:os";
 import { Reason } from "../types.js";
 import { fileURLToPath } from "node:url";
-import type { Root } from "@modelcontextprotocol/sdk/types.js";
-import { writeLogLine } from "./log.js";
+import type { Root, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 
 export interface ReadFileResult {
   readonly ok: true;
@@ -71,12 +70,13 @@ export async function getAllowedDirectoriesFromArgs(
 
 export async function getValidRootDirectories(
   requestedRoots: readonly Root[],
+  log: (level: LoggingLevel, data: string, logger?: string) => void,
 ): Promise<string[]> {
   const validated: string[] = [];
   for (const root of requestedRoots) {
     const resolved = await parseRootUri(root.uri);
     if (!resolved) {
-      writeLogLine(`Skipping invalid root: ${root.uri}`);
+      log("warning", `Skipping invalid root: ${root.uri}`, "roots");
       continue;
     }
     try {
@@ -84,11 +84,11 @@ export async function getValidRootDirectories(
       if (stats.isDirectory()) {
         validated.push(resolved);
       } else {
-        writeLogLine(`Skipping non-directory root: ${resolved}`);
+        log("warning", `Skipping non-directory root: ${resolved}`, "roots");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      writeLogLine(`Skipping unreadable root ${resolved}: ${message}`);
+      log("warning", `Skipping unreadable root ${resolved}: ${message}`, "roots");
     }
   }
   return validated;

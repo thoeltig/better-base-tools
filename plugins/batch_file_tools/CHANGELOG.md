@@ -5,6 +5,25 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.1.6] - 2026-05-31
+
+### Added
+
+- `BATCH_TOOLS_MCP_LOGGING` / `--mcp-logging` env/arg — toggle MCP protocol logging; falls back to `console.error` for errors when disabled (default: `false`)
+- `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` / `--user-audience` env/arg — append a compact human-readable summary to tool results (e.g. `"Read 5 — compact: 3, fileinfo: 2"`); requires harness support for `annotations.audience` (default: `false`)
+- `BATCH_TOOLS_READ_META` / `--read-meta` and `BATCH_TOOLS_EDIT_META` / `--edit-meta` env/args — JSON objects merged into the `_meta` field of each tool registration; use for harness-specific flags such as `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}` (default: `{}`)
+- `BATCH_TOOLS_DRY_RUN` / `--dry-run` env/arg — run `batch_edit` without writing any files; all ops are validated and results reported as if applied (default: `false`)
+- `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` / `--mcp-structured-content` env/arg — include raw result objects as `structuredContent` in tool responses alongside `content[]`; for harnesses that support both correctly (default: `false`)
+
+### Changed
+
+- Remove hardcoded `anthropic/maxResultSizeChars` and `anthropic/alwaysLoad` from `_meta` — now configured via `BATCH_TOOLS_READ_META` / `BATCH_TOOLS_EDIT_META`
+
+### Removed
+
+- `batch_edit_text` tool — concept did not work correctly with existing harnesses
+- `dryRun` field from `batch_edit` input schema — replaced by `BATCH_TOOLS_DRY_RUN` server-level env/arg
+
 ## [1.1.5] - 2026-05-27
 
 ### Added
@@ -207,6 +226,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.1.6]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.6
 [1.1.5]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.5
 [1.1.4]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.4
 [1.1.3]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.3

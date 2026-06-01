@@ -1,16 +1,15 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { EditInput, ReadInput } from "./types.js";
+import { EditInput, ReadInput, ToolContentResult } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
-import { RootsListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import { RootsListChangedNotificationSchema, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { writeLogLine } from "./lib/log.js";
 
 const args = process.argv.slice(2);
 const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
@@ -18,16 +17,45 @@ let validRootDirectories: string[] = [];
 const sessionAllowedReadPaths: string[] = [];
 const sessionAllowedEditPaths: string[] = [];
 
-// structuredContent policy (see Claude_Temp_Files/dogfood-log.md):
-// DO NOT set on either tool. Claude Code's harness surfaces
-// structuredContent to the model in place of content[], which re-wraps
-// the per-file TextContent envelope in JSON and re-escapes every `\n` to
-// `\\n`. Emit unescaped raw text via content[] only.
+// MCP harnesses like Claude Code do not support some features of the MCP protocol. Logging falls back to console.error for errors only which is the default.
+const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'BATCH_TOOLS_MCP_LOGGING', 'false') === 'true';
+const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
+const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
+const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
+const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
+const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
+
+function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
+  const envVal = process.env[envName];
+  if (envVal !== undefined && envVal !== '') return envVal;
+  const prefix = `--${argName}=`;
+  const exact = process.argv.find(a => a.startsWith(prefix));
+  if (exact) return exact.slice(prefix.length);
+  const idx = process.argv.indexOf(`--${argName}`);
+  if (idx >= 0) {
+    if (process.argv[idx + 1] && !process.argv[idx + 1]!.startsWith('--')) return process.argv[idx + 1]!;
+    return 'true';
+  }
+  return defaultVal;
+}
+
+function parseConfigArgRecord(argName: string, envName: string): Record<string, unknown> {
+  const raw = parseConfigArg(argName, envName, '');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    console.error(`[config] ${envName}: expected a JSON object, ignoring`);
+  } catch {
+    console.error(`[config] ${envName}: invalid JSON, ignoring`);
+  }
+  return {};
+}
 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.1.5",
+    version: "1.1.6",
   },
   {
     capabilities: {
@@ -37,15 +65,36 @@ const server = new McpServer(
   },
 );
 
+
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
-  try {
-    server.sendLoggingMessage({ 
-      level, 
-      data,
-      logger 
-    });
-  } catch { /* ignore if client doesn't support logging */ }
+  if (USE_MCP_LOGGING) {
+    try {
+      server.sendLoggingMessage({ level, data, logger });
+    } catch {
+      console.error(`[${logger ?? 'server'}] ${data}`);
+    }
+  } else if (level === 'error') {
+    console.error(`[${logger ?? 'server'}] ${data}`);
+  }
 }
+
+function createOutputMessage(msg: string, isError?: boolean | undefined): {
+  isError: boolean | undefined;
+  content: ToolContentResult[];
+}{
+  return { 
+    isError, 
+    content: [{ 
+      type: 'text', 
+      text: isError ? `Error: ${msg}` : msg,
+      annotations: {
+        audience: ["assistant", "user"],
+        priority: 0
+      }
+    }]
+  };
+}
+
 
 async function reportProgress(
   extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
@@ -81,10 +130,7 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: READ_META
   },
   async (param, extra) => {
   try {
@@ -104,18 +150,13 @@ server.registerTool(
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
-      return {
-        content: formatReadContent(result)
-      };
+      const toolOutput: CallToolResult = { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_read error — ${message}`, "batch_read");
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
+      return createOutputMessage(message, true);
     }
   }
 );
@@ -124,7 +165,7 @@ server.registerTool(
   "batch_edit",
   {
     title: "Improved edit tool which supports batching and different output modes",
-    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. dryRun supported. Op selection — match the op to how you read the file: compact or verbatim → replace/replace_all (use read content as anchor); verbatim_numbered+searchTerm/offset → replace_range/insert_at_line (use returned line numbers; do not use replace — it wastes the line anchors). Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) full-file edit — read compact or verbatim, use replace/replace_all; (2) targeted edit — read verbatim_numbered+searchTerm or +offset+count, use replace_range/insert_at_line with the returned line numbers; (3) multi-file refactor — replace_all+glob to rename a symbol across all matching files; (4) new file — write(overwrite) auto-creates file and any missing parent dirs; (5) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (6) multi-line content — prefer replace_range/insert_at_line over replace to avoid JSON-escaping newlines in old/new strings.",
+    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. Op selection — match the op to how you read the file: compact or verbatim → replace/replace_all (use read content as anchor); verbatim_numbered+searchTerm/offset → replace_range/insert_at_line (use returned line numbers; do not use replace — it wastes the line anchors). Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) full-file edit — read compact or verbatim, use replace/replace_all; (2) targeted edit — read verbatim_numbered+searchTerm or +offset+count, use replace_range/insert_at_line with the returned line numbers; (3) multi-file refactor — replace_all+glob to rename a symbol across all matching files; (4) new file — write(overwrite) auto-creates file and any missing parent dirs; (5) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (6) multi-line content — prefer replace_range/insert_at_line over replace to avoid JSON-escaping newlines in old/new strings.",
     inputSchema: EditInput,
     annotations: {
       title: 'Improved edit tool which supports batching and different output modes',
@@ -133,10 +174,7 @@ server.registerTool(
       idempotentHint: false,
       openWorldHint: false
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: EDIT_META
   },
   async (param, extra) => {
   try {
@@ -152,63 +190,20 @@ server.registerTool(
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchEdit(parsed, effectiveAllowed, (done, total) => reportProgress(extra, done, total));
+      const result = await handleBatchEdit(parsed, effectiveAllowed, DRY_RUN, (done, total) => reportProgress(extra, done, total));
       const okCount = result.results.filter(r => r.status === "ok").length;
       const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
       writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
-      return {
-        content: formatEditContent(result, parsed.dryRun)
-      };
+      const toolOutput: CallToolResult = { content: formatEditContent(result, parsed.files, USE_USER_AUDIENCE, DRY_RUN) };
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine("error", `batch_edit error — ${message}`, "batch_edit");
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
+      return createOutputMessage(message, true);
     }
   }
 );
-
-/* 
-Commented out for now to let the model focus on a single edit tool. Test if behavior changes.
-Lately the model switches between edit tools and sometimes it confuses which schema each tool needs. If JSON only is easier it might be enough benefit.
-
-server.registerTool(
-  "batch_edit_text",
-  {
-    title: "Line-based text-format variant of batch_edit (no JSON envelope per op)",
-    description: "Same semantics as batch_edit but accepts edits as one line-based text blob — avoids per-op JSON envelopes. Prefer when ops are content-heavy (≥~15 lines per op); for small/many ops (≤~5 lines per op) prefer batch_edit. GRAMMAR (line-based, column-0 sensitive): root scalars (optional, before first File:) — `stopOnError: true|false`, `dryRun: true|false`, `verbose: true|false`. Each file block starts with `File: <absolute path or glob>` followed by optional `stopOnError:`/`verbose:` (file-level overrides), then one or more Action blocks. ACTIONS: `replace` (OLD+NEW fences) | `replace_all` (OLD+NEW fences) | `insert_at_line` (`line: N` + NEW fence) | `replace_range` (`start: N` + `end: M` + NEW fence) | `write` (`mode: append|overwrite` + NEW fence). Each Action accepts optional `verbose: true|false` and `stopOnError: true|false`. FENCES: content between `<<<OLD` / `OLD>>>` and `<<<NEW` / `NEW>>>` is verbatim. Sentinels are recognized only at column 0. COLLISION: if content contains `OLD>>>` or `NEW>>>` at column 0, use a unique suffix on both open and close — e.g. `<<<OLD#k1` ... `OLD#k1>>>`. Any indented line is content even if it looks like a header/fence. RESOLUTION: verbose op > file > root > false; stopOnError op > file > root > false. EXAMPLE:\n```\nstopOnError: true\nFile: C:/proj/src/foo.ts\nAction: replace\n<<<OLD\nconst x = 1;\nOLD>>>\n<<<NEW\nconst x = 42;\nNEW>>>\nAction: insert_at_line\nline: 1\n<<<NEW\n// top of file\nNEW>>>\nFile: C:/proj/src/bar.ts\nAction: write\nmode: append\n<<<NEW\n// appended\nNEW>>>\n```\nERRORS: parser errors surface as `reason: \"unparseable\"` with line number in `message`. Recovery is per-Action via opening-fence + Action lookback; an unparseable Action does not abort the file unless stopOnError is set. Files with no parseable ops emit as a single `unparseable` file error. Runtime errors (anchor not found, file not writable, etc.) match batch_edit including `nearest_anchor` hints. Output shape matches batch_edit (one text block per file).",
-    inputSchema: { param: EditTextInput },
-    annotations: {
-      title: 'Line-based text-format variant of batch_edit (no JSON envelope per op)',
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: false
-    }
-  },
-  async ({ param }) => {
-  try {
-      const parsed = EditTextInput.parse(param);
-      const allowedDirectories = getAllowedDirectoriesToUse();
-      const result = await handleBatchEditText(parsed, allowedDirectories);
-      return {
-        content: formatEditContent(result)
-      };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      const logLine = `Tool error: ${message}`;
-      writeLogLine(logLine);
-      return {
-        isError: true,
-        content: [{ type: "text", text: logLine }],
-      };
-    }
-  }
-); */
 
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => await updateValidRootDirectories());
 
@@ -219,25 +214,25 @@ server.server.oninitialized = async () => {
   }
 
   if (getAllowedDirectoriesToUse("read").length === 0) {
-    writeLogLine(`No allowed directories provided via args or MCP roots. Server will be shut down.`);
+    writeMcpLogLine("error", `No allowed directories provided via args or MCP roots. Server will be shut down.`, 'permissions');
     process.exit(1);
   }
 
   const parts: string[] = [];
   if (validRootDirectories.length > 0) parts.push(`roots=[${validRootDirectories.join(', ')}]`);
   if (allowedDirectoriesFromArgs.length > 0) parts.push(`args=[${allowedDirectoriesFromArgs.join(', ')}]`);
-  writeLogLine(`Allowed directories — ${parts.join(' + ')}`);
+  writeMcpLogLine("info", `Allowed directories — ${parts.join(' + ')}`, 'permissions');
 };
 
 async function updateValidRootDirectories() {
   try {
     const response = await server.server.listRoots();
     if (response && 'roots' in response) {
-      validRootDirectories = await getValidRootDirectories(response.roots);
+      validRootDirectories = await getValidRootDirectories(response.roots, writeMcpLogLine);
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    writeLogLine(`Failed to request roots from client: ${message}`);
+    writeMcpLogLine("error", `Failed to request roots from client: ${message}`, 'permissions');
   }
 }
 
@@ -264,7 +259,7 @@ async function elicitPaths(
 
   for (const p of unauthorized) {
     if (isPathAllowed(p, sessionList)) {
-      writeMcpLogLine("info", `elicit skip (session-allowed) — ${p}`, "elicit");
+      writeMcpLogLine("info", `elicit skip (session-allowed) — ${p}`, 'permissions');
       acceptedPaths.push(p);
       continue;
     }
@@ -294,7 +289,7 @@ async function elicitPaths(
       });
 
       if (r.action !== "accept") {
-        writeMcpLogLine("info", `elicit deny — ${p}`, "elicit");
+        writeMcpLogLine("info", `elicit deny — ${p}`, 'permissions');
         continue;
       }
 
@@ -304,7 +299,7 @@ async function elicitPaths(
       const sessionAllow = Array.isArray(content['session_allow']) ? content['session_allow'] as string[] : [];
 
       const sessionScope = sessionAllow.includes("folder") ? "folder" : sessionAllow.includes("file") ? "file" : "none";
-      writeMcpLogLine("info", `elicit accept — ${p} (session: ${sessionScope})`, "elicit");
+      writeMcpLogLine("info", `elicit accept — ${p} (session: ${sessionScope})`, 'permissions');
 
       if (sessionAllow.includes("folder")) {
         sessionList.push(folder);
@@ -312,7 +307,7 @@ async function elicitPaths(
         sessionList.push(p);
       }
     } catch (err) {
-      writeMcpLogLine("warning", `elicit error — ${p}: ${err instanceof Error ? err.message : String(err)}`, "elicit");
+      writeMcpLogLine("warning", `elicit error — ${p}: ${err instanceof Error ? err.message : String(err)}`, 'permissions');
     }
   }
 
@@ -326,36 +321,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  writeLogLine(`batch-tools-mcp-server fatal: ${message}`);
+  console.error(`batch-tools-mcp-server fatal: ${message}`);
   process.exit(1);
 });
-
-/*
-JSON repair — assessment 2026-05-14
-Issue: ~1 in 30-50 batch_edit calls fail on malformed JSON (unescaped newlines / missing brackets
-in LLM-generated old/new/content fields). Mostly complex nested edits.
-
-Previous draft (handleMessage override) is wrong: by the time handleMessage fires, the SDK
-transport has already called JSON.parse on the raw NDJSON line. `arguments` is an object,
-not a string, so `typeof rawArgs === 'string'` is always false and repair is never invoked.
-
-Correct intercept: Transform stream on raw stdin BEFORE transport creation.
-- Buffer each NDJSON line, run `jsonrepair` (npm), re-emit the repaired line.
-- Use `jsonrepair` npm package — well-tested against LLM output patterns (unescaped \n,
-  dangling quotes, missing brackets). Build custom only if per-op/per-file recovery is needed
-  (parse outer structure, mark individual broken ops as "unparseable" without failing the call).
-
-TODO: implement stdin Transform wrapper; add `jsonrepair` dependency.
-
-import { jsonrepair } from "jsonrepair";
-import { Transform } from "node:stream";
-
-const repairer = new Transform({
-  transform(chunk, _enc, cb) {
-    try { cb(null, jsonrepair(chunk.toString())); } catch { cb(null, chunk); }
-  }
-});
-process.stdin.pipe(repairer);
-const transport = new StdioServerTransport({ stdin: repairer as any, stdout: process.stdout });
-await server.connect(transport);
-*/

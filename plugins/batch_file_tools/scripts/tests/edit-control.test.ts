@@ -32,8 +32,8 @@ async function readText(p: string): Promise<string> {
   return readFile(p, { encoding: "utf8" });
 }
 
-async function edit(input: EditInput) {
-  return handleBatchEdit(input, [workDir]);
+async function edit({ dryRun = false, ...input }: EditInput & { dryRun?: boolean }) {
+  return handleBatchEdit(input as EditInput, [workDir], dryRun);
 }
 
 describe("stopOnError — file level", () => {

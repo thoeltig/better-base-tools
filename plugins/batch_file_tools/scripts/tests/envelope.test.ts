@@ -97,7 +97,7 @@ describe("formatEditContent", () => {
   });
 
   it("dryRun OK: prefixed with DRY RUN", () => {
-    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [] }] }, true);
+    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [] }] }, [], false, true);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(`<!-- DRY RUN: batch_edit OK — /a.ts -->`);
   });
