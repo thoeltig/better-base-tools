@@ -80,6 +80,7 @@ export interface SamplingBatch {
 export interface HierarchicalGrouping {
   folderPath: string;
   folderScore: number;
+  technologies?: string[];
   files: GroupedScoredFileSummary[];
 }
 

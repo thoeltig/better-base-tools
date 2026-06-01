@@ -473,8 +473,13 @@ server.registerTool(
           }
           const group = grouped[folderPath]!;
           group.folderScore += item.fileScore;
+          if (item.technologies?.length) {
+            const set = new Set(group.technologies ?? []);
+            item.technologies.forEach(t => set.add(t));
+            group.technologies = [...set];
+          }
           const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, ...restFields } = item;
+          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, ...restFields } = item;
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
@@ -491,7 +496,7 @@ server.registerTool(
           keywords,
           scope: scope || 'all',
           total: limited.length,
-          results: limited,
+          results: limited.map(({ deleted: _del, lastUpdated: _ld, ...rest }) => rest),
         };
       }
 
