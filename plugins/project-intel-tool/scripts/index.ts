@@ -515,15 +515,20 @@ function calculateConfidence(keywords: string[], itemPath: string, summary: any)
   const pathLower = itemPath.toLowerCase();
   const sumLower = (summary.summary || '').toLowerCase();
   const purposeLower = (summary.purpose || '').toLowerCase();
+  const baseline = summary.sizeCharsWhenAnalysed;
+  const current = summary.sizeChars;
+  const semanticWeight = (baseline && current)
+    ? Math.min(baseline, current) / Math.max(baseline, current)
+    : 1;
   keywords.forEach(k => {
-    if (purposeLower.includes(k)) score += 6;
-    if (sumLower.includes(k)) score += 6;
+    if (purposeLower.includes(k)) score += 6 * semanticWeight;
+    if (sumLower.includes(k)) score += 6 * semanticWeight;
     if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
     if (summary.imports?.some((i: string) => i.toLowerCase().includes(k))) score += 4;
     if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;
     if (pathLower.includes(k)) score += 4;
-    if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2;
-    if (summary.role?.toLowerCase().includes(k)) score += 2;
+    if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2 * semanticWeight;
+    if (summary.role?.toLowerCase().includes(k)) score += 2 * semanticWeight;
   });
   return score;
 }
