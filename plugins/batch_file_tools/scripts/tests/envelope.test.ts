@@ -192,14 +192,14 @@ describe("formatReadContent — new search output formats", () => {
 describe("formatEditContent", () => {
   it("single file OK: overview with file and op count", () => {
     const blocks = formatEditContent({
-      results: [{ path: "/a.ts", status: "ok", ops: [] }],
+      results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 0 }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0 ops successful -->`);
   });
 
   it("dryRun OK: prefixed with DRY RUN", () => {
-    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [] }] }, [], false, true);
+    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 0 }] }, [], false, true);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(`<!-- DRY RUN: Edit: 1 file, 0 ops successful -->`);
   });
@@ -207,9 +207,9 @@ describe("formatEditContent", () => {
   it("multi-file all OK: compact one-liner with count", () => {
     const blocks = formatEditContent({
       results: [
-        { path: "/a.ts", status: "ok", ops: [] },
-        { path: "/b.ts", status: "ok", ops: [] },
-        { path: "/c.ts", status: "ok", ops: [] },
+        { path: "/a.ts", status: "ok", ops: [], totalOps: 0 },
+        { path: "/b.ts", status: "ok", ops: [], totalOps: 0 },
+        { path: "/c.ts", status: "ok", ops: [], totalOps: 0 },
       ],
     });
     expect(blocks).toHaveLength(1);
@@ -222,10 +222,8 @@ describe("formatEditContent", () => {
         {
           path: "/a.ts",
           status: "ok",
-          ops: [
-            { index: 0, status: "ok", summary: "appended 1 line" },
-            { index: 1, status: "ok", summary: "replaced 1 occurrence at line 4" },
-          ],
+          ops: [],
+          totalOps: 2,
         },
       ],
     });
@@ -255,13 +253,13 @@ describe("formatEditContent", () => {
               },
             },
           ],
+          totalOps: 1,
         },
       ],
     });
-    expect(blocks).toHaveLength(2);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0/1 ops successful -->`);
-    expect(blocks[1]!.text).toBe(
-      `<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 1 (replace); error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed`,
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 1 (replace); error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed`
     );
   });
 
@@ -283,13 +281,13 @@ describe("formatEditContent", () => {
               },
             },
           ],
+          totalOps: 1,
         },
       ],
     });
-    expect(blocks).toHaveLength(2);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0/1 ops successful -->`);
-    expect(blocks[1]!.text).toBe(
-      `<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 0 (replace); error: widen anchor; matches at lines 3, 17, 42 -->`,
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 0 (replace); error: widen anchor; matches at lines 3, 17, 42 -->`
     );
   });
 
@@ -309,13 +307,13 @@ describe("formatEditContent", () => {
               hint: { next_action: "not absolute" },
             },
           ],
+          totalOps: 1,
         },
       ],
     });
-    expect(blocks).toHaveLength(2);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0/1 ops successful -->`);
-    expect(blocks[1]!.text).toBe(
-      `<!-- '/missing.ts': 0/1 ops successful -->\n<!-- file error: io_error: not absolute -->`,
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/missing.ts': 0/1 ops successful -->\n<!-- file error: io_error: not absolute -->`
     );
   });
 
@@ -331,13 +329,13 @@ describe("formatEditContent", () => {
             { index: 2, status: "skipped" },
             { index: 3, status: "skipped" },
           ],
+          totalOps: 4,
         },
       ],
     });
-    expect(blocks).toHaveLength(2);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0/4 ops successful -->`);
-    expect(blocks[1]!.text).toBe(
-      `<!-- '/a.ts': 0/4 ops successful -->\n<!-- op 0 (replace); error: 'foo' not found in file -->\n<!-- ops 1 to 3; skipped -->`,
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Edit: 1 file, 0/4 ops successful -->\n\n<!-- '/a.ts': 0/4 ops successful -->\n<!-- op 0 (replace); error: 'foo' not found in file -->\n<!-- ops 1 to 3; skipped -->`,
     );
   });
 });

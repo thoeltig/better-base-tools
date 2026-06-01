@@ -35,8 +35,9 @@ export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<Re
 
 export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditFile> = [], addUserAudience = false, dryRun?: boolean): ToolContentResult[] {
   const allResults = result.results;
-  const totalOps = allResults.reduce((sum, r) => sum + r.ops.length, 0);
-  const okOps = allResults.reduce((sum, r) => sum + r.ops.filter(o => o.status === "ok").length, 0);
+  const totalOps = allResults.reduce((sum, r) => sum + r.totalOps, 0);
+  const nonOkOps = allResults.reduce((sum, r) => sum + r.ops.length, 0);
+  const okOps = totalOps - nonOkOps;
   const fileCount = allResults.length;
   const dryTag = dryRun ? "DRY RUN: " : "";
   const fileLabel = fileCount === 1 ? "file" : "files";
@@ -51,11 +52,12 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
     return output;
   }
 
-  const blocks: ToolContentResult[] = [createToolOutputForAssistant(`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps}/${totalOps} ops successful -->`)];
+  const allLines: string[] = [`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps}/${totalOps} ops successful -->`];
 
   for (const r of [...errorFiles, ...skippedFiles]) {
-    const fileOkOps = r.ops.filter(o => o.status === "ok").length;
-    const fileTotalOps = r.ops.length;
+    const fileNonOkOps = r.ops.length;
+    const fileTotalOps = r.totalOps;
+    const fileOkOps = fileTotalOps - fileNonOkOps;
     const fileLines: string[] = [
       `<!-- '${shortenPath(r.path)}': ${fileOkOps}/${fileTotalOps} ops successful -->`,
     ];
@@ -98,11 +100,12 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
       }
     }
 
-    blocks.push(createToolOutputForAssistant(fileLines.join("\n")));
+    allLines.push(fileLines.join("\n"));
   }
 
-  if (addUserAudience) blocks.push(createToolOutputForUser(buildEditSummary(files, result.results)));
-  return blocks;
+  const output = [createToolOutputForAssistant(allLines.join("\n\n"))];
+  if (addUserAudience) output.push(createToolOutputForUser(buildEditSummary(files, result.results)));
+  return output;
 }
 
 function readResultToBlock(r: ReadResult): ToolContentResult {
