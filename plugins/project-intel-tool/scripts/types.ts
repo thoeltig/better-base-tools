@@ -40,6 +40,9 @@ export interface FileSummary {
   refs?: string[];       // intra-project file references resolved from imports
   sizeChars?: number;
   lineCount?: number;
+  sizeCharsWhenAnalysed?: number;
+  lineCountWhenAnalysed?: number;
+  analysisDelta?: string;
   deleted?: boolean;
   lastUpdated?: string;
 }

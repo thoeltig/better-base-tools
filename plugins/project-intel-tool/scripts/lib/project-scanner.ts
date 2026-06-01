@@ -309,6 +309,18 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
       const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
       const existing = summaries.files.get(absPath) ?? {};
       const refs = fm.refs.filter(r => r !== summariesRelPath);
+      const wasAnalyzed = !!(existing.summary || existing.purpose);
+      const hasChanged = changedSet.has(absPath);
+      const hasPriorMetrics = existing.sizeCharsWhenAnalysed !== undefined && existing.lineCountWhenAnalysed !== undefined;
+      const shouldComputeDelta = wasAnalyzed && hasChanged && hasPriorMetrics;
+      let analysisDelta: string | undefined;
+      if (shouldComputeDelta) {
+        const deltaLines = fm.lineCount - existing.lineCountWhenAnalysed!;
+        const deltaChars = fm.sizeChars - existing.sizeCharsWhenAnalysed!;
+        if (deltaLines !== 0 || deltaChars !== 0) {
+          analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
+        }
+      }
       summaries.files.set(absPath, {
         ...existing,
         sizeChars: fm.sizeChars,
@@ -317,6 +329,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
         ...(fm.imports.length > 0 ? { imports: fm.imports } : {}),
         ...(refs.length > 0 ? { refs } : {}),
         deleted: false,
+        ...(analysisDelta !== undefined ? { analysisDelta } : {}),
       });
     }
     writeSummaries(knowledgeDir, summaries, projectRoot);

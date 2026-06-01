@@ -81,6 +81,9 @@ export function mergeSamplingResults(knowledgeDir: string, results: SamplingFile
       ...result,
       deleted: false,
       lastUpdated: new Date().toISOString(),
+      sizeCharsWhenAnalysed: result.sizeChars ?? existing.sizeChars,
+      lineCountWhenAnalysed: result.lineCount ?? existing.lineCount,
+      analysisDelta: undefined,
     });
   }
   writeSummaries(knowledgeDir, summaries, projectRoot);

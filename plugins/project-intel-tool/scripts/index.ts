@@ -479,7 +479,7 @@ server.registerTool(
             group.technologies = [...set];
           }
           const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, ...restFields } = item;
+          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, ...restFields } = item;
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
@@ -496,7 +496,7 @@ server.registerTool(
           keywords,
           scope: scope || 'all',
           total: limited.length,
-          results: limited.map(({ deleted: _del, lastUpdated: _ld, ...rest }) => rest),
+          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, ...rest }) => rest),
         };
       }
 
