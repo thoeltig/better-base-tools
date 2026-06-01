@@ -39,11 +39,10 @@ _¹ Documentation analysis project — content-only workload, pure native. ² An
 | Mode | Output | Use for |
 |---|---|---|
 | `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
-| `verbatim` | Normalized indentation, no line numbers | Exact-match `replace`/`replace_all` anchor; use when whitespace must survive the match verbatim |
-| `verbatim_numbered` | Line-numbered (`{n}\t{content}`) | Targeted edits and `insert_at_line` or `replace_range` anchors |
+| `verbatim` | Normalized indentation | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
 | `fileinfo` | Metadata (size, lines, mtime, isFile) plus optional `refs[]` | Dependency mapping and pre-read sizing |
 
-Requests also support glob and directory expansion, a `searchTerm` parameter that returns matching lines with `count` context lines around each hit, and `offset` and `count` for pagination.
+Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search. Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns a `<!-- Line M to N, match at line K -->` block per match with that many context lines. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
 
 #### Formatting normalization
 
@@ -65,7 +64,7 @@ The following example reads three files in a single call, each with a different 
 ```json
 { "requests": [
   { "path": "/src/auth.ts", "mode": "compact" },
-  { "path": "/src/user.ts", "mode": "verbatim_numbered", "searchTerm": "validateToken" },
+  { "path": "/src/user.ts", "mode": "verbatim", "searchTerm": "validateToken" },
   { "path": "/package.json", "mode": "fileinfo" }
 ]}
 ```
