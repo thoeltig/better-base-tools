@@ -215,6 +215,7 @@ export const FileResult = z.object({
     status: FileStatus,
     error: FileError.optional(),
     ops: z.array(OpResult),
+    totalOps: z.number().int().min(0),
   })
   .strict();
 export type FileResult = z.infer<typeof FileResult>;

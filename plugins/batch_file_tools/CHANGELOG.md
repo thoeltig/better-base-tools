@@ -5,6 +5,17 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.2.1] - 2026-06-01
+
+### Fixed
+
+- Fix `batch_edit` always reporting `0 ops successful` — `filterOps` in `edit.ts` stripped successful ops from `FileResult.ops` before returning; `envelope.ts` read counts from the already-filtered array, so `okOps` was always 0 regardless of actual results. Fix: add required `totalOps: number` to `FileResult` (captured before filtering in all construction sites), update `envelope.ts` to derive `okOps = totalOps - nonOkOps` directly.
+- Fix per-file header in error output always showing `0/N` — same root cause as above; `fileOkOps/fileTotalOps` also read from the filtered `r.ops` array instead of `r.totalOps`.
+
+### Changed
+
+- Merge `batch_edit` error output into a single content block — overview and per-file error sections are now joined with `\n\n` in one block instead of separate `content[]` entries, removing the nested sub-item rendering in Claude Code.
+
 ## [1.2.0] - 2026-06-01
 
 ### Changed
@@ -249,6 +260,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.2.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.2.1
 [1.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.2.0
 [1.1.7]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.7
 [1.1.6]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.6

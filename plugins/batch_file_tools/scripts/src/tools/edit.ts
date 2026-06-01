@@ -191,6 +191,7 @@ function buildGlobError(file: EditFile, reason: Reason, message: string): FileRe
     status: "error",
     error: { reason, message },
     ops,
+    totalOps: file.ops.length,
   };
 }
 
@@ -199,6 +200,7 @@ function skipFile(file: EditFile): FileResult {
     path: file.path,
     status: "skipped",
     ops: file.ops.map((_, index): OpResult => ({ index, status: "skipped" })),
+    totalOps: file.ops.length,
   };
 }
 
@@ -278,6 +280,7 @@ async function editOneFile(
     path: file.path,
     status,
     ops: filterOps(opResults),
+    totalOps: opResults.length,
   };
 }
 
@@ -295,6 +298,7 @@ function buildFileLoadErrorResult(file: EditFile, err: unknown): FileResult {
       type: op.type,
       hint: { next_action: message },
     })),
+    totalOps: file.ops.length,
   };
 }
 
@@ -311,6 +315,7 @@ function buildWriteErrorResult(file: EditFile, opResults: OpResult[], err: unkno
       type: file.ops[i]!.type,
       hint: { next_action: `write failed: ${message}` },
     })),
+    totalOps: file.ops.length,
   };
 }
 
