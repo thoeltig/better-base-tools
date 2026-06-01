@@ -3,7 +3,6 @@ import { z } from "zod";
 export const ReadMode = z.enum([
   "compact",
   "verbatim",
-  "verbatim_numbered",
   "fileinfo",
 ])
   .default("compact");
@@ -33,24 +32,15 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
     mode: ReadMode
-      .describe("'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content, no line numbers — full-file anchor for replace/replace_all when whitespace normalization would break the match. 'verbatim_numbered'= line-numbered ('{line}\\t{content}') — requires searchTerm or offset/count (enforced); returned line numbers anchor replace_range/insert_at_line. 'fileinfo'= metadata (size, lines, mtime, isFile) plus refs[] — use before reading content."),
+      .describe("'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. 'fileinfo'= metadata (size, lines, mtime, isFile) plus refs[] — use before reading content."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
     count: z.number().int().min(1).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this string (case-insensitive); returns match blocks formatted in the requested mode, each prefixed with <!-- Match at line N -->"),
+      .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
   })
-  .strict()
-  .superRefine((val, ctx) => {
-    if (val.mode === "verbatim_numbered" && !val.searchTerm && !val.offset && !val.count) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "verbatim_numbered requires searchTerm, offset, or count — use compact or verbatim for full-file reads",
-        path: ["mode"],
-      });
-    }
-  });
+  .strict();
 export type ReadRequest = z.infer<typeof ReadRequest>;
 
 export const ReadInput = z.object({
@@ -72,6 +62,8 @@ export const ReadResult = z.object({
     content: z.string(),
     match_count: z.number().int().min(0).optional()
       .describe("Number of matches found (search mode only)"),
+    start_line: z.number().int().min(1).optional()
+      .describe("1-indexed first line of the returned content (regular reads only)"),
     error: FileError.optional(),
   })
   .strict();

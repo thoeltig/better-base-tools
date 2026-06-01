@@ -5,6 +5,21 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.2.0] - 2026-06-01
+
+### Changed
+- Replace `verbatim_numbered` with line-range headers on sliced reads — `verbatim` with `offset`+`count` now emits `<!-- Read line X to Y of file '...' as 'mode' (N of M lines total) -->` in the output header; the line range anchors `replace_range`/`insert_at_line` without a separate mode
+- Search output redesigned — `count=0` (default): each match returned as inline `lineNum\tcontent`; `count>0` (context lines): match windows use `<!-- Line M to N, match at line K -->` per block; the outer `<!-- Found N match(es) in M lines ... -->` header is preserved for both variants
+- Search context blocks merged — overlapping or near-adjacent context windows (gap ≤ `SEARCH_MERGE_GAP = 3` lines) are collapsed into a single block; single-match blocks retain `<!-- Line M to N, match at line K -->`; multi-match merged blocks use `<!-- Line M to N -->` only
+- Single-line read header simplified — when a read returns exactly one line, header uses `<!-- Read line N of file '...' -->` instead of `<!-- Read line N to N ... -->`
+- `batch_edit` output redesigned — replaces multi-line HTML comment error block with flat single-line comments: overview `<!-- Edit: N files, X ops successful -->` (or `X/Y` when errors present); per-file section `<!-- 'path': X/Y ops successful -->` followed by `<!-- file error: reason: msg -->` or `<!-- file; skipped -->` for file-level failures; per-op error `<!-- op N (type); error: ...[; possible verbatim anchor: lines A-B] -->` with anchor content inline below; skipped op ranges as `<!-- ops N to M; skipped -->`; successful files not listed
+- Zero-match search results consolidated — all files with no matches in a single call are merged into one output block (`<!-- No match(es) found -->\n'file1'\n...`) instead of one block per file
+- Add `start_line` to `ReadResult` — set on all regular reads (`req.offset ?? 1`); enables the envelope to compute the correct line range for the header
+
+### Removed
+- `verbatim_numbered` from `ReadMode` enum — use `verbatim`+`offset`+`count` for targeted slices; the output header now carries the line range
+- `formatEdit()` from `transforms.ts` — was only used by `verbatim_numbered`
+
 ## [1.1.7] - 2026-06-01
 
 ### Changed
@@ -234,6 +249,7 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
+[1.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.2.0
 [1.1.7]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.7
 [1.1.6]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.6
 [1.1.5]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.5
