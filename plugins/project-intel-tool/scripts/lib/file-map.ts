@@ -158,7 +158,7 @@ export function parseFileRefs(
 ): FileRefs {
   const ext = path.extname(filePath).toLowerCase();
   const sizeChars = content.length;
-  const lineCount = content.split('\n').length;
+  const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length - (content.endsWith('\n') || content.endsWith('\r') ? 1 : 0);
 
   let parsed: Pick<FileRefs, 'imports' | 'exports' | 'refs'>;
   if (TS_JS_EXTS.has(ext)) {
