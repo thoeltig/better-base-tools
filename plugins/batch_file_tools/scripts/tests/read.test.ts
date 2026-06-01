@@ -193,6 +193,39 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("line1");
   });
 
+  it("search: overlapping context blocks are merged into one block", async () => {
+    // matches at lines 2 and 4, count=2 → windows [1-4] and [2-6] overlap → merged [1-6]
+    const content = "a\nb\nc\nd\ne\nf\n";
+    const p = await fixture("merge-overlap.ts", content);
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "b", count: 2 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("<!-- Line 1 to 4, match at line 2 -->");
+  });
+
+  it("search: nearby context blocks within gap are merged", async () => {
+    // 20-line file, matches at lines 1 and 8, count=2 → windows [1-3] and [6-10], gap=2 ≤ 3 → merged
+    const lines = Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join("\n") + "\n";
+    const p = await fixture("merge-gap.ts", lines.replace("line1", "TARGET").replace("line8", "TARGET"));
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(2);
+    expect(r.content).toContain("match at lines 1, 8");
+    expect(r.content).not.toContain("match at line 1");
+  });
+
+  it("search: blocks with gap > SEARCH_MERGE_GAP stay separate", async () => {
+    // 20-line file, matches at lines 1 and 10, count=2 → windows [1-3] and [8-12], gap=4 > 3 → not merged
+    const lines = Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join("\n") + "\n";
+    const p = await fixture("no-merge-gap.ts", lines.replace("line1", "TARGET").replace("line10", "TARGET"));
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(2);
+    expect(r.content).toContain("match at line 1");
+    expect(r.content).toContain("match at line 10");
+    expect(r.content).not.toContain("match at lines");
+  });
+
   it("glob read: expands to one result per matched file", async () => {
     const a = await fixture("glob_a.ts", "a\n");
     const b = await fixture("glob_b.ts", "b\n");

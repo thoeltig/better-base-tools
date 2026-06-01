@@ -7,6 +7,8 @@ import { formatForRead } from "../lib/transforms.js";
 import { extractRefs } from "../lib/extract-refs.js";
 import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
 
+const SEARCH_MERGE_GAP = 3;
+
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
 
 export async function handleBatchRead(
@@ -256,15 +258,33 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
 
     let returnedLines = 0;
     const blocks: string[] = [];
-    for (const idx of matchIdxs) {
-      const s = Math.max(0, idx - ctx);
-      const e = Math.min(rawLines.length - 1, idx + ctx);
-      returnedLines += e - s + 1;
-      const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
-      if (ctx === 0) {
+    if (ctx === 0) {
+      for (const idx of matchIdxs) {
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1, normalizeFormatting });
         blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
-      } else {
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1}, match at line ${idx + 1} -->\n${formatted.content}`);
+        returnedLines += 1;
+      }
+    } else {
+      type MatchBlock = { s: number; e: number; matchLines: number[] };
+      const intervals: MatchBlock[] = [];
+      for (const idx of matchIdxs) {
+        const s = Math.max(0, idx - ctx);
+        const e = Math.min(rawLines.length - 1, idx + ctx);
+        const last = intervals.at(-1);
+        if (last && s - last.e - 1 <= SEARCH_MERGE_GAP) {
+          last.e = Math.max(last.e, e);
+          last.matchLines.push(idx);
+        } else {
+          intervals.push({ s, e, matchLines: [idx] });
+        }
+      }
+      for (const { s, e, matchLines } of intervals) {
+        returnedLines += e - s + 1;
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
+        const matchLabel = matchLines.length === 1
+          ? `match at line ${matchLines[0]! + 1}`
+          : `match at lines ${matchLines.map(m => m + 1).join(", ")}`;
+        blocks.push(`<!-- Line ${s + 1} to ${e + 1}, ${matchLabel} -->\n${formatted.content}`);
       }
     }
 

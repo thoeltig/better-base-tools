@@ -10,6 +10,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 - Replace `verbatim_numbered` with line-range headers on sliced reads — `verbatim` with `offset`+`count` now emits `<!-- Read line X to Y of file '...' as 'mode' (N of M lines total) -->` in the output header; the line range anchors `replace_range`/`insert_at_line` without a separate mode
 - Search output redesigned — `count=0` (default): each match returned as inline `lineNum\tcontent`; `count>0` (context lines): match windows use `<!-- Line M to N, match at line K -->` per block; the outer `<!-- Found N match(es) in M lines ... -->` header is preserved for both variants
+- Search context blocks merged — overlapping or near-adjacent context windows (gap ≤ `SEARCH_MERGE_GAP = 3` lines) are collapsed into a single block; merged headers list all match lines: `<!-- Line M to N, match at lines K, L, ... -->`
 - Zero-match search results consolidated — all files with no matches in a single call are merged into one output block (`<!-- No match(es) found -->\n'file1'\n...`) instead of one block per file
 - Add `start_line` to `ReadResult` — set on all regular reads (`req.offset ?? 1`); enables the envelope to compute the correct line range for the header
 
