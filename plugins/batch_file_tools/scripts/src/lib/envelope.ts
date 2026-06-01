@@ -14,8 +14,21 @@ function shortenPath(p: string): string {
   return rel.startsWith("..") || isAbsolute(rel) ? p : rel;
 }
 
-export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<ReadRequest>, addUserAudience: boolean): ToolContentResult[] {
-  const toolResultOutput = result.results.map(readResultToBlock);
+export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<ReadRequest> = [], addUserAudience = false): ToolContentResult[] {
+  const noMatchResults: ReadResult[] = [];
+  const otherResults: ReadResult[] = [];
+  for (const r of result.results) {
+    if (r.match_count === 0 && !r.error) {
+      noMatchResults.push(r);
+    } else {
+      otherResults.push(r);
+    }
+  }
+  const toolResultOutput = otherResults.map(readResultToBlock);
+  if (noMatchResults.length > 0) {
+    const fileList = noMatchResults.map(r => `'${shortenPath(r.path)}'`).join('\n');
+    toolResultOutput.push(createToolOutputForAssistant(`<!-- No match(es) found -->\n${fileList}`));
+  }
   if (addUserAudience) toolResultOutput.push(createToolOutputForUser(buildReadSummary(requests, result.results)));
   return toolResultOutput;
 }
@@ -86,10 +99,15 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
     hint = `<!-- File info for '${shortenPath(r.path)}' -->`;
   } else if (r.match_count !== undefined) {
     hint = `<!-- Found ${r.match_count} match(es) in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
+  } else if (r.returned_lines === 0) {
+    hint = `<!-- Read 0 lines of file '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
   } else {
-    const countPrefix = r.returned_lines !== r.lines ? `${r.returned_lines} of ` : "";
-    const unit = r.lines === 1 ? "line" : "lines";
-    hint = `<!-- Read ${countPrefix}${r.lines} ${unit} in file '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
+    const startLine = r.start_line ?? 1;
+    const endLine = startLine + r.returned_lines - 1;
+    const linesInfo = r.returned_lines < r.lines
+      ? `${r.returned_lines} of ${r.lines} lines total`
+      : `${r.lines} ${r.lines === 1 ? "line" : "lines"} total`;
+    hint = `<!-- Read line ${startLine} to ${endLine} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
   }
   return createToolOutputForAssistant(`${hint}\n${r.content ?? ""}`);
 }

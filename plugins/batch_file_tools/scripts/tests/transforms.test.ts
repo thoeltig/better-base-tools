@@ -3,54 +3,6 @@ import { formatForRead } from "../src/lib/transforms.js";
 
 const SAMPLE = "alpha\nbeta\ngamma\ndelta\n";
 
-describe("formatForRead — verbatim_numbered mode", () => {
-  it("prefixes each line with 1-indexed number + tab", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "verbatim_numbered" });
-    expect(r.content).toBe("1\talpha\n2\tbeta\n3\tgamma\n4\tdelta\n");
-    expect(r.total_lines).toBe(4);
-    expect(r.returned_lines).toBe(4);
-    expect(r.truncated).toBe(false);
-  });
-
-  it("preserves original line numbers when offset is set", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "verbatim_numbered", offset: 3 });
-    expect(r.content).toBe("3\tgamma\n4\tdelta\n");
-    expect(r.returned_lines).toBe(2);
-    expect(r.truncated).toBe(false);
-  });
-
-  it("truncated=true when limit cuts the tail", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "verbatim_numbered", limit: 2 });
-    expect(r.content).toBe("1\talpha\n2\tbeta\n");
-    expect(r.returned_lines).toBe(2);
-    expect(r.truncated).toBe(true);
-  });
-
-  it("offset + limit combined", () => {
-    const r = formatForRead({
-      content: SAMPLE,
-      mode: "verbatim_numbered",
-      offset: 2,
-      limit: 2,
-    });
-    expect(r.content).toBe("2\tbeta\n3\tgamma\n");
-    expect(r.truncated).toBe(true);
-  });
-
-  it("offset past EOF returns empty content", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "verbatim_numbered", offset: 99 });
-    expect(r.content).toBe("");
-    expect(r.returned_lines).toBe(0);
-    expect(r.truncated).toBe(false);
-  });
-
-  it("empty file produces empty edit output", () => {
-    const r = formatForRead({ content: "", mode: "verbatim_numbered" });
-    expect(r.content).toBe("");
-    expect(r.total_lines).toBe(0);
-    expect(r.returned_lines).toBe(0);
-  });
-});
 
 describe("formatForRead — compact mode", () => {
   it("strips trailing whitespace on each line", () => {
@@ -295,16 +247,6 @@ describe("formatForRead — verbatim indent normalization (Phase 4)", () => {
   it("CRLF file: endings preserved after normalization", () => {
     const r = formatForRead({ content: "function foo() {\r\n\treturn 1;\r\n}\r\n", mode: "verbatim" });
     expect(r.content).toBe("function foo() {\r\n  return 1;\r\n}\r\n");
-  });
-
-  it("verbatim_numbered: line numbers unchanged, content normalized", () => {
-    const r = formatForRead({ content: "class A {\n\tfoo() {}\n}\n", mode: "verbatim_numbered" });
-    expect(r.content).toBe("1\tclass A {\n2\t  foo() {}\n3\t}\n");
-  });
-
-  it("verbatim_numbered: 4-space → 2-space, line numbers intact", () => {
-    const r = formatForRead({ content: "if (x) {\n    y();\n}\n", mode: "verbatim_numbered", path: "/x/a.ts" });
-    expect(r.content).toBe("1\tif (x) {\n2\t  y();\n3\t}\n");
   });
 
   it("normalizeFormatting: false returns tabs as-is", () => {

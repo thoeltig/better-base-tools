@@ -15,7 +15,7 @@ describe("formatReadContent", () => {
         },
         {
           path: "/b.txt",
-          mode_applied: "verbatim_numbered",
+          mode_applied: "verbatim",
           lines: 1,
           returned_lines: 1,
           truncated: false,
@@ -25,10 +25,10 @@ describe("formatReadContent", () => {
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read 3 lines in file '/a.txt' as 'compact' -->\nline1\nline2\nline3\n`,
+      `<!-- Read line 1 to 3 of file '/a.txt' as 'compact' (3 lines total) -->\nline1\nline2\nline3\n`,
     );
     expect(blocks[1]!.text).toBe(
-      `<!-- Read 1 line in file '/b.txt' as 'verbatim_numbered' -->\n1\tonly\n`,
+      `<!-- Read line 1 to 1 of file '/b.txt' as 'verbatim' (1 line total) -->\n1\tonly\n`,
     );
   });
 
@@ -37,16 +37,17 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/a.txt",
-          mode_applied: "verbatim_numbered",
+          mode_applied: "verbatim",
           lines: 10,
           returned_lines: 2,
+          start_line: 3,
           truncated: true,
           content: "3\tc\n4\td\n",
         },
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!-- Read 2 of 10 lines in file '/a.txt' as 'verbatim_numbered' -->\n3\tc\n4\td\n`,
+      `<!-- Read line 3 to 4 of file '/a.txt' as 'verbatim' (2 of 10 lines total) -->\n3\tc\n4\td\n`,
     );
   });
 
@@ -55,7 +56,7 @@ describe("formatReadContent", () => {
       results: [
         {
           path: "/missing.txt",
-          mode_applied: "verbatim_numbered",
+          mode_applied: "verbatim",
           lines: 0,
           returned_lines: 0,
           truncated: false,
@@ -65,7 +66,7 @@ describe("formatReadContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!-- 'not_found' error reading file '/missing.txt' as 'verbatim_numbered': no such file -->\n`,
+      `<!-- 'not_found' error reading file '/missing.txt' as 'verbatim': no such file -->\n`,
     );
   });
 
@@ -84,6 +85,107 @@ describe("formatReadContent", () => {
     });
     expect(blocks[0]!.text.includes("\\n")).toBe(false);
     expect(blocks[0]!.text.endsWith("x\ny\n")).toBe(true);
+  });
+});
+
+describe("formatReadContent — new search output formats", () => {
+  it("count=0: Found header + inline lineNum\\tcontent per match", () => {
+    const blocks = formatReadContent({
+      results: [{
+        path: "/src/types.ts",
+        mode_applied: "compact",
+        lines: 262,
+        returned_lines: 2,
+        truncated: false,
+        content: "170\texport const EditInput\n176\texport type EditInput",
+        match_count: 2,
+      }],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Found 2 match(es) in 262 lines of '/src/types.ts' as 'compact' -->\n170\texport const EditInput\n176\texport type EditInput`
+    );
+  });
+
+  it("count>0: Found header + <!-- Line M to N, match at line K --> blocks in content", () => {
+    const blocks = formatReadContent({
+      results: [{
+        path: "/src/readme.md",
+        mode_applied: "verbatim",
+        lines: 122,
+        returned_lines: 5,
+        truncated: false,
+        content: "<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74",
+        match_count: 1,
+      }],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Found 1 match(es) in 122 lines of '/src/readme.md' as 'verbatim' -->\n<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74`
+    );
+  });
+
+  it("all zero-match results consolidated into one block", () => {
+    const blocks = formatReadContent({
+      results: [
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0 },
+        { path: "/b.ts", mode_applied: "compact", lines: 20, returned_lines: 0, truncated: false, content: "", match_count: 0 },
+        { path: "/c.ts", mode_applied: "compact", lines: 5,  returned_lines: 0, truncated: false, content: "", match_count: 0 },
+      ],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(`<!-- No match(es) found -->\n'/a.ts'\n'/b.ts'\n'/c.ts'`);
+  });
+
+  it("mixed: matched files get individual blocks, no-match files get one consolidated block", () => {
+    const blocks = formatReadContent({
+      results: [
+        { path: "/a.ts", mode_applied: "compact", lines: 100, returned_lines: 2, truncated: false, content: "7\timport { foo }\n91\texport const bar", match_count: 2 },
+        { path: "/b.ts", mode_applied: "compact", lines: 50,  returned_lines: 0, truncated: false, content: "", match_count: 0 },
+        { path: "/c.ts", mode_applied: "compact", lines: 30,  returned_lines: 0, truncated: false, content: "", match_count: 0 },
+      ],
+    });
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Found 2 match(es) in 100 lines of '/a.ts' as 'compact' -->\n7\timport { foo }\n91\texport const bar`
+    );
+    expect(blocks[1]!.text).toBe(`<!-- No match(es) found -->\n'/b.ts'\n'/c.ts'`);
+  });
+
+  it("sliced read: header encodes start_line and end_line from result", () => {
+    const blocks = formatReadContent({
+      results: [{
+        path: "/src/types.ts",
+        mode_applied: "verbatim",
+        lines: 262,
+        returned_lines: 12,
+        start_line: 168,
+        truncated: false,
+        content: "export type EditFile = z.infer<typeof EditFile>;",
+      }],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Read line 168 to 179 of file '/src/types.ts' as 'verbatim' (12 of 262 lines total) -->\nexport type EditFile = z.infer<typeof EditFile>;`
+    );
+  });
+
+  it("full-file read: header shows line 1 to N with total only", () => {
+    const blocks = formatReadContent({
+      results: [{
+        path: "/src/index.ts",
+        mode_applied: "compact",
+        lines: 50,
+        returned_lines: 50,
+        start_line: 1,
+        truncated: false,
+        content: "export default function main() {}",
+      }],
+    });
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text).toBe(
+      `<!-- Read line 1 to 50 of file '/src/index.ts' as 'compact' (50 lines total) -->\nexport default function main() {}`
+    );
   });
 });
 

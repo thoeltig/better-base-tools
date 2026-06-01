@@ -124,8 +124,7 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
       result.push({ kind: "ok", req: range.originalReq });
       continue;
     }
-    const isFullFile = range.start === 1 && range.end === Infinity;
-    const finalMode = isFullFile && coalescedMode === "verbatim_numbered" ? "verbatim" : coalescedMode;
+    const finalMode = coalescedMode;
     const req: ReadRequest = { path, mode: finalMode };
     if (range.start > 1) req.offset = range.start;
     if (range.end !== Infinity) req.count = range.end - range.start + 1;
@@ -262,7 +261,11 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       const e = Math.min(rawLines.length - 1, idx + ctx);
       returnedLines += e - s + 1;
       const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
-      blocks.push(`<!-- Match at line ${idx + 1} -->\n${formatted.content}`);
+      if (ctx === 0) {
+        blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
+      } else {
+        blocks.push(`<!-- Line ${s + 1} to ${e + 1}, match at line ${idx + 1} -->\n${formatted.content}`);
+      }
     }
 
     return {
@@ -293,5 +296,6 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     returned_lines: formatted.returned_lines,
     truncated: formatted.truncated,
     content: formatted.content,
+    start_line: req.offset ?? 1,
   };
 }

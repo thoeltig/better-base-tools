@@ -102,9 +102,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const normalize = input.normalizeFormatting !== false;
   let content: string;
   let emittedLines = returnedLines;
-  if (input.mode === "verbatim_numbered") {
-    content = formatEdit(split.lines, clampedStart, clampedEnd, input.path, !normalize);
-  } else if (input.mode === "compact") {
+  if (input.mode === "compact") {
     const compact = formatCompact(
       split.lines,
       split.endings,
@@ -129,25 +127,6 @@ export function formatForRead(input: FormatInput): FormatOutput {
   };
 }
 
-function formatEdit(
-  lines: readonly string[],
-  start: number,
-  end: number,
-  path?: string,
-  disableNorm?: boolean,
-): string {
-  const indentUnit = (!disableNorm && !isTabRequired(path))
-    ? detectIndentUnit(lines.slice(start, end))
-    : -1;
-  let out = "";
-  for (let i = start; i < end; i++) {
-    const lineNum = i + 1;
-    let line = lines[i] ?? "";
-    if (indentUnit >= 0) line = normalizeLineIndent(line, indentUnit);
-    out += `${lineNum}\t${line}\n`;
-  }
-  return out;
-}
 
 function formatRaw(
   lines: readonly string[],

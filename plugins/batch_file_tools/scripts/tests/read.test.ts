@@ -26,17 +26,17 @@ async function read(input: ReadInput) {
 }
 
 describe("handleBatchRead", () => {
-  it("reads a single file in edit mode with line numbers", async () => {
+  it("reads a single file in verbatim mode", async () => {
     const p = await fixture("a.txt", "one\ntwo\nthree\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim_numbered" }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim" }] });
     expect(out.results).toHaveLength(1);
     const r = out.results[0]!;
     expect(r.path).toBe(p);
-    expect(r.mode_applied).toBe("verbatim_numbered");
+    expect(r.mode_applied).toBe("verbatim");
     expect(r.lines).toBe(3);
     expect(r.returned_lines).toBe(3);
     expect(r.truncated).toBe(false);
-    expect(r.content).toBe("1\tone\n2\ttwo\n3\tthree\n");
+    expect(r.content).toBe("one\ntwo\nthree\n");
     expect(r.error).toBeUndefined();
   });
 
@@ -46,12 +46,12 @@ describe("handleBatchRead", () => {
     const out = await read({
       requests: [
         { path: a, mode: "verbatim" },
-        { path: b, mode: "verbatim_numbered" },
+        { path: b, mode: "verbatim" },
       ],
     });
     expect(out.results.map((r) => r.path)).toEqual([a, b]);
     expect(out.results[0]!.content).toBe("A1\nA2\n");
-    expect(out.results[1]!.content).toBe("1\tB1\n");
+    expect(out.results[1]!.content).toBe("B1\n");
   });
 
   it("raw mode preserves CRLF byte-exactly", async () => {
@@ -63,10 +63,11 @@ describe("handleBatchRead", () => {
   it("offset and count respected; truncated flag set correctly", async () => {
     const p = await fixture("long.txt", "L1\nL2\nL3\nL4\nL5\n");
     const out = await read({
-      requests: [{ path: p, mode: "verbatim_numbered", offset: 2, count: 2 }],
+      requests: [{ path: p, mode: "verbatim", offset: 2, count: 2 }],
     });
     const r = out.results[0]!;
-    expect(r.content).toBe("2\tL2\n3\tL3\n");
+    expect(r.content).toBe("L2\nL3\n");
+    expect(r.start_line).toBe(2);
     expect(r.lines).toBe(5);
     expect(r.returned_lines).toBe(2);
     expect(r.truncated).toBe(true);
@@ -75,7 +76,7 @@ describe("handleBatchRead", () => {
   it("missing file returns an error entry, not a throw", async () => {
     const missing = join(workDir, "does_not_exist.txt");
     const out = await read({
-      requests: [{ path: missing, mode: "verbatim_numbered" }],
+      requests: [{ path: missing, mode: "verbatim" }],
     });
     const r = out.results[0]!;
     expect(r.content).toBeDefined();
@@ -88,13 +89,13 @@ describe("handleBatchRead", () => {
     const missing = join(workDir, "nope.txt");
     const out = await read({
       requests: [
-        { path: missing, mode: "verbatim_numbered" },
-        { path: ok, mode: "verbatim_numbered" },
+        { path: missing, mode: "verbatim" },
+        { path: ok, mode: "verbatim" },
       ],
     });
     expect(out.results).toHaveLength(2);
     expect(out.results[0]!.error?.reason).toBe("not_found");
-    expect(out.results[1]!.content).toBe("1\thi\n");
+    expect(out.results[1]!.content).toBe("hi\n");
   });
 
   it("compact mode on non-indent-sensitive file collapses to single line", async () => {
@@ -111,7 +112,7 @@ describe("handleBatchRead", () => {
 
   it("relative paths resolve from cwd, not_authorized when outside allowed dirs", async () => {
     const out = await read({
-      requests: [{ path: "relative/path.txt", mode: "verbatim_numbered" }],
+      requests: [{ path: "relative/path.txt", mode: "verbatim" }],
     });
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
@@ -153,8 +154,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Match at line 2 -->");
-    expect(r.content).toContain("const b = 2;");
+    expect(r.content).toContain("2\tconst b = 2;");
   });
 
   it("search: multiple matches", async () => {
@@ -162,8 +162,8 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("<!-- Match at line 1 -->");
-    expect(r.content).toContain("<!-- Match at line 3 -->");
+    expect(r.content).toContain("1\tfoo();");
+    expect(r.content).toContain("3\tfoo();");
   });
 
   it("search: multiple matches on the same line returns that line once", async () => {
@@ -171,7 +171,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content.match(/<!-- Match at line/g)).toHaveLength(1);
+    expect(r.content).toContain("1\tfoo foo foo");
   });
 
   it("search: no match returns match_count=0 and empty content", async () => {
@@ -204,27 +204,27 @@ describe("handleBatchRead", () => {
     expect(paths.some(p => p.endsWith(".txt"))).toBe(false);
   });
 
-  it("glob read: verbatim_numbered expands and numbers each matched file independently", async () => {
+  it("glob read: verbatim expands to one result per matched file", async () => {
     const a = await fixture("vng_a.ts", "hello\nworld\n");
     const b = await fixture("vng_b.ts", "foo\n");
-    const out = await read({ requests: [{ path: `${workDir}/vng_*.ts`, mode: "verbatim_numbered" }] });
+    const out = await read({ requests: [{ path: `${workDir}/vng_*.ts`, mode: "verbatim" }] });
     const byPath = Object.fromEntries(out.results.map(r => [r.path, r]));
-    expect(byPath[a]!.mode_applied).toBe("verbatim_numbered");
-    expect(byPath[a]!.content).toBe("1\thello\n2\tworld\n");
-    expect(byPath[b]!.mode_applied).toBe("verbatim_numbered");
-    expect(byPath[b]!.content).toBe("1\tfoo\n");
+    expect(byPath[a]!.mode_applied).toBe("verbatim");
+    expect(byPath[a]!.content).toBe("hello\nworld\n");
+    expect(byPath[b]!.mode_applied).toBe("verbatim");
+    expect(byPath[b]!.content).toBe("foo\n");
   });
 
-  it("folder read: verbatim_numbered expands directory to numbered results per file", async () => {
+  it("folder read: verbatim expands directory to one result per file", async () => {
     const a = await fixture("vnf_a.ts", "alpha\n");
     const b = await fixture("vnf_b.ts", "beta\n");
-    const out = await read({ requests: [{ path: workDir, mode: "verbatim_numbered" }] });
+    const out = await read({ requests: [{ path: workDir, mode: "verbatim" }] });
     const paths = out.results.map(r => r.path);
     expect(paths).toContain(a);
     expect(paths).toContain(b);
     const ra = out.results.find(r => r.path === a)!;
-    expect(ra.mode_applied).toBe("verbatim_numbered");
-    expect(ra.content).toBe("1\talpha\n");
+    expect(ra.mode_applied).toBe("verbatim");
+    expect(ra.content).toBe("alpha\n");
   });
 
   it("folder read: expands to immediate children", async () => {
@@ -238,14 +238,13 @@ describe("handleBatchRead", () => {
 
   it("search: verbatim_numbered uses absolute file line numbers in match blocks", async () => {
     const p = await fixture("search-numbered.ts", "line1\nline2\nline3\nTARGET\nline5\nline6\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim_numbered", searchTerm: "TARGET", count: 1 }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Match at line 4 -->");
-    // lines should be labeled with absolute file numbers 3, 4, 5
-    expect(r.content).toContain("3\tline3");
-    expect(r.content).toContain("4\tTARGET");
-    expect(r.content).toContain("5\tline5");
+    expect(r.content).toContain("<!-- Line 3 to 5, match at line 4 -->");
+    expect(r.content).toContain("line3");
+    expect(r.content).toContain("TARGET");
+    expect(r.content).toContain("line5");
   });
 
   it("search: compact mode collapses content in match blocks", async () => {
@@ -253,8 +252,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Match at line 2 -->");
-    // compact strips extra whitespace
+    expect(r.content).toContain("2\t");
     expect(r.content).toContain("const b = 2;");
   });
 
@@ -350,22 +348,22 @@ describe("deduplication", () => {
     const p = await fixture("dedup_range_overlap.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim_numbered", offset: 1, count: 6 },
-        { path: p, mode: "verbatim_numbered", offset: 4, count: 6 },
+        { path: p, mode: "verbatim", offset: 1, count: 6 },
+        { path: p, mode: "verbatim", offset: 4, count: 6 },
       ],
     });
     expect(out.results).toHaveLength(1);
     expect(out.results[0]!.returned_lines).toBe(9);
-    expect(out.results[0]!.content).toContain("1\tL1");
-    expect(out.results[0]!.content).toContain("9\tL9");
+    expect(out.results[0]!.content).toContain("L1");
+    expect(out.results[0]!.content).toContain("L9");
   });
 
   it("range: adjacent slices merge", async () => {
     const p = await fixture("dedup_range_adj.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\n");
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim_numbered", offset: 1, count: 4 },
-        { path: p, mode: "verbatim_numbered", offset: 5, count: 4 },
+        { path: p, mode: "verbatim", offset: 1, count: 4 },
+        { path: p, mode: "verbatim", offset: 5, count: 4 },
       ],
     });
     expect(out.results).toHaveLength(1);
@@ -376,8 +374,8 @@ describe("deduplication", () => {
     const p = await fixture("dedup_range_sep.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim_numbered", offset: 1, count: 3 },
-        { path: p, mode: "verbatim_numbered", offset: 7, count: 3 },
+        { path: p, mode: "verbatim", offset: 1, count: 3 },
+        { path: p, mode: "verbatim", offset: 7, count: 3 },
       ],
     });
     expect(out.results).toHaveLength(2);
@@ -398,32 +396,31 @@ describe("deduplication", () => {
     expect(out.results[0]!.content).toBe("const   a = 1;\n");
   });
 
-  it("mode: verbatim_numbered slices with no overlap stay verbatim_numbered", async () => {
+  it("mode: verbatim slices with no overlap stay verbatim", async () => {
     const p = await fixture("dedup_mode_vn.ts", "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\n");
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim_numbered", offset: 1, count: 3 },
-        { path: p, mode: "verbatim_numbered", offset: 7, count: 3 },
+        { path: p, mode: "verbatim", offset: 1, count: 3 },
+        { path: p, mode: "verbatim", offset: 7, count: 3 },
       ],
     });
     expect(out.results).toHaveLength(2);
-    expect(out.results[0]!.mode_applied).toBe("verbatim_numbered");
-    expect(out.results[1]!.mode_applied).toBe("verbatim_numbered");
+    expect(out.results[0]!.mode_applied).toBe("verbatim");
+    expect(out.results[1]!.mode_applied).toBe("verbatim");
   });
 
-  it("mode: verbatim_numbered merged to full-file downgrades to verbatim", async () => {
+  it("mode: verbatim slices merged to full-file stays verbatim", async () => {
     const p = await fixture("dedup_mode_vn_full.ts", "L1\nL2\nL3\nL4\nL5\n");
     // offset:3 with no count = [3, Infinity]; offset:1,count:4 = [1,4]; merged = [1, Infinity]
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim_numbered", offset: 1, count: 4 },
-        { path: p, mode: "verbatim_numbered", offset: 3 },
+        { path: p, mode: "verbatim", offset: 1, count: 4 },
+        { path: p, mode: "verbatim", offset: 3 },
       ],
     });
     expect(out.results).toHaveLength(1);
     expect(out.results[0]!.mode_applied).toBe("verbatim");
     expect(out.results[0]!.returned_lines).toBe(5);
-    expect(out.results[0]!.content).not.toContain("1\t");
   });
 
   it("same file via symlink deduplicates", async () => {
