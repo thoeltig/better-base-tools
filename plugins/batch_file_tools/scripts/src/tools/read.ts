@@ -281,10 +281,8 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       for (const { s, e, matchLines } of intervals) {
         returnedLines += e - s + 1;
         const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
-        const matchLabel = matchLines.length === 1
-          ? `match at line ${matchLines[0]! + 1}`
-          : `match at lines ${matchLines.map(m => m + 1).join(", ")}`;
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1}, ${matchLabel} -->\n${formatted.content}`);
+        const matchSuffix = matchLines.length === 1 ? `, match at line ${matchLines[0]! + 1}` : "";
+        blocks.push(`<!-- Line ${s + 1} to ${e + 1}${matchSuffix} -->\n${formatted.content}`);
       }
     }
 

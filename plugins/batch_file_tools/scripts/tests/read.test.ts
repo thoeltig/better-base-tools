@@ -210,8 +210,8 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("match at lines 1, 8");
-    expect(r.content).not.toContain("match at line 1");
+    expect(r.content).toContain("<!-- Line 1 to 10 -->");
+    expect(r.content).not.toContain("match at");
   });
 
   it("search: blocks with gap > SEARCH_MERGE_GAP stay separate", async () => {
