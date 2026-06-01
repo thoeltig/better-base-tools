@@ -42,7 +42,7 @@ _¹ Documentation analysis project — content-only workload, pure native. ² An
 | `verbatim` | Normalized indentation | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
 | `fileinfo` | Metadata (size, lines, mtime, isFile) plus optional `refs[]` | Dependency mapping and pre-read sizing |
 
-Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search. Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns a `<!-- Line M to N, match at line K -->` block per match with that many context lines. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
+Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search. Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns context blocks — nearby windows are merged into one block, single-match blocks are annotated `<!-- Line M to N, match at line K -->`, merged multi-match blocks use `<!-- Line M to N -->` only. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
 
 #### Formatting normalization
 
