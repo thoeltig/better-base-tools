@@ -76,15 +76,21 @@ export function mergeSamplingResults(knowledgeDir: string, results: SamplingFile
   for (const result of results) {
     const absPath = toAbsReal(projectRoot, result.path);
     const existing = summaries.files.get(absPath) || {};
-    summaries.files.set(absPath, {
+    const entry: FileSummary = {
       ...existing,
       ...result,
       deleted: false,
-      lastUpdated: new Date().toISOString(),
-      sizeCharsWhenAnalysed: result.sizeChars ?? existing.sizeChars,
-      lineCountWhenAnalysed: result.lineCount ?? existing.lineCount,
-      analysisDelta: undefined,
-    });
+      lastUpdated: new Date().toISOString()
+    };
+    
+    const newSizeChars = result.sizeChars ?? existing.sizeChars;
+    if(newSizeChars) entry.sizeCharsWhenAnalysed = newSizeChars;
+
+    const newLineCount = result.lineCount ?? existing.lineCount;
+    if(newLineCount) entry.lineCountWhenAnalysed = newLineCount;
+
+    delete entry.analysisDelta;
+    summaries.files.set(absPath, entry);
   }
   writeSummaries(knowledgeDir, summaries, projectRoot);
   return summaries;
