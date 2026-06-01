@@ -33,62 +33,76 @@ export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<Re
   return toolResultOutput;
 }
 
-export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditFile>, addUserAudience: boolean, dryRun: boolean | undefined): ToolContentResult[] {
-  const ok = result.results.filter(r => r.status === "ok");
-  const errors = result.results.filter(r => r.status === "error" || r.status === "partial");
-  const skipped = result.results.filter(r => r.status === "skipped");
+export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditFile> = [], addUserAudience = false, dryRun?: boolean): ToolContentResult[] {
+  const allResults = result.results;
+  const totalOps = allResults.reduce((sum, r) => sum + r.ops.length, 0);
+  const okOps = allResults.reduce((sum, r) => sum + r.ops.filter(o => o.status === "ok").length, 0);
+  const fileCount = allResults.length;
+  const dryTag = dryRun ? "DRY RUN: " : "";
+  const fileLabel = fileCount === 1 ? "file" : "files";
 
-  if (errors.length === 0 && skipped.length === 0) {
-    const label = ok.length === 1 ? shortenPath(ok[0]!.path) : `${ok.length} files`;
-    const tag = dryRun ? "DRY RUN: batch_edit OK" : "batch_edit OK";
-    const toolOutputNoErrors = [createToolOutputForAssistant(`<!-- ${tag} — ${label} -->`)];    
-    if (addUserAudience) toolOutputNoErrors.push(createToolOutputForUser(buildEditSummary(files, result.results)));
-    return toolOutputNoErrors;
+  const errorFiles = allResults.filter(r => r.status === "error" || r.status === "partial");
+  const skippedFiles = allResults.filter(r => r.status === "skipped");
+  const hasProblems = errorFiles.length > 0 || skippedFiles.length > 0;
+
+  if (!hasProblems) {
+    const output = [createToolOutputForAssistant(`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps} ops successful -->`)];
+    if (addUserAudience) output.push(createToolOutputForUser(buildEditSummary(files, result.results)));
+    return output;
   }
 
-  const summaryParts: string[] = [];
-  if (ok.length > 0) summaryParts.push(`${ok.length} OK`);
-  if (errors.length > 0) summaryParts.push(`${errors.length} error${errors.length > 1 ? "s" : ""}`);
-  if (skipped.length > 0) summaryParts.push(`${skipped.length} skipped`);
+  const blocks: ToolContentResult[] = [createToolOutputForAssistant(`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps}/${totalOps} ops successful -->`)];
 
-  const errorLines: string[] = [];
-  const anchorBlocks: ToolContentResult[] = [];
+  for (const r of [...errorFiles, ...skippedFiles]) {
+    const fileOkOps = r.ops.filter(o => o.status === "ok").length;
+    const fileTotalOps = r.ops.length;
+    const fileLines: string[] = [
+      `<!-- '${shortenPath(r.path)}': ${fileOkOps}/${fileTotalOps} ops successful -->`,
+    ];
 
-  for (const r of errors) {
-    const fileHeader = r.error
-      ? `${shortenPath(r.path)} — ${r.error.reason}: ${r.error.message}`
-      : `${r.path} (${r.status}):`;
-    errorLines.push(fileHeader);
-
-    for (let i = 0; i < r.ops.length; i++) {
-      const op = r.ops[i]!;
-      const idx = op.index ?? i;
-      if (op.status === "error") {
-        const tag = `  op ${idx}${op.type ? ` (${op.type})` : ""}`;
-        let line = `${tag}: ${op.reason ?? "error"}`;
-        if (op.hint?.next_action) line += ` — ${op.hint.next_action}`;
-        if (op.hint?.match_lines?.length) line += ` (matches at lines ${op.hint.match_lines.join(", ")})`;
-        errorLines.push(line);
-        const anchor = op.hint?.nearest_anchor;
-        if (anchor) {
-          anchorBlocks.push(createToolOutputForAssistant(`<!-- op ${idx} nearest_anchor: ${shortenPath(r.path)} lines ${anchor.start_line}-${anchor.end_line} -->\n${anchor.content.replace(/\n$/, "")}`));
+    if (r.status === "skipped") {
+      fileLines.push(`<!-- file; skipped -->`);
+    } else if (r.error) {
+      fileLines.push(`<!-- file error: ${r.error.reason}: ${r.error.message} -->`);
+    } else {
+      const skippedIdxs: number[] = [];
+      for (const op of r.ops) {
+        if (op.status === "skipped") {
+          skippedIdxs.push(op.index ?? 0);
+          continue;
         }
-      } else if (op.status === "skipped") {
-        errorLines.push(`  op ${idx}: skipped`);
+        if (op.status !== "error") continue;
+
+        const idx = op.index ?? 0;
+        const type = op.type ?? "unknown";
+        let errorMsg = op.hint?.next_action ?? op.reason ?? "error";
+        if (op.hint?.nearest_anchor) {
+          errorMsg = errorMsg.replace(/ — nearest similar line is \d+.*$/, "");
+        }
+
+        let line = `<!-- op ${idx} (${type}); error: ${errorMsg}`;
+        const anchor = op.hint?.nearest_anchor;
+        if (anchor) line += `; possible verbatim anchor: lines ${anchor.start_line}-${anchor.end_line}`;
+        if (op.hint?.match_lines?.length) line += `; matches at lines ${op.hint.match_lines.join(", ")}`;
+        line += ` -->`;
+
+        fileLines.push(line);
+        if (anchor) fileLines.push(anchor.content.replace(/\n$/, ""));
+      }
+
+      if (skippedIdxs.length > 0) {
+        const first = Math.min(...skippedIdxs);
+        const last = Math.max(...skippedIdxs);
+        const range = first === last ? `op ${first}` : `ops ${first} to ${last}`;
+        fileLines.push(`<!-- ${range}; skipped -->`);
       }
     }
+
+    blocks.push(createToolOutputForAssistant(fileLines.join("\n")));
   }
 
-  for (const r of skipped) {
-    errorLines.push(`${shortenPath(r.path)} — skipped`);
-  }
-
-  const toolResultOutput = [
-    createToolOutputForAssistant(`<!--\nbatch_edit — ${summaryParts.join(", ")}\n\n${errorLines.join("\n")}\n-->`),
-    ...anchorBlocks,
-  ];
-  if (addUserAudience) toolResultOutput.push(createToolOutputForUser(buildEditSummary(files, result.results)));
-  return toolResultOutput;
+  if (addUserAudience) blocks.push(createToolOutputForUser(buildEditSummary(files, result.results)));
+  return blocks;
 }
 
 function readResultToBlock(r: ReadResult): ToolContentResult {
