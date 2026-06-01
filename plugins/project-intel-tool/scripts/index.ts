@@ -24,6 +24,7 @@ import {
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
   ScoredFileSummary,
+  ToolContentResult,
 } from './types.js';
 
 const server = new McpServer(
@@ -126,6 +127,23 @@ function shutdown(): void {
   shutdownController.abort();
   releaseLock();
   process.exit(0);
+}
+
+function createOutputMessage(msg: string, isError?: boolean | undefined): {
+  isError: boolean | undefined;
+  content: ToolContentResult[];
+}{
+  return { 
+    isError, 
+    content: [{ 
+      type: 'text', 
+      text: isError ? `Error: ${msg}` : msg,
+      annotations: {
+        audience: ["assistant", "user"],
+        priority: 0
+      }
+    }]
+  };
 }
 
 process.on('SIGTERM', shutdown);
@@ -260,11 +278,11 @@ server.registerTool(
   async (args) => {
     writeMcpLogLine('info', `scan — called${args.scanLocation ? ` (scope: ${args.scanLocation})` : ''}`, 'scan');
     if (isScanning) {
-      return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress.' }) }] };
+      return createOutputMessage('A scan is already in progress.');
     }
     const root = assertRoots();
     if (!root) {
-      return { isError: true, content: [{ type: 'text', text: 'No MCP roots available. Cannot determine project location.' }] };
+      return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
@@ -274,43 +292,25 @@ server.registerTool(
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const scanLocation = args.scanLocation ? path.resolve(root, args.scanLocation) : root;
       if (!toAbsReal(scanLocation, '.').startsWith(toAbsReal(root, '.'))) {
-        return { isError: true, content: [{ type: 'text', text: `scanLocation must be within the project root: ${root}` }] };
+        return createOutputMessage(`scanLocation must be within the project root: ${root}`, true);
       }
       const scanResult = await scanProject(scanLocation, knowledgeDir, scanConfig);
       const { filesToScan } = scanResult;
 
       if (filesToScan.length === 0) {
         writeMcpLogLine('info', 'scan — up_to_date', 'scan');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              status: 'up_to_date',
-              totalFiles: scanResult.projectStats.totalFilesInKnowledge,
-              message: 'All files are up to date. Use query to search.',
-            }),
-          }],
-        };
+        return createOutputMessage('All files are up to date. Use query to search.');
       }
 
       if (USE_MCP_SAMPLING) {
         if (!acquireLock(knowledgeDir)) {
-          return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress for this project.' }) }] };
+          return createOutputMessage('A scan is already in progress for this project.');
         }
         isScanning = true;
         runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
           .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
         writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              status: 'scanning',
-              filesToScan: filesToScan.length,
-              message: `Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`,
-            }),
-          }],
-        };
+        return createOutputMessage(`Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`);
       }
 
       // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
@@ -328,13 +328,17 @@ server.registerTool(
               `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
               'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
               'Prompt for the subagent: Follow the instructions in the provided file.',
-          }),
+          }), 
+          annotations: { 
+            audience: ['assistant'], 
+            priority: 0.1
+          }
         }],
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `scan error — ${message}`, 'scan');
-      return { isError: true, content: [{ type: 'text', text: `scan error: ${message}` }] };
+      return createOutputMessage(message, true);
     }
   }
 );
@@ -370,24 +374,22 @@ if (!USE_MCP_SAMPLING) {
       writeMcpLogLine('info', `submit_analysis — ${args.results.length} file(s) queued`, 'submit');
       const root = assertRoots();
       if (!root) {
-        return { isError: true, content: [{ type: 'text', text: 'No MCP roots available.' }] };
+        return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
       }
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
       if (!await acquireSubmitLock(knowledgeDir)) {
-        return { isError: true, content: [{ type: 'text', text: 'submit_analysis: timed out waiting for write lock' }] };
+        return createOutputMessage('Wait for write timed out, try again in 10s', true);
       }
       try {
         const projectRoot = path.dirname(path.resolve(knowledgeDir));
         mergeSamplingResults(knowledgeDir, args.results as SamplingFileSummary[], projectRoot);
         writeMcpLogLine('info', `submit_analysis — merged ${args.results.length} file(s)`, 'submit');
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ status: 'success', filesProcessed: args.results.length }) }],
-        };
+        return createOutputMessage(`Analysis for ${args.results.length} files submitted successfully`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         writeMcpLogLine('error', `submit_analysis error — ${message}`, 'submit');
-        return { isError: true, content: [{ type: 'text', text: `submit_analysis error: ${message}` }] };
+        return createOutputMessage(message, true);
       } finally {
         releaseLock();
       }
@@ -424,15 +426,13 @@ server.registerTool(
     writeMcpLogLine('info', `query — keywords: "${args.keywords}"`, 'query');
     const root = assertRoots();
     if (!root) {
-      return { isError: true, content: [{ type: 'text', text: 'No MCP roots available. Cannot determine project location.' }] };
+      return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
       if (!fs.existsSync(knowledgeDir)) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: 'No knowledge found. Run scan first.' }) }],
-        };
+        return createOutputMessage('No knowledge found. Run scan first.', true);
       }
 
       const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
@@ -510,11 +510,21 @@ server.registerTool(
       }
 
       writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
-      return { content: [{ type: 'text', text: JSON.stringify(output) }] };
+      return { 
+        content: [{ 
+          type: 'text', 
+          text: JSON.stringify(output), 
+          annotations: { 
+            audience: ['assistant'], 
+            priority: 0.3,
+            lastModified: new Date().toISOString()
+          }
+        }]
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `query error — ${message}`, 'query');
-      return { isError: true, content: [{ type: 'text', text: `query error: ${message}` }] };
+      return createOutputMessage(message, true);
     }
   }
 );
