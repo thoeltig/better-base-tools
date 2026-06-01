@@ -107,7 +107,8 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
     const linesInfo = r.returned_lines < r.lines
       ? `${r.returned_lines} of ${r.lines} lines total`
       : `${r.lines} ${r.lines === 1 ? "line" : "lines"} total`;
-    hint = `<!-- Read line ${startLine} to ${endLine} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
+    const lineRange = startLine === endLine ? `line ${startLine}` : `line ${startLine} to ${endLine}`;
+    hint = `<!-- Read ${lineRange} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
   }
   return createToolOutputForAssistant(`${hint}\n${r.content ?? ""}`);
 }
