@@ -207,6 +207,11 @@ All settings are configurable as environment variables or CLI arguments (`--name
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
 | `PROJECT_INTEL_TOOL_INCLUDE_PATHS` | `--include` | Comma-separated extra paths to include in scan | |
 | `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` | `--exclude` | Comma-separated paths to exclude from scan | |
+| `PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | Append a compact human-readable summary to tool results (e.g. `"Found 9 knowledge entries"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. | `false` |
+| `PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | Include raw result objects as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. | `false` |
+| `PROJECT_INTEL_TOOL_SCAN_META` | `--scan-meta` | JSON object merged into the `_meta` field of the `scan` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000}`. | `{}` |
+| `PROJECT_INTEL_TOOL_QUERY_META` | `--query-meta` | JSON object merged into the `_meta` field of the `query` tool registration. Replaces the previously hardcoded `anthropic/maxResultSizeChars` and `anthropic/alwaysLoad` defaults. | `{}` |
+| `PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META` | `--submit-analysis-meta` | JSON object merged into the `_meta` field of the `submit_analysis` tool registration. Same format as `PROJECT_INTEL_TOOL_QUERY_META`. | `{}` |
 
 ---
 
