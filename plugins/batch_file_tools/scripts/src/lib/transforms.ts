@@ -99,11 +99,11 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const clampedEnd = Math.max(clampedStart, Math.min(endIdx, totalLines));
   const returnedLines = clampedEnd - clampedStart;
 
-  const normalize = input.normalizeFormatting !== false;
+  const disableNormalizedFormatting = input.normalizeFormatting === false;
   let content: string;
   let emittedLines = returnedLines;
   if (input.mode === "verbatim_numbered") {
-    content = formatEdit(split.lines, clampedStart, clampedEnd, input.path, !normalize);
+    content = formatEdit(split.lines, clampedStart, clampedEnd, input.path, disableNormalizedFormatting);
   } else if (input.mode === "compact") {
     const compact = formatCompact(
       split.lines,
@@ -115,7 +115,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
     content = compact.content;
     emittedLines = compact.line_count;
   } else {
-    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd, input.path, !normalize);
+    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd, input.path, disableNormalizedFormatting);
   }
 
   const truncated = returnedLines < totalLines - clampedStart;
