@@ -455,7 +455,7 @@ server.registerTool(
       }
 
       const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-      const scope = args.scope || '';
+      const scope = args.scope;
       const maxResults = args.max || QUERY_RESULT_MAX;
       const format = args.format || FORMAT_GROUPED;
 
@@ -507,24 +507,20 @@ server.registerTool(
             group.technologies = [...set];
           }
           const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, ...restFields } = item;
+          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, ...restFields } = item;
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
         output = {
-          query: args.keywords,
-          keywords,
-          scope: scope || 'all',
           total: limited.length,
-          grouped: Object.values(grouped).sort((a, b) => b.folderScore - a.folderScore),
+          grouped: Object.values(grouped)
+            .sort((a, b) => b.folderScore - a.folderScore)
+            .map(({ folderScore: _fs, ...rest }) => rest),
         };
       } else {
         output = {
-          query: args.keywords,
-          keywords,
-          scope: scope || 'all',
           total: limited.length,
-          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, ...rest }) => rest),
+          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, ...rest }) => rest),
         };
       }
 

@@ -98,7 +98,6 @@ export interface ScoredFileSummary extends FileSummary {
 export interface GroupedScoredFileSummary extends FileSummary {
   fileName: string;
   path?: string;
-  fileScore: number;
 }
 
 // Session start hook
