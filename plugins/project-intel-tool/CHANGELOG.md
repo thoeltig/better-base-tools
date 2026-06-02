@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-02
+
+_Query output cleanup, role filter, and analysis schema overhaul._
+
+### Added
+
+- **`role` filter on `query`** — new optional `z.enum` parameter to filter results to a specific file role: `implementation`, `executable`, `helperScript`, `test`, `configuration`, `build`, `documentation`, `data`
+- **`searchTags` field** — analysis model generates additional search keywords not already present in summary, role, or technologies; used for scoring (`+3 × semanticWeight`) but excluded from query output
+
+### Changed
+
+- **Role values updated**: `script` renamed to `helperScript`; `executable` and `data` added; full set: `implementation | executable | helperScript | test | configuration | build | documentation | data`. Existing knowledge bases should be rescanned to reclassify files.
+- **`purpose` field removed**: replaced by an extended `summary` (~450 chars) covering content, purpose, and key information in a single field. Existing knowledge bases should be rescanned.
+- **`format` parameter typed**: `query` `format` is now `z.enum(['grouped', 'flat'])`; invalid values rejected at schema level
+- **Query output cleaned up**: `fileScore`, `folderScore`, `query`, and `keywords` removed from all query responses; `scope` only included when set by the caller
+
+### Fixed
+
+- **Stale batch files**: `writeBatchFiles` now clears existing files from `.knowledge/batches/` before writing, preventing orchestration agents from picking up batch files from a previous scan
+- **Knowledge directory indexed by git scanner**: `.knowledge/` is now excluded from git-based file scanning, preventing batch prompt files and summaries from being treated as project source files
+
 ## [1.2.0] - 2026-06-02
 
 ### Added
@@ -157,7 +178,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.2.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...HEAD
+[1.3.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.2.0...ProjectIntelTools_v1.3.0
 [1.2.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.1.0...ProjectIntelTools_v1.2.0
 [1.1.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...ProjectIntelTools_v1.1.0
 [1.0.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.6.0...ProjectIntelTools_v1.0.0

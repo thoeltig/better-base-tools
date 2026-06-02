@@ -19,7 +19,7 @@ Every session models start blind into a project maze. Without prior context they
 The tool separates knowledge into two layers with different update frequencies.
 
 - **Structural data** is always up to date and requires no AI. It captures file path, character count, line count, extracted imports and exports, and inter-file references (the file map). This layer is written every session start for all new and changed files.
-- **Semantic data** is populated by AI analysis during scan. It captures a one-sentence summary, a three-sentence purpose description, a role, and key technologies. This layer is only updated when scan is explicitly run.
+- **Semantic data** is populated by AI analysis during scan. It captures an extended summary (~450 chars covering content, purpose, and key information), a role, key technologies, and search tags. This layer is only updated when scan is explicitly run.
 
 This means the tool is useful from the moment it is installed, because file structure, sizes, and dependency connections are always available even before a scan has been run.
 
@@ -36,12 +36,12 @@ The session start hook runs `scanProject` automatically on every session. It det
 65 file summaries available, 10 file(s) changed, 1 file(s) without AI analysis
 
 [Assistent message injected into the model's context]
-You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. The result will also provide you a quick overview of the used technologies, imports and exports, purpose, role and description of each file. The tool is designed to provide you an efficient way to know what files you need for a task without reading the full files.
+You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. The result will also provide you a quick overview of the used technologies, imports and exports, role and description of each file. The tool is designed to provide you an efficient way to know what files you need for a task without reading the full files.
 
-File map and structural information are always up to date, descriptions and purpose might need a reevaluation after file changes to check if the content still matches the summaries: 65 file summaries available, 10 file(s) changed, 1 file(s) without AI analysis
+File map and structural information are always up to date, descriptions might need a reevaluation after file changes to check if the content still matches the summaries: 65 file summaries available, 10 file(s) changed, 1 file(s) without AI analysis
 ```
 
-**Status fields:** `N file summaries available` counts files with structural data in the knowledge base. `N file(s) changed` counts files where git or mtime shows changes since last scan. Structural data is already updated for these files, but semantic fields (summary, purpose) may be stale. `N file(s) without AI analysis` counts files that have structural data only, with semantic fields not yet populated.
+**Status fields:** `N file summaries available` counts files with structural data in the knowledge base. `N file(s) changed` counts files where git or mtime shows changes since last scan. Structural data is already updated for these files, but semantic fields (summary, role, technologies) may be stale. `N file(s) without AI analysis` counts files that have structural data only, with semantic fields not yet populated.
 
 If the session start hook fails, for example because the MCP server is not correctly registered or the build is missing, the hook outputs: `Knowledge check failed — Could not check project knowledge status. Most likely an issue with the MCP server.`
 
@@ -60,23 +60,24 @@ Searches the knowledge base by keywords and returns a ranked list of files and d
 | `scope` | Limit results to files under this path | All directories |
 | `max` | Maximum number of results | 25 |
 | `format` | `grouped` or `flat` | `grouped` |
+| `role` | Filter by file role: `implementation`, `executable`, `helperScript`, `test`, `configuration`, `build`, `documentation`, `data` | All roles |
 
 **Semantic scoring:** each keyword is matched against multiple fields per file:
 
 | Field | Weight | Available without scan |
 |---|---|---|
-| Purpose | +6 | No |
 | Summary | +6 | No |
 | Exports | +4 | Yes |
 | Imports | +4 | Yes |
 | Path | +4 | Yes |
 | Refs | +3 | Yes |
+| SearchTags | +3 | No |
 | Technologies | +2 | No |
 | Role | +2 | No |
 
-When a file has been modified since its last semantic analysis, the scores for semantic fields (purpose, summary, role, technologies) are multiplied by `min(baseline, current) / max(baseline, current)` — the ratio of file size at analysis time to current size. A small edit barely affects ranking; a near-complete rewrite reduces semantic scores close to zero while leaving structural scores unchanged.
+When a file has been modified since its last semantic analysis, the scores for semantic fields (summary, role, technologies, searchTags) are multiplied by `min(baseline, current) / max(baseline, current)` — the ratio of file size at analysis time to current size. A small edit barely affects ranking; a near-complete rewrite reduces semantic scores close to zero while leaving structural scores unchanged.
 
-Queries on package names, function names, file names, and import/export identifiers return useful results immediately. Purpose and summary scoring activates after running scan.
+Queries on package names, function names, file names, and import/export identifiers return useful results immediately. Summary, role, technology, and tag scoring activates after running scan.
 
 The `grouped` format organizes results by directory, making it a good choice for understanding subsystems and architecture. Each directory group includes a deduplicated `technologies` list aggregated from all files in that group. The `flat` format returns a single ranked list sorted by relevance score, making it better suited for broad searches across unrelated parts of the project.
 
@@ -147,16 +148,16 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
     "exports": ["authenticate", "logout", "middleware"],
     "imports": ["jwt", "bcrypt", "express"],
     "refs": ["src/auth/session.ts", "src/auth/token.ts"],
-    "summary": "Main authentication module entry point",
-    "purpose": "Exports auth functions and middleware for the Express API. Handles JWT creation, bcrypt password comparison, and session attachment. Acts as the single integration point for all auth consumers.",
+    "summary": "Main authentication module entry point that exports auth functions and middleware for the Express API. Handles JWT creation, bcrypt password comparison, and session attachment. Acts as the single integration point for all auth consumers.",
     "role": "implementation",
     "technologies": ["TypeScript", "JWT", "bcrypt"],
+    "searchTags": ["login", "token", "password", "session"],
     "analysisDelta": "+12 lines +340 chars"
   }
 }
 ```
 
-The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `refs` maps intra-project file connections. The semantic fields (`summary`, `purpose`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal baseline fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`) are stored in the knowledge base but never surfaced in query output.
+The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `refs` maps intra-project file connections. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
 Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across all sub-project knowledge bases.
 
 ---
@@ -165,7 +166,7 @@ Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects wi
 
 Structural data is never stale. Session start always refreshes `sizeChars`, `lineCount`, `exports`, `imports`, and `refs` for all changed files.
 
-Semantic data (summary, purpose, role, technologies) can become stale when files change. Two signals indicate this: the session start reports `N file(s) changed`, and individual query results include `analysisDelta` (e.g. `+12 lines +340 chars`) when a file has been modified since its last analysis. A small delta suggests the description is likely still accurate; a large delta suggests a re-scan. The semantic weight penalty in scoring automatically de-prioritizes heavily changed files in results.
+Semantic data (summary, role, technologies) can become stale when files change. Two signals indicate this: the session start reports `N file(s) changed`, and individual query results include `analysisDelta` (e.g. `+12 lines +340 chars`) when a file has been modified since its last analysis. A small delta suggests the description is likely still accurate; a large delta suggests a re-scan. The semantic weight penalty in scoring automatically de-prioritizes heavily changed files in results.
 
 Good triggers for a re-scan are when session start reports a significant number of changed files, when query results feel outdated or miss recent additions, or after major structural changes such as a new subsystem or large refactor.
 
@@ -190,7 +191,7 @@ Query first when answering vague prompts ("improve the API" → query "api" firs
 | Finds by concept | Yes (after scan) | No | Yes |
 | Token cost | Low | Very low | High |
 
-Without scan, structural queries on packages, imports, file names, and refs work immediately at low cost without any file reads. After scan, semantic queries on purpose, role, and technology are also available. Combined, this gives a full overview of any area of the project without opening a single file.
+Without scan, structural queries on packages, imports, file names, and refs work immediately at low cost without any file reads. After scan, semantic queries on summary, role, and technology are also available. Combined, this gives a full overview of any area of the project without opening a single file.
 
 ---
 
