@@ -535,7 +535,7 @@ server.registerTool(
       const queryResult: CallToolResult = { 
         content: [{ 
           type: 'text', 
-          text: JSON.stringify(output), 
+          text: outputToFluentText(output as FluentOutput), 
           annotations: { 
             audience: ['assistant'], 
             priority: 0.3,
@@ -560,6 +560,34 @@ server.registerTool(
     }
   }
 );
+
+type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summary?: string; imports?: string[]; exports?: string[]; technologies?: string[] };
+type FluentGroup = { folderPath: string; technologies?: string[]; files: (FluentFile & { fileName: string })[] };
+type FluentOutput = { grouped?: FluentGroup[]; results?: (FluentFile & { path: string })[] };
+
+function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean): string {
+  const techStr = includeTech && file.technologies?.length ? ` | ${file.technologies.join(', ')}` : '';
+  const meta = `<!-- ${name}${file.lineCount !== undefined ? ` (Lines: ${file.lineCount}, Chars: ${file.sizeChars})` : ''}${file.role ? ` [${file.role}]` : ''}${techStr} -->`;
+  const parts: string[] = [meta];
+  if (file.summary) parts.push(file.summary);
+  const conn: string[] = [];
+  if (file.imports?.length) conn.push(`imports: ${file.imports.join(', ')}`);
+  if (file.exports?.length) conn.push(`exports: ${file.exports.join(', ')}`);
+  if (conn.length) parts.push(conn.join(' | '));
+  return parts.join('\n');
+}
+
+function outputToFluentText(output: FluentOutput): string {
+  if (output.grouped) {
+    return output.grouped.map(group => {
+      const techStr = group.technologies?.length ? ` | ${group.technologies.join(', ')}` : '';
+      const header = `<!-- ${group.folderPath}${techStr} -->`;
+      const files = group.files.map(f => fileEntryToFluent(f.fileName, f, false)).join('\n\n');
+      return `${header}\n${files}`;
+    }).join('\n\n');
+  }
+  return (output.results ?? []).map(item => fileEntryToFluent(item.path, item, true)).join('\n\n');
+}
 
 function createFlatOutput(items: ScoredFileSummary[]): unknown {
   return {
