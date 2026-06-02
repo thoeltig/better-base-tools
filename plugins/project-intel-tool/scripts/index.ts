@@ -515,17 +515,20 @@ server.registerTool(
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
-        output = {
-          total: limited.length,
-          grouped: Object.values(grouped)
-            .sort((a, b) => b.folderScore - a.folderScore)
-            .map(({ folderScore: _fs, ...rest }) => rest),
-        };
+        const groupValues = Object.values(grouped);
+        const fallbackToFlat = limited.length === 1 || groupValues.every(g => g.files.length === 1);
+        if (fallbackToFlat) {
+          output = createFlatOutput(limited);
+        } else {
+          output = {
+            total: limited.length,
+            grouped: groupValues
+              .sort((a, b) => b.folderScore - a.folderScore)
+              .map(({ folderScore: _fs, ...rest }) => rest),
+          };
+        }
       } else {
-        output = {
-          total: limited.length,
-          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => rest),
-        };
+        output = createFlatOutput(limited);
       }
 
       writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
@@ -557,6 +560,13 @@ server.registerTool(
     }
   }
 );
+
+function createFlatOutput(items: ScoredFileSummary[]): unknown {
+  return {
+    total: items.length,
+    results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => rest),
+  };
+}
 
 function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
   let score = 0;

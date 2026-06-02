@@ -7,7 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
-## [1.3.1] - 2026-06-02
+## [1.3.1] - 2026-06-03
+
+### Fixed
+
+- **`query` grouped format fallback** — falls back to flat when only one result is returned, or when every folder group contains exactly one file (grouping only activates when at least one group has more than one entry)
 
 ### Changed
 
