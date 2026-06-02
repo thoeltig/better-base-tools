@@ -425,8 +425,8 @@ if (!USE_MCP_SAMPLING) {
 server.registerTool(
   'query',
   {
-    title: 'Search project file summaries by keywords',
-    description: 'Search project file summaries by keywords. Searches primary knowledge and any sub-project knowledge. Returns ranked results. Deleted files are excluded.',
+    title: 'Query project files by path, structure, or semantics',
+    description: 'Search project files by keywords matched against: file path, exports, imports, refs, searchTags, technologies, role, and semantic summary. Available immediately on session start without scanning — structural data (imports, exports, refs, lines, chars) is always current; semantic fields are confidence-weighted by changeDelta (size ratio since last scan) so stale summaries rank lower automatically. Accepts file names, folder paths, and semantic terms as keywords. Use scope to narrow to a subdirectory, role to filter by file type.',
     inputSchema: z.object({
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),
@@ -436,7 +436,7 @@ server.registerTool(
 
     }).strict(),
     annotations: {
-      title: 'Search project file summaries by keywords',
+      title: 'Query project files by path, structure, or semantics',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
