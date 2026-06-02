@@ -6,6 +6,8 @@ export const SUMMARIES_FILE: string = 'summaries.json';
 export const SCAN_FILE: string = 'scan.json';
 export const FORMAT_FLAT: string = 'flat';
 export const FORMAT_GROUPED: string = 'grouped';
+export const ROLE_VALUES = ['implementation', 'executable', 'helperScript', 'test', 'configuration', 'build', 'documentation', 'data'] as const;
+export type FileRole = typeof ROLE_VALUES[number];
 export const QUERY_RESULT_MAX: number = 25;
 export const SAMPLING_DELAY_MS: number = 1500;
 export const SAMPLING_TOKEN_BUDGET: number = 50_000;
@@ -35,9 +37,9 @@ export interface SubKnowledgeRef {
 
 export interface FileSummary {
   summary?: string;
-  purpose?: string;
-  role?: string;
+  role?: FileRole;
   technologies?: string[];
+  searchTags?: string[];
   exports?: string[];
   imports?: string[];
   refs?: string[];       // intra-project file references resolved from imports
@@ -66,9 +68,9 @@ export interface SummariesData {
 export interface SamplingFileSummary {
   path: string;
   summary?: string;
-  purpose?: string;
   role?: string;
   technologies?: string[];
+  searchTags?: string[];
   exports?: string[];
   imports?: string[];
   refs?: string[];

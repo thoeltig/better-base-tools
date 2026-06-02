@@ -289,7 +289,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   // Files arrays hold abs paths; convert to relative for buildFileMap and output
   const changedSet = new Set([...files.new, ...files.modified]);
   const unanalyzedAbs = [...summaries.files.entries()]
-    .filter(([absPath, v]) => !v.deleted && !v.summary && !v.purpose && fs.existsSync(absPath))
+    .filter(([absPath, v]) => !v.deleted && !v.summary && fs.existsSync(absPath))
     .map(([absPath]) => absPath);
   const unanalyzedFilesCount = unanalyzedAbs.filter(abs => !changedSet.has(abs)).length;
   const uniqueAbs = [...new Set([...files.new, ...files.modified, ...unanalyzedAbs])].filter(f => !isSummariesFile(f));
@@ -310,7 +310,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
       const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
       const existing = summaries.files.get(absPath) ?? {};
       const refs = fm.refs.filter(r => r !== summariesRelPath);
-      const wasAnalyzed = !!(existing.summary || existing.purpose);
+      const wasAnalyzed = !!existing.summary;
       const hasChanged = changedSet.has(absPath);
       const hasPriorMetrics = existing.sizeCharsWhenAnalysed !== undefined && existing.lineCountWhenAnalysed !== undefined;
       const shouldComputeDelta = wasAnalyzed && hasChanged && hasPriorMetrics;

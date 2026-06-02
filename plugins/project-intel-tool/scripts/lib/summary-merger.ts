@@ -2,7 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   FileSummary,
+  FileRole,
   KNOWLEDGE_DIRECTORY,
+  ROLE_VALUES,
   SamplingFileSummary,
   SUMMARIES_FILE,
   SummariesData,
@@ -75,13 +77,17 @@ export function mergeSamplingResults(knowledgeDir: string, results: SamplingFile
   const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
   for (const result of results) {
     const absPath = toAbsReal(projectRoot, result.path);
-    const existing = summaries.files.get(absPath) || {};
+    const { role: existingRole, ...existing } = summaries.files.get(absPath) || {};
+    const { role: rawRole, ...restResult } = result;
+    const validRole = ROLE_VALUES.includes(rawRole as FileRole) ? rawRole as FileRole : undefined;
     const entry: FileSummary = {
       ...existing,
-      ...result,
+      ...restResult,
       deleted: false,
       lastUpdated: new Date().toISOString()
     };
+
+    if(validRole) entry.role = validRole;
     
     const newSizeChars = result.sizeChars ?? existing.sizeChars;
     if(newSizeChars) entry.sizeCharsWhenAnalysed = newSizeChars;

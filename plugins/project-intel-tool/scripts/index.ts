@@ -23,6 +23,7 @@ import {
   SamplingFileSummary,
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
+  ROLE_VALUES,
   ScoredFileSummary,
   ToolContentResult,
 } from './types.js';
@@ -378,9 +379,9 @@ if (!USE_MCP_SAMPLING) {
         results: z.array(z.object({
           path: z.string(),
           summary: z.string().optional(),
-          purpose: z.string().optional(),
           role: z.string().optional(),
           technologies: z.array(z.string()).optional(),
+          searchTags: z.array(z.string()).optional(),
           exports: z.array(z.string()).optional(),
           imports: z.array(z.string()).optional(),
         })),
@@ -431,7 +432,7 @@ server.registerTool(
       scope: z.string().optional().describe('Limit results to files under this directory path'),
       max: z.number().optional().describe(`Max results (default: ${QUERY_RESULT_MAX})`),
       format: z.enum(['grouped', 'flat']).optional().describe('Output format: grouped (default) or flat'),
-      role: z.enum(['implementation', 'executable', 'helperScript', 'test', 'configuration', 'build', 'documentation', 'data']).optional().describe('Filter results to files with this role'),
+      role: z.enum(ROLE_VALUES).optional().describe('Filter results to files with this role'),
 
     }).strict(),
     annotations: {
@@ -510,7 +511,7 @@ server.registerTool(
             group.technologies = [...set];
           }
           const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, ...restFields } = item;
+          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...restFields } = item;
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
@@ -523,7 +524,7 @@ server.registerTool(
       } else {
         output = {
           total: limited.length,
-          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, ...rest }) => rest),
+          results: limited.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => rest),
         };
       }
 
@@ -561,15 +562,14 @@ function calculateConfidence(keywords: string[], itemPath: string, summary: any)
   let score = 0;
   const pathLower = itemPath.toLowerCase();
   const sumLower = (summary.summary || '').toLowerCase();
-  const purposeLower = (summary.purpose || '').toLowerCase();
   const baseline = summary.sizeCharsWhenAnalysed;
   const current = summary.sizeChars;
   const semanticWeight = (baseline && current)
     ? Math.min(baseline, current) / Math.max(baseline, current)
     : 1;
   keywords.forEach(k => {
-    if (purposeLower.includes(k)) score += 6 * semanticWeight;
     if (sumLower.includes(k)) score += 6 * semanticWeight;
+    if (summary.searchTags?.some((t: string) => t.toLowerCase().includes(k))) score += 3 * semanticWeight;
     if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
     if (summary.imports?.some((i: string) => i.toLowerCase().includes(k))) score += 4;
     if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;

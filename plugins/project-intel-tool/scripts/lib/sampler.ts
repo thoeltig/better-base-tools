@@ -10,6 +10,7 @@ import {
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
   BATCHES_DIRECTORY,
+  ROLE_VALUES,
 } from '../types.js';
 
 // Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
@@ -187,10 +188,10 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
   return `Analyze the following ${batch.files.length} file(s). Return a JSON array with one object per file:
 [{
   "path": "<exact file path from input>",
-  "summary": "<one sentence, max 150 chars>",
-  "purpose": "<three sentences: what it does, key technical details, how it connects to the rest of the codebase — max 450 chars>",
-  "role": "<implementation|executable|helperScript|test|configuration|build|documentation|data>",
-  "technologies": ["<2-5 key techs>"]
+  "summary": "<explain content, purpose and key information for understanding this file's role in the codebase — max 450 chars>",
+  "role": "<${ROLE_VALUES.join('|')}>",
+  "technologies": ["<2-5 key techs>"],
+  "searchTags": ["<additional search words not in summary, role, or technologies that help locate this file>"]
 }]
 ${contextSection}
 Files to analyze:
