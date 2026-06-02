@@ -257,19 +257,20 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   const { includes: includeAbsPaths, excludes: excludeAbsPaths } = resolveConfigPaths(
     scanConfig.includePaths, scanConfig.excludePaths, resolvedLocation
   );
+  const allExcludePaths = [...excludeAbsPaths, path.resolve(knowledgeDir)];
 
   if (isGitRepository()) {
-    files = getFilesFromGit(resolvedLocation, summaries, projectRoot, excludeAbsPaths);
+    files = getFilesFromGit(resolvedLocation, summaries, projectRoot, allExcludePaths);
     for (const inclPath of includeAbsPaths) {
       if (fs.existsSync(inclPath)) {
-        const inclFiles = getFilesFromFileSystem(inclPath, summaries, projectRoot, detectedSubKnowledge, excludeAbsPaths);
+        const inclFiles = getFilesFromFileSystem(inclPath, summaries, projectRoot, detectedSubKnowledge, allExcludePaths);
         files.new.push(...inclFiles.new);
         files.modified.push(...inclFiles.modified);
         files.deleted.push(...inclFiles.deleted);
       }
     }
   } else {
-    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge, excludeAbsPaths);
+    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge, allExcludePaths);
   }
 
   files.deleted = [...new Set(files.deleted)];

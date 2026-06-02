@@ -275,7 +275,14 @@ export async function runSamplingBackground(
 
 export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, projectRoot: string): string[] {
   const batchDir = path.join(knowledgeDir, BATCHES_DIRECTORY);
-  if (!fs.existsSync(batchDir)) fs.mkdirSync(batchDir, { recursive: true });
+  if (fs.existsSync(batchDir)) {
+    for (const f of fs.readdirSync(batchDir)) {
+      if (/^batch-\d+\.txt$/.test(f))
+        try { fs.unlinkSync(path.join(batchDir, f)); } catch {}
+    }
+  } else {
+    fs.mkdirSync(batchDir, { recursive: true });
+  }
   const noopLog: SamplerLog = () => {};
   return batches.map((batch, i) => {
     const fp = path.join(batchDir, `batch-${i}.txt`);
