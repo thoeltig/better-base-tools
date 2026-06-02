@@ -430,7 +430,9 @@ server.registerTool(
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),
       max: z.number().optional().describe(`Max results (default: ${QUERY_RESULT_MAX})`),
-      format: z.string().optional().describe('Output format: grouped (default) or flat'),
+      format: z.enum(['grouped', 'flat']).optional().describe('Output format: grouped (default) or flat'),
+      role: z.enum(['implementation', 'executable', 'helperScript', 'test', 'configuration', 'build', 'documentation', 'data']).optional().describe('Filter results to files with this role'),
+
     }).strict(),
     annotations: {
       title: 'Search project file summaries by keywords',
@@ -469,6 +471,7 @@ server.registerTool(
           const relPath = path.relative(summaryProjectRoot, absPath).replace(/\\/g, '/');
           const prefixedPath = pathPrefix ? `${pathPrefix}/${relPath}`.replace(/\/\//g, '/') : relPath;
           if (scope && !prefixedPath.startsWith(scope)) return;
+          if (args.role && summary.role !== args.role) return;
           const score = calculateConfidence(keywords, prefixedPath, summary);
           if (score > 0) {
             const { lastUpdated: _ld, ...summaryRest } = summary;

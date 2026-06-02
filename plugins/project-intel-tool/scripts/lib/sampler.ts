@@ -189,7 +189,7 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
   "path": "<exact file path from input>",
   "summary": "<one sentence, max 150 chars>",
   "purpose": "<three sentences: what it does, key technical details, how it connects to the rest of the codebase — max 450 chars>",
-  "role": "<implementation|documentation|configuration|test|build|script>",
+  "role": "<implementation|executable|helperScript|test|configuration|build|documentation|data>",
   "technologies": ["<2-5 key techs>"]
 }]
 ${contextSection}
