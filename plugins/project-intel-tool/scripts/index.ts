@@ -34,7 +34,7 @@ import {
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.4.0' },
+    version: '1.4.1' },
   { 
     capabilities: { 
       tools: {}, 
