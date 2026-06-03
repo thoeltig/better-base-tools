@@ -57,7 +57,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.2.2",
+    version: "1.2.3",
   },
   {
     capabilities: {
@@ -337,7 +337,7 @@ async function shutdown(source: string): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error shutting down batch-tools-mcp-server via ${source}: ${message}`);
   }
-  
+
   process.exit(0);
 }
 

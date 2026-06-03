@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-06-04
+
+### Added
+
+- **Process shutdown handling** — `isShuttingDown` guard prevents double cleanup on concurrent signals; `stdin:end` and `stdin:close` handlers alongside `SIGTERM`/`SIGINT` ensure reliable termination on Windows and on MCP client crash; server close wrapped in try/catch with error logging
+
 ## [1.2.2] - 2026-06-03
 
 ### Added
@@ -274,7 +280,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...HEAD
+[1.2.3]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...BatchFileTools_v1.2.3
 [1.2.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.1...BatchFileTools_v1.2.2
 [1.2.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.0...BatchFileTools_v1.2.1
 [1.2.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.7...BatchFileTools_v1.2.0
