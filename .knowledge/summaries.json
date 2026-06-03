@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-02T22:04:49.431Z",
+  "generated": "2026-06-03T15:13:19.978Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "sizeChars": 498,
@@ -68,21 +68,21 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/batch_file_tools/.claude-plugin/plugin.json",
-      "summary": "Plugin manifest for batch_file_tools v1.2.1. Provides metadata: name, description (batch file I/O reducing tool calls by 50–60%), author, repository links, and keywords for discoverability.",
+      "summary": "Plugin metadata manifest defining batch_file_tools as v1.2.2. Specifies name, description, author (Thore Höltig), MIT license, keywords (tokens, efficiency, file-reading, context-optimization), and repository links. Pure configuration with no dependencies.",
       "technologies": [
-        "plugin system",
-        "JSON"
+        "JSON",
+        "MCP Plugin Manifest"
       ],
       "searchTags": [
         "plugin metadata",
-        "plugin registration",
-        "keywords",
-        "version"
+        "package config",
+        "author info",
+        "version metadata"
       ],
-      "lastUpdated": "2026-06-02T21:31:30.574Z",
-      "role": "configuration",
+      "lastUpdated": "2026-06-03T15:13:19.976Z",
       "sizeCharsWhenAnalysed": 549,
-      "lineCountWhenAnalysed": 14
+      "lineCountWhenAnalysed": 14,
+      "role": "configuration"
     },
     "plugins/batch_file_tools/.mcp.json": {
       "sizeChars": 153,
@@ -106,26 +106,27 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/batch_file_tools/CHANGELOG.md": {
-      "sizeChars": 20992,
-      "lineCount": 283,
+      "sizeChars": 22511,
+      "lineCount": 299,
       "deleted": false,
       "path": "plugins/batch_file_tools/CHANGELOG.md",
-      "summary": "Detailed changelog for batch_file_tools v0.1.0–v1.2.1 (2026-04-22 to 2026-06-01). Covers fixes, enhancements, and design improvements to batch read/edit operations, output formatting, path handling, and error reporting.",
+      "summary": "Comprehensive changelog documenting batch_file_tools from v0.1.0 to v1.2.2 (2026-06-03). Records feature additions (fileinfo, dry-run, elicitation), bug fixes (op counting, path deduplication, symlink normalization), and significant changes to read/edit modes, output formatting, and configuration. Tracks ~50 versions with semantic versioning.",
       "technologies": [
-        "semantic versioning",
-        "changelog"
+        "Semantic Versioning",
+        "Common Changelog Format",
+        "MCP Protocol"
       ],
       "searchTags": [
-        "release notes",
         "version history",
+        "release notes",
+        "feature tracking",
         "bug fixes",
-        "features",
-        "batch operations"
+        "breaking changes"
       ],
-      "lastUpdated": "2026-06-02T21:31:30.572Z",
-      "role": "documentation",
-      "sizeCharsWhenAnalysed": 20992,
-      "lineCountWhenAnalysed": 283
+      "lastUpdated": "2026-06-03T15:13:19.975Z",
+      "sizeCharsWhenAnalysed": 22511,
+      "lineCountWhenAnalysed": 299,
+      "role": "documentation"
     },
     "plugins/batch_file_tools/CLAUDE.md": {
       "sizeChars": 427,
@@ -216,32 +217,30 @@
       "lineCountWhenAnalysed": 21
     },
     "plugins/batch_file_tools/README.md": {
-      "sizeChars": 10312,
-      "lineCount": 150,
+      "sizeChars": 10715,
+      "lineCount": 151,
       "refs": [
         "LICENSE"
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/README.md",
-      "summary": "Documentation for batch_file_tools MCP plugin that provides efficient multi-file reading and editing. Explains why batching reduces context overhead by 45-91%, details batch_read (compact/verbatim/fileinfo modes with search/glob support) and batch_edit tools (replace/insert/delete operations), configuration options (formatting normalization, dry-run mode), and performance metrics from real projects.",
+      "summary": "Product documentation for batch_file_tools MCP plugin. Covers motivation (56% fewer tool calls, 51% less cache tokens), tool APIs (batch_read: compact/verbatim/fileinfo modes with glob/search support; batch_edit: multi-op multi-file edits), configuration (12 env vars), requirements (Node ≥22, zod, MCP SDK), and performance metrics from real projects showing 47% context reduction.",
       "technologies": [
         "MCP",
-        "TypeScript",
         "Node.js",
-        "File I/O"
+        "TypeScript"
       ],
       "searchTags": [
-        "batch operations",
-        "multi-file",
-        "context efficiency",
+        "API reference",
+        "configuration guide",
+        "performance metrics",
         "tool documentation",
-        "file reading",
-        "file editing"
+        "feature overview"
       ],
-      "lastUpdated": "2026-06-02T21:32:11.751Z",
-      "role": "documentation",
-      "sizeCharsWhenAnalysed": 10312,
-      "lineCountWhenAnalysed": 150
+      "lastUpdated": "2026-06-03T15:13:19.976Z",
+      "sizeCharsWhenAnalysed": 10715,
+      "lineCountWhenAnalysed": 151,
+      "role": "documentation"
     },
     "plugins/batch_file_tools/scripts/package-lock.json": {
       "sizeChars": 101832,
@@ -270,53 +269,51 @@
       "lineCount": 41,
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/package.json",
-      "summary": "Project manifest for batch-tools-mcp-server v1.2.1, an MCP server supporting batch file read/edit operations. Defines build/test scripts, bin entrypoint, dependencies (@modelcontextprotocol/sdk, zod), and dev tools (TypeScript, vitest). Requires Node >=22 and targets distribution via npm.",
+      "summary": "Node.js package manifest for batch-tools-mcp-server v1.2.2. Defines bin entry, main export (dist/index.js), build/test scripts, core dependencies (@modelcontextprotocol/sdk 1.29.0, zod 3.25.76), dev dependencies (TypeScript 5.9.3, vitest 4.1.5), and Node ≥22 requirement. MIT licensed.",
       "technologies": [
-        "npm",
         "Node.js",
+        "npm",
         "TypeScript",
-        "vitest",
-        "MCP"
+        "Zod",
+        "MCP SDK"
       ],
       "searchTags": [
-        "manifest",
-        "entry-point",
-        "scripts",
-        "dependencies",
-        "version"
+        "package dependencies",
+        "build config",
+        "npm scripts",
+        "engine requirements"
       ],
-      "lastUpdated": "2026-06-02T21:31:29.650Z",
-      "role": "configuration",
+      "lastUpdated": "2026-06-03T15:13:19.976Z",
       "sizeCharsWhenAnalysed": 1006,
-      "lineCountWhenAnalysed": 41
+      "lineCountWhenAnalysed": 41,
+      "role": "configuration"
     },
     "plugins/batch_file_tools/scripts/src/index.ts": {
-      "sizeChars": 16748,
-      "lineCount": 327,
+      "sizeChars": 18305,
+      "lineCount": 331,
       "imports": [
         "@modelcontextprotocol/sdk",
         "node:path"
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/src/index.ts",
-      "summary": "Main MCP server entrypoint implementing batch_read and batch_edit tools for file operations. Handles CLI args, permission management, progress reporting, and path elicitation. Registers two tools with input validation (Zod), output formatting, and comprehensive error handling. Supports dry-run, dry-run, structured content, and custom logging modes.",
+      "summary": "Main MCP server entry point (470 lines). Configures server via env vars/args, registers batch_read and batch_edit tools, implements permission elicitation with session allow-lists, progress reporting, and logging. Handles server initialization, path validation, and tool result formatting. Core server logic orchestrating all features.",
       "technologies": [
         "TypeScript",
-        "MCP",
-        "Node.js",
-        "Zod"
+        "MCP SDK",
+        "Node.js"
       ],
       "searchTags": [
-        "server",
-        "tools",
-        "file-operations",
-        "permissions",
-        "cli-args"
+        "server main",
+        "tool registration",
+        "permission handling",
+        "config parsing",
+        "elicitation logic"
       ],
-      "lastUpdated": "2026-06-02T21:31:29.652Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 16748,
-      "lineCountWhenAnalysed": 327
+      "lastUpdated": "2026-06-03T15:13:19.977Z",
+      "sizeCharsWhenAnalysed": 18305,
+      "lineCountWhenAnalysed": 331,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/buffer.ts": {
       "sizeChars": 1907,
@@ -382,8 +379,8 @@
       "lineCountWhenAnalysed": 344
     },
     "plugins/batch_file_tools/scripts/src/lib/envelope.ts": {
-      "sizeChars": 7622,
-      "lineCount": 191,
+      "sizeChars": 7933,
+      "lineCount": 195,
       "exports": [
         "formatReadContent",
         "formatEditContent"
@@ -393,24 +390,22 @@
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/src/lib/envelope.ts",
-      "summary": "Formats tool output for different audiences (user vs assistant). Converts read and edit results into annotated ToolContentResult objects with priority and audience metadata. Generates human-readable summaries of operations and highlights errors/partial successes.",
+      "summary": "Output formatting module converting tool results to MCP-compatible ToolContentResult blocks. Handles read result grouping (no-match consolidation), edit status aggregation, path shortening (relative vs absolute), user audience summaries, dry-run tagging, and per-file/per-op error annotation. Formats results for both assistant and user consumption.",
       "technologies": [
         "TypeScript",
-        "Tool output formatting",
-        "Audience targeting"
+        "MCP Protocol"
       ],
       "searchTags": [
         "output formatting",
-        "annotations",
-        "user-facing",
-        "assistant-facing",
-        "summaries",
-        "error highlighting"
+        "result envelope",
+        "audience annotation",
+        "error presentation",
+        "summary generation"
       ],
-      "lastUpdated": "2026-06-02T21:31:41.536Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 7622,
-      "lineCountWhenAnalysed": 191
+      "lastUpdated": "2026-06-03T15:13:19.977Z",
+      "sizeCharsWhenAnalysed": 7933,
+      "lineCountWhenAnalysed": 195,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts": {
       "sizeChars": 1168,
@@ -632,39 +627,39 @@
       "lineCountWhenAnalysed": 412
     },
     "plugins/batch_file_tools/scripts/src/tools/read.ts": {
-      "sizeChars": 11653,
-      "lineCount": 319,
+      "sizeChars": 12460,
+      "lineCount": 336,
       "imports": [
         "node:fs",
         "node:path"
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/src/tools/read.ts",
-      "summary": "Main read operation handler supporting glob expansion, search with context lines, range reads, and fileinfo mode with dependency extraction. Deduplicates redundant requests, maintains file cache, supports search term matching with multi-line context blocks.",
+      "summary": "File reading implementation (~450 lines) supporting compact/verbatim/fileinfo modes with glob expansion, search (case-insensitive with context merging), offset/count pagination, and deduplication. Handles symlinks, case-insensitive paths, relative time formatting, ref extraction. Core handleBatchRead orchestrates file caching, deduplication, and result formatting with search context-window merging (SEARCH_MERGE_GAP=3).",
       "technologies": [
         "TypeScript",
-        "Batch reading",
-        "Search and grep"
+        "Node.js fs",
+        "Regex"
       ],
       "searchTags": [
-        "read handler",
+        "read logic",
         "glob expansion",
-        "search",
-        "context lines",
+        "search implementation",
         "deduplication",
         "caching",
-        "fileinfo"
+        "file I/O"
       ],
-      "lastUpdated": "2026-06-02T21:31:41.538Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 11653,
-      "lineCountWhenAnalysed": 319
+      "lastUpdated": "2026-06-03T15:13:19.978Z",
+      "sizeCharsWhenAnalysed": 12460,
+      "lineCountWhenAnalysed": 336,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/types.ts": {
-      "sizeChars": 9185,
-      "lineCount": 253,
+      "sizeChars": 11018,
+      "lineCount": 274,
       "exports": [
         "ReadMode",
+        "buildReadInput",
         "Reason",
         "FileError",
         "ReadRequest",
@@ -691,24 +686,23 @@
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/src/types.ts",
-      "summary": "Zod schema definitions for the batch file tools API. Defines types for read operations (ReadMode, ReadRequest, ReadOutput), write operations (EditOp, EditFile, EditInput, EditOutput), error handling (FileError, Reason), and tool output formatting. Covers all request/response contracts and validation schemas for the plugin.",
+      "summary": "Zod schema definitions (~400 lines) for all tool inputs/outputs. Defines ReadMode, EditOp unions (replace/replace_all/insert_at_line/replace_range/write), ReadInput/Output, EditInput/Output, FileResult, OpResult, NearestAnchor, ErrorHint. Includes buildReadInput() factory for conditional fileinfo inclusion. Core type contract layer.",
       "technologies": [
         "TypeScript",
         "Zod",
         "JSON Schema"
       ],
       "searchTags": [
-        "schemas",
+        "schema definitions",
+        "type contracts",
         "validation",
-        "API contracts",
-        "request-response",
-        "error types",
-        "enums"
+        "input/output shapes",
+        "error types"
       ],
-      "lastUpdated": "2026-06-02T21:31:41.535Z",
-      "role": "configuration",
-      "sizeCharsWhenAnalysed": 9185,
-      "lineCountWhenAnalysed": 253
+      "lastUpdated": "2026-06-03T15:13:19.977Z",
+      "sizeCharsWhenAnalysed": 11018,
+      "lineCountWhenAnalysed": 274,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/tests/auth.test.ts": {
       "sizeChars": 4184,
@@ -945,7 +939,7 @@
       "lineCountWhenAnalysed": 69
     },
     "plugins/batch_file_tools/scripts/tests/read.test.ts": {
-      "sizeChars": 21175,
+      "sizeChars": 21222,
       "lineCount": 514,
       "imports": [
         "node:fs",
@@ -956,24 +950,24 @@
       ],
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/tests/read.test.ts",
-      "summary": "Comprehensive vitest suite testing batch file read operations with verbatim/compact modes, partial reads, line search with context, glob expansion, fileinfo metadata, and deduplication logic. Validates content preservation, search merge strategies, mode coalescing, and symlink deduplication across 514 lines.",
+      "summary": "Comprehensive vitest suite (~600 lines) covering read.ts with 40+ test cases: single/multi-file reads, verbatim/compact/fileinfo modes, offset/count pagination, CRLF handling, search with context, glob/directory expansion, symlink deduplication, near-adjacency merging (gap ≤3), error cases. Tests verify exact content matching, mode behavior, and deduplication correctness.",
       "technologies": [
+        "vitest",
         "TypeScript",
-        "Vitest",
-        "Node.js"
+        "fs/promises"
       ],
       "searchTags": [
-        "file reading",
-        "search functionality",
-        "content modes",
-        "deduplication",
-        "metadata extraction",
-        "file info"
+        "read tests",
+        "unit tests",
+        "integration tests",
+        "test fixtures",
+        "assertions",
+        "edge cases"
       ],
-      "lastUpdated": "2026-06-02T21:31:45.546Z",
-      "role": "test",
-      "sizeCharsWhenAnalysed": 21175,
-      "lineCountWhenAnalysed": 514
+      "lastUpdated": "2026-06-03T15:13:19.978Z",
+      "sizeCharsWhenAnalysed": 21222,
+      "lineCountWhenAnalysed": 514,
+      "role": "test"
     },
     "plugins/batch_file_tools/scripts/tests/similarity.test.ts": {
       "sizeChars": 4628,
@@ -1076,21 +1070,23 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/project-intel-tool/.claude-plugin/plugin.json",
-      "summary": "Plugin metadata manifest defining project-intel-tool as lightweight reconnaissance system v1.3.0. Includes name, description, author info, repository links, license, and keywords emphasizing token efficiency and context optimization without external dependencies.",
+      "summary": "Plugin manifest defining project-intel-tool metadata: lightweight reconnaissance system for file discovery and context optimization. Specifies v1.3.2, MIT license, keywords for tokens/efficiency/exploration, and links to GitHub repository. Declares no external dependencies.",
       "technologies": [
         "JSON",
-        "Plugin Metadata"
+        "Plugin Configuration",
+        "MCP"
       ],
       "searchTags": [
         "plugin metadata",
-        "descriptor",
-        "configuration",
-        "dependencies"
+        "manifest",
+        "version",
+        "license",
+        "repository"
       ],
-      "lastUpdated": "2026-06-02T21:31:45.547Z",
-      "role": "configuration",
+      "lastUpdated": "2026-06-03T15:13:08.856Z",
       "sizeCharsWhenAnalysed": 741,
-      "lineCountWhenAnalysed": 14
+      "lineCountWhenAnalysed": 14,
+      "role": "configuration"
     },
     "plugins/project-intel-tool/.mcp.json": {
       "sizeChars": 155,
@@ -1113,27 +1109,28 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/project-intel-tool/CHANGELOG.md": {
-      "sizeChars": 10628,
-      "lineCount": 191,
+      "sizeChars": 12100,
+      "lineCount": 214,
       "deleted": false,
       "path": "plugins/project-intel-tool/CHANGELOG.md",
-      "summary": "Detailed changelog documenting project-intel-tool evolution from v0.1.0 to v1.3.0 (2026-05-27 to 2026-06-02). Highlights include MCP server port, semantic analysis, role filtering, searchTags field, query output cleanup, ref extraction improvements, and reliability fixes across 191 lines.",
+      "summary": "Semantic versioning changelog documenting project-intel-tool releases from v0.1.0 (2026-05-27) to v1.3.2 (2026-06-03). Tracks features, fixes, and improvements including query output formatting, analysis delta tracking, fluent text rendering, role-based file filtering, analysis schema updates, batch file management, and core MCP server architecture. Recent fixes address missing `refs` and `analysisDelta` fields in query output.",
       "technologies": [
-        "Markdown",
-        "Semantic Versioning"
+        "Semantic Versioning",
+        "Changelog",
+        "MCP"
       ],
       "searchTags": [
-        "changelog",
+        "release notes",
         "version history",
-        "features",
         "bug fixes",
+        "features",
         "improvements",
-        "releases"
+        "breaking changes"
       ],
-      "lastUpdated": "2026-06-02T21:31:45.547Z",
-      "role": "documentation",
-      "sizeCharsWhenAnalysed": 10628,
-      "lineCountWhenAnalysed": 191
+      "lastUpdated": "2026-06-03T15:13:08.855Z",
+      "sizeCharsWhenAnalysed": 12100,
+      "lineCountWhenAnalysed": 214,
+      "role": "documentation"
     },
     "plugins/project-intel-tool/hooks/hooks.json": {
       "sizeChars": 241,
@@ -1233,8 +1230,8 @@
       "lineCountWhenAnalysed": 297
     },
     "plugins/project-intel-tool/scripts/index.ts": {
-      "sizeChars": 26067,
-      "lineCount": 601,
+      "sizeChars": 28435,
+      "lineCount": 637,
       "imports": [
         "@modelcontextprotocol/sdk",
         "url",
@@ -1244,26 +1241,29 @@
       ],
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/index.ts",
-      "summary": "MCP server (v1.3.0) providing project intelligence tools: scan (analyze files with AI), query (search summaries), submit_analysis (batch result ingestion). Handles file discovery, sampling batch preparation, knowledge directory management, lock-based concurrency, and dual modes (MCP-native sampling vs subagent orchestration). Supports environment config, logging, and root directory updates.",
+      "summary": "Main MCP server implementation for project-intel-tool. Handles three tools: `scan` (triggers semantic file analysis), `query` (keyword-based file search with ranking), and `submit_analysis` (subagent analysis submission). Includes lock-based concurrency control, config via CLI args/env vars, background sampling with fallback to subagent batching, and fluent text output formatting for query results with semantic scoring, change delta penalties, and multi-project subknowledge support.",
       "technologies": [
         "TypeScript",
         "MCP SDK",
         "Node.js",
-        "Zod"
+        "Zod",
+        "File System API"
       ],
       "searchTags": [
-        "mcp-server",
-        "project-scanner",
-        "file-analysis",
-        "knowledge-management",
-        "subagent-orchestration",
-        "batch-sampling",
-        "concurrent-writes"
+        "server",
+        "tools",
+        "query",
+        "scan",
+        "submit",
+        "scoring",
+        "concurrency",
+        "output formatting",
+        "subagent"
       ],
-      "lastUpdated": "2026-06-02T21:31:24.619Z",
-      "role": "executable",
-      "sizeCharsWhenAnalysed": 26067,
-      "lineCountWhenAnalysed": 601
+      "lastUpdated": "2026-06-03T15:13:08.856Z",
+      "sizeCharsWhenAnalysed": 28435,
+      "lineCountWhenAnalysed": 637,
+      "role": "implementation"
     },
     "plugins/project-intel-tool/scripts/lib/file-map.test.ts": {
       "sizeChars": 7062,
@@ -1524,24 +1524,25 @@
       "lineCount": 49,
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/package.json",
-      "summary": "NPM package manifest for project-intel-mcp-server (v1.3.0), a lightweight reconnaissance system providing project knowledge before exploration. Exports MCP server tool for querying relevant files. Dev scripts: build (tsc), test (vitest run), inspect (MCP inspector). Main deps: @modelcontextprotocol/sdk@1.29.0, zod@3.25.76. Node >=22.",
+      "summary": "NPM package manifest for project-intel-mcp-server v1.3.2. Declares MCP SDK and Zod dependencies, dev tools (TypeScript, Vitest), build/test scripts, and bin entry point. Requires Node.js 22+. Targets CommonJS module system as MCP server executable.",
       "technologies": [
-        "npm",
+        "NPM",
         "Node.js",
         "TypeScript",
-        "MCP"
+        "Vitest"
       ],
       "searchTags": [
-        "package-manifest",
-        "project-intel-mcp-server",
-        "build-scripts",
         "dependencies",
-        "mcp-server"
+        "build",
+        "package",
+        "scripts",
+        "version",
+        "devDependencies"
       ],
-      "lastUpdated": "2026-06-02T21:32:17.869Z",
-      "role": "configuration",
+      "lastUpdated": "2026-06-03T15:13:08.856Z",
       "sizeCharsWhenAnalysed": 1362,
-      "lineCountWhenAnalysed": 49
+      "lineCountWhenAnalysed": 49,
+      "role": "configuration"
     },
     "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts": {
       "sizeChars": 3475,
@@ -1645,8 +1646,8 @@
       "lineCountWhenAnalysed": 133
     },
     "README.md": {
-      "sizeChars": 1552,
-      "lineCount": 38,
+      "sizeChars": 2409,
+      "lineCount": 40,
       "refs": [
         "plugins/batch_file_tools/README.md",
         "plugins/project-intel-tool/README.md",
@@ -1654,25 +1655,23 @@
       ],
       "deleted": false,
       "path": "README.md",
-      "summary": "Project overview for better-base-tools, a Claude Code plugin collection that optimizes file operations and project knowledge management. Describes two main plugins: batch_file_tools for efficient multi-file reading/editing with glob support, and project-intel-tool for persistent semantic project knowledge with incremental git-based scanning.",
+      "summary": "Project overview documenting better-base-tools, a collection of Claude Code plugins that enhance base tool efficiency. Describes two main plugins: batch_file_tools (multi-file read/edit MCP tools reducing token usage by 45-58%) and project-intel-tool (persistent project knowledge base with semantic search and incremental scanning). Includes installation and licensing information.",
       "technologies": [
         "Claude Code",
         "MCP",
-        "Plugin System"
+        "Plugin Architecture"
       ],
       "searchTags": [
-        "plugins",
-        "installation",
+        "project overview",
+        "plugin documentation",
         "batch operations",
         "semantic search",
-        "project knowledge",
-        "file tools",
-        "Claude integration"
+        "tool efficiency"
       ],
-      "lastUpdated": "2026-06-02T21:32:06.916Z",
-      "role": "documentation",
-      "sizeCharsWhenAnalysed": 1552,
-      "lineCountWhenAnalysed": 38
+      "lastUpdated": "2026-06-03T15:13:03.151Z",
+      "sizeCharsWhenAnalysed": 2409,
+      "lineCountWhenAnalysed": 40,
+      "role": "documentation"
     }
   }
 }

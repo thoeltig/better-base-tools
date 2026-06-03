@@ -5,6 +5,8 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [Unreleased]
+
 ## [1.2.2] - 2026-06-03
 
 ### Added
@@ -272,24 +274,26 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[1.2.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.2.1
-[1.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.2.0
-[1.1.7]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.7
-[1.1.6]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.6
-[1.1.5]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.5
-[1.1.4]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.4
-[1.1.3]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.3
-[1.1.2]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.2
-[1.1.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.1
-[1.1.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.1.0
-[1.0.1]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.0.1
-[1.0.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v1.0.0
-[0.9.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.9.0
-[0.8.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.8.0
-[0.7.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.7.0
-[0.6.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.6.0
-[0.5.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.5.0
-[0.4.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.4.0
-[0.3.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.3.0
-[0.2.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.2.0
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...HEAD
+[1.2.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.1...BatchFileTools_v1.2.2
+[1.2.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.0...BatchFileTools_v1.2.1
+[1.2.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.7...BatchFileTools_v1.2.0
+[1.1.7]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.6...BatchFileTools_v1.1.7
+[1.1.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.5...BatchFileTools_v1.1.6
+[1.1.5]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.4...BatchFileTools_v1.1.5
+[1.1.4]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.3...BatchFileTools_v1.1.4
+[1.1.3]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.2...BatchFileTools_v1.1.3
+[1.1.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.1...BatchFileTools_v1.1.2
+[1.1.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.1.0...BatchFileTools_v1.1.1
+[1.1.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.0.1...BatchFileTools_v1.1.0
+[1.0.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.0.0...BatchFileTools_v1.0.1
+[1.0.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.9.0...BatchFileTools_v1.0.0
+[0.9.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.8.0...BatchFileTools_v0.9.0
+[0.8.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.7.0...BatchFileTools_v0.8.0
+[0.7.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.6.0...BatchFileTools_v0.7.0
+[0.6.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.5.0...BatchFileTools_v0.6.0
+[0.5.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.4.0...BatchFileTools_v0.5.0
+[0.4.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.3.0...BatchFileTools_v0.4.0
+[0.3.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.2.0...BatchFileTools_v0.3.0
+[0.2.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v0.1.0...BatchFileTools_v0.2.0
 [0.1.0]: https://github.com/thoeltig/better-base-tools/releases/tag/BatchFileTools_v0.1.0

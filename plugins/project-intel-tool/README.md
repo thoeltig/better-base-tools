@@ -81,7 +81,18 @@ Queries on package names, function names, file names, and import/export identifi
 
 The `grouped` format organizes results by directory, making it a good choice for understanding subsystems and architecture. Each directory group includes a deduplicated `technologies` list aggregated from all files in that group. The `flat` format returns a single ranked list sorted by relevance score, making it better suited for broad searches across unrelated parts of the project.
 
-Each result includes `sizeChars` and `lineCount`, which the model uses to decide how to read the file (full read, line-range slice, or targeted search) without opening it first. When a file has changed since its last semantic analysis, results also include `analysisDelta` (e.g. `+12 lines +340 chars`) as an inline freshness indicator.
+Each result includes `sizeChars` and `lineCount`, which the model uses to decide how to read the file (full read, line-range slice, or targeted search) without opening it first. When a file has changed since its last semantic analysis, results also include an `unanalysed:` line (e.g. `unanalysed: +12 lines +340 chars`) as a freshness indicator.
+
+**Output format example:**
+```
+<!-- src/auth/index.ts (Lines: 142, Chars: 4820) [implementation] | TypeScript, JWT, bcrypt -->
+Main authentication module entry point...
+unanalysed: +12 lines +340 chars
+imports: jwt, bcrypt, express
+exports: authenticate, logout, middleware
+referenced: src/auth/session.ts, src/auth/token.ts
+```
+Each connectivity field (`imports`, `exports`, `referenced`, `unanalysed`) is rendered on its own line and omitted when empty.
 
 ### `scan`
 
