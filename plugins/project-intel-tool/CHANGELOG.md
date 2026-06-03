@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-06-03
+
+### Fixed
+
+- **`query` fluent output missing `refs` field** — `FluentFile` type now includes `refs`; intra-project file references render as `referenced: ...` on a dedicated line below the summary
+- **`query` fluent output missing `analysisDelta`** — files with unanalysed changes now show `unanalysed: +N lines +N chars` below the summary, signalling that the semantic summary may be stale
+
+### Changed
+
+- **`query` fluent output connectivity fields** — `imports:` and `exports:` now each render on their own line instead of being joined with ` | `; consistent with `referenced:` line format
+
 ## [1.3.1] - 2026-06-03
 
 ### Fixed
@@ -188,8 +199,9 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.1...HEAD
-[1.3.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...ProjectIntelTools_v1.3.1
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...HEAD
+[1.3.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.1...ProjectIntelTools_v1.3.2
+[1.3.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...ProjectIntelTools_v1.3.1
 [1.3.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.2.0...ProjectIntelTools_v1.3.0
 [1.2.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.1.0...ProjectIntelTools_v1.2.0
 [1.1.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...ProjectIntelTools_v1.1.0
