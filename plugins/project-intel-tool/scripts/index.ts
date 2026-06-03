@@ -561,7 +561,7 @@ server.registerTool(
   }
 );
 
-type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summary?: string; imports?: string[]; exports?: string[]; technologies?: string[] };
+type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summary?: string; analysisDelta?: string; imports?: string[]; exports?: string[]; refs?: string[]; technologies?: string[] };
 type FluentGroup = { folderPath: string; technologies?: string[]; files: (FluentFile & { fileName: string })[] };
 type FluentOutput = { grouped?: FluentGroup[]; results?: (FluentFile & { path: string })[] };
 
@@ -570,10 +570,10 @@ function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean)
   const meta = `<!-- ${name}${file.lineCount !== undefined ? ` (Lines: ${file.lineCount}, Chars: ${file.sizeChars})` : ''}${file.role ? ` [${file.role}]` : ''}${techStr} -->`;
   const parts: string[] = [meta];
   if (file.summary) parts.push(file.summary);
-  const conn: string[] = [];
-  if (file.imports?.length) conn.push(`imports: ${file.imports.join(', ')}`);
-  if (file.exports?.length) conn.push(`exports: ${file.exports.join(', ')}`);
-  if (conn.length) parts.push(conn.join(' | '));
+  if (file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
+  if (file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
+  if (file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
+  if (file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
   return parts.join('\n');
 }
 
