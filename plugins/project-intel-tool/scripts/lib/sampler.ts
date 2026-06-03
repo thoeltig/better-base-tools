@@ -215,6 +215,7 @@ function parseResponse(text: string): SamplingFileSummary[] {
 }
 
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
+export type SamplerProgress = (done: number, total: number, message: string) => Promise<void> | void;
 
 export async function runSampling(
   batches: SamplingBatch[],
@@ -223,6 +224,7 @@ export async function runSampling(
   projectRoot: string,
   signal: AbortSignal,
   log: SamplerLog = () => {},
+  onProgress?: SamplerProgress,
   delayMs: number = SAMPLING_DELAY_MS
 ): Promise<void> {
   log('info', `Starting: ${batches.length} batch(es)`);
@@ -263,6 +265,8 @@ export async function runSampling(
     } catch (err) {
       log('error', `Batch ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+
+    await onProgress?.(i + 1, batches.length, `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s)`);
 
     if (i < batches.length - 1) {
       await new Promise<void>(resolve => {

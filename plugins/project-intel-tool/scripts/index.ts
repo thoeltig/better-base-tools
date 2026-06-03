@@ -2,7 +2,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { RootsListChangedNotificationSchema, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { LoggingLevel } from '@modelcontextprotocol/sdk/types.js';
+import type { LoggingLevel, ServerRequest, ServerNotification } from '@modelcontextprotocol/sdk/types.js';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import * as fs from 'fs';
@@ -10,7 +11,7 @@ import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries, mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
-import { buildSamplingBatches, runSampling, writeBatchFiles, SamplingServer } from './lib/sampler.js';
+import { buildSamplingBatches, runSampling, writeBatchFiles, SamplingServer, SamplerProgress } from './lib/sampler.js';
 import {
   ENV_INCLUDE_PATHS,
   ENV_EXCLUDE_PATHS,
@@ -55,6 +56,7 @@ let isScanning = false;
 // Enable only when the harness is known to support the respective MCP capability.
 const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
+const USE_MCP_PROGRESS = parseConfigArg('mcp-progress', 'PROJECT_INTEL_TOOL_MCP_PROGRESS', 'false') === 'true';
 const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const SCAN_META = parseConfigArgRecord('scan-meta', 'PROJECT_INTEL_TOOL_SCAN_META');
@@ -186,6 +188,22 @@ function samplerLog(level: 'info' | 'warning' | 'error', msg: string): void {
   writeMcpLogLine(level, msg, 'sampler');
 }
 
+async function reportProgress(
+  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  progress: number,
+  total: number,
+  message?: string
+): Promise<void> {
+  const token = extra._meta?.progressToken;
+  if (token === undefined) return;
+  try {
+    await extra.sendNotification({
+      method: 'notifications/progress',
+      params: { progressToken: token, progress, total, message },
+    });
+  } catch { /* ignore if client doesn't support progress */ }
+}
+
 function prepareAnalysisBatches(
   filesToScan: string[],
   knowledgeDir: string,
@@ -206,6 +224,7 @@ async function runFullScan(
   filesToScan: string[],
   knowledgeDir: string,
   projectRoot: string,
+  onProgress?: SamplerProgress,
 ): Promise<{ filesScanned: number; batchCount: number }> {
   try {
     const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
@@ -215,7 +234,8 @@ async function runFullScan(
       knowledgeDir,
       projectRoot,
       shutdownController.signal,
-      samplerLog
+      samplerLog,
+      onProgress
     );
     return { filesScanned: filesToScan.length, batchCount: batches.length };
   } finally {
@@ -290,7 +310,7 @@ server.registerTool(
     },
     _meta: SCAN_META,
   },
-  async (args) => {
+  async (args, extra) => {
     writeMcpLogLine('info', `scan — called${args.scanLocation ? ` (scope: ${args.scanLocation})` : ''}`, 'scan');
     if (isScanning) {
       return createOutputMessage('A scan is already in progress.');
@@ -322,7 +342,10 @@ server.registerTool(
           return createOutputMessage('A scan is already in progress for this project.');
         }
         isScanning = true;
-        const { filesScanned, batchCount } = await runFullScan(filesToScan, knowledgeDir, projectRoot);
+        const onProgress = USE_MCP_PROGRESS
+          ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg)
+          : undefined;
+        const { filesScanned, batchCount } = await runFullScan(filesToScan, knowledgeDir, projectRoot, onProgress);
         writeMcpLogLine('info', `scan complete — ${filesScanned} file(s) in ${batchCount} batch(es)`, 'scan');
         return createOutputMessage(`Scan complete. Analysed ${filesScanned} file(s) in ${batchCount} batch(es). Use query to search.`);
       }
