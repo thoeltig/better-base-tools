@@ -324,6 +324,28 @@ async function main(): Promise<void> {
   await server.connect(transport);
 }
 
+let isShuttingDown = false;
+
+async function shutdown(source: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  try {
+    console.error(`batch-tools-mcp-server: Shutdown via ${source}`);
+    await server.server.close(); 
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error shutting down batch-tools-mcp-server via ${source}: ${message}`);
+  }
+  
+  process.exit(0);
+}
+
+process.stdin.on('end', () => void shutdown('stdin:end'));
+process.stdin.on('close', () => void shutdown('stdin:close'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`batch-tools-mcp-server fatal: ${message}`);

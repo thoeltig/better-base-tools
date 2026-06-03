@@ -145,10 +145,29 @@ async function acquireSubmitLock(knowledgeDir: string, timeoutMs = 30_000, inter
   return false;
 }
 
-function shutdown(): void {
-  console.error('[server] Shutdown signal received, aborting background tasks');
-  shutdownController.abort();
-  releaseLock();
+let isShuttingDown = false;
+
+async function shutdown(source: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  try {
+    console.error(`project-intel-mcp-server: Release resources`);
+    shutdownController.abort();
+    releaseLock();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error releasing resources from project-intel-mcp-server: ${message}`);
+  }
+  
+  try {
+    console.error(`project-intel-mcp-server: Shutdown via ${source}`);
+    await server.server.close(); 
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error shutting down project-intel-mcp-server via ${source}: ${message}`);
+  }
+
   process.exit(0);
 }
 
@@ -169,8 +188,10 @@ function createOutputMessage(msg: string, isError?: boolean | undefined): {
   };
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.stdin.on('end', () => void shutdown('stdin:end'));
+process.stdin.on('close', () => void shutdown('stdin:close'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
