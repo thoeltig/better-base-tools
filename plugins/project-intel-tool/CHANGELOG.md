@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-04
+
+### Added
+
+- **`verbosity` parameter on `query`** — optional field controlling data density in results: `full` (default, current behaviour), `structure` (filepath/size/lines/role/analysisDelta/imports/exports/refs — no summary or technologies), `semantic` (filepath/role/technologies/summary/analysisDelta — no imports/exports/refs/lineCount/sizeChars)
+- **`PROJECT_INTEL_TOOL_MCP_PROGRESS` / `--mcp-progress`** — enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch; requires harness support for `notifications/progress` (default: `false`)
+
+### Changed
+
+- **`scan` is now blocking** — previously returned immediately while analysis ran in the background; now blocks until all batches are complete and returns `"Scan complete. Analysed N file(s) in M batch(es)."`. Gives the model an accurate signal that knowledge is ready to query and removes the need to race query calls against an incomplete scan.
+- **Improved process shutdown** — added `isShuttingDown` guard to prevent double cleanup on concurrent signals; added `stdin:end` and `stdin:close` handlers alongside `SIGTERM`/`SIGINT` for reliable termination on Windows and on MCP client crash; resource release and server close split into separate try/catch blocks with individual error logging
+
 ## [1.3.2] - 2026-06-03
 
 ### Fixed
@@ -199,7 +211,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...HEAD
+[1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...ProjectIntelTools_v1.4.0
 [1.3.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.1...ProjectIntelTools_v1.3.2
 [1.3.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...ProjectIntelTools_v1.3.1
 [1.3.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.2.0...ProjectIntelTools_v1.3.0

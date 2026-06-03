@@ -61,6 +61,7 @@ Searches the knowledge base by keywords and returns a ranked list of files and d
 | `max` | Maximum number of results | 25 |
 | `format` | `grouped` or `flat` | `grouped` |
 | `role` | Filter by file role: `implementation`, `executable`, `helperScript`, `test`, `configuration`, `build`, `documentation`, `data` | All roles |
+| `verbosity` | `full` (all fields), `structure` (size/lines/imports/exports/refs — no summary/technologies), `semantic` (summary/technologies/analysisDelta — no imports/exports/refs/lineCount/sizeChars) | `full` |
 
 **Semantic scoring:** each keyword is matched against multiple fields per file:
 
@@ -143,7 +144,7 @@ Each batch file contains the compact content of the files to analyse, the summar
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
-When MCP sampling is enabled, scan runs analysis entirely in the background via the MCP sampling protocol. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the initial return from scan and its context is not polluted by the analysis work.
+When MCP sampling is enabled, scan runs analysis via the MCP sampling protocol and blocks until complete. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the final result — `"Scan complete. Analysed N file(s) in M batch(es)."` — and its context is not polluted by the analysis work. When `PROJECT_INTEL_TOOL_MCP_PROGRESS=true`, one `notifications/progress` notification is sent per completed batch for harnesses that surface progress to the user.
 
 This mode requires the harness to support MCP sampling. The `submit_analysis` tool is **not** registered in this mode.
 
@@ -214,6 +215,7 @@ All settings are configurable as environment variables or CLI arguments (`--name
 |---|---|---|---|
 | `PROJECT_INTEL_TOOL_MCP_SAMPLING` | `--mcp-sampling` | Enable MCP sampling mode | `false` |
 | `PROJECT_INTEL_TOOL_MCP_LOGGING` | `--mcp-logging` | Enable MCP logging protocol (stderr fallback otherwise) | `false` |
+| `PROJECT_INTEL_TOOL_MCP_PROGRESS` | `--mcp-progress` | Enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch | `false` |
 | `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `50000` |
 | `PROJECT_INTEL_TOOL_MIN_BATCH_TOKENS` | `--min-batch-tokens` | Min batch size before layer-boundary flush | `3200` |
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
