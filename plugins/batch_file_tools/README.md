@@ -40,7 +40,7 @@ _¹ Documentation analysis project — content-only workload, pure native. ² An
 |---|---|---|
 | `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
 | `verbatim` | Normalized indentation | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
-| `fileinfo` | Metadata (size, lines, mtime, isFile) plus optional `refs[]` | Dependency mapping and pre-read sizing |
+| `fileinfo` | Fluent-text header `<!-- path (Lines: N, Size: N) lastChanged: Xd Yh -->` plus optional `referenced:` line | Dependency mapping and pre-read sizing — disabled by default, enable via `BATCH_TOOLS_READ_ENABLE_FILEINFO=true` |
 
 Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search. Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns context blocks — nearby windows are merged into one block, single-match blocks are annotated `<!-- Line M to N, match at line K -->`, merged multi-match blocks use `<!-- Line M to N -->` only. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
 
@@ -115,6 +115,7 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
 | `BATCH_TOOLS_NORMALIZE_FORMATTING` | `--normalize-formatting` | `true` | Normalize indentation on read (see [Formatting normalization](#formatting-normalization)). Disable when indentation is itself being edited. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
+| `BATCH_TOOLS_READ_ENABLE_FILEINFO` | `--read-enable-fileinfo` | `false` | Enable the `fileinfo` read mode. When disabled, `fileinfo` is absent from the schema and tool description entirely. Enable for workflows that need pre-read size checks or dependency mapping via `refs[]`. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 
 ## Requirements

@@ -5,6 +5,18 @@ Format: [Common Changelog](https://common-changelog.org)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 
+## [1.2.2] - 2026-06-03
+
+### Added
+
+- **`fileinfo` mode opt-in flag** — `fileinfo` is now disabled by default; enable via `BATCH_TOOLS_READ_ENABLE_FILEINFO=true` / `--read-enable-fileinfo=true`. When disabled the mode is absent from the schema enum and tool description entirely, so the model never sees it.
+
+### Changed
+
+- **`fileinfo` output format** — replaced JSON blob with fluent-text format matching project-intel-tool style: `<!-- path (Lines: N, Size: N) lastChanged: Xd Yh -->` header line followed by an optional `referenced: path1, path2` line when intra-project refs are present
+- **`fileinfo` `lastChanged` field** — replaces ISO `mtime` string with a human-readable relative duration (e.g. `3d 4h`, `2mo 5d`, `1y 2mo`); at most two units shown, zero-value units omitted, minimum `< 1min`
+- **`fileinfo` removed `isFile` field** — was always `true` since the mode only processes files
+
 ## [1.2.1] - 2026-06-01
 
 ### Fixed
