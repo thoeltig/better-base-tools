@@ -220,7 +220,12 @@ async function reportProgress(
   try {
     await extra.sendNotification({
       method: 'notifications/progress',
-      params: { progressToken: token, progress, total, message },
+      params: { 
+        progressToken: token,
+        progress,
+        total,
+        message
+      },
     });
   } catch { /* ignore if client doesn't support progress */ }
 }
@@ -422,7 +427,7 @@ if (!USE_MCP_SAMPLING) {
         results: z.array(z.object({
           path: z.string(),
           summary: z.string().optional(),
-          role: z.string().optional(),
+          role: z.enum(ROLE_VALUES).optional(),
           technologies: z.array(z.string()).optional(),
           searchTags: z.array(z.string()).optional(),
           exports: z.array(z.string()).optional(),
