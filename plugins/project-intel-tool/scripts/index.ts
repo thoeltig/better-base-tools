@@ -26,6 +26,8 @@ import {
   ROLE_VALUES,
   ScoredFileSummary,
   ToolContentResult,
+  VERBOSITY_VALUES,
+  VerbosityType,
 } from './types.js';
 
 const server = new McpServer(
@@ -430,10 +432,10 @@ server.registerTool(
     inputSchema: z.object({
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),
-      max: z.number().optional().describe(`Max results (default: ${QUERY_RESULT_MAX})`),
-      format: z.enum(['grouped', 'flat']).optional().describe('Output format: grouped (default) or flat'),
+      max: z.number().optional().default(QUERY_RESULT_MAX).describe(`Max results (default: ${QUERY_RESULT_MAX})`),
+      format: z.enum(['grouped', 'flat']).optional().default("grouped").describe('Output format: grouped (default) or flat'),
       role: z.enum(ROLE_VALUES).optional().describe('Filter results to files with this role'),
-
+      verbosity: z.enum(VERBOSITY_VALUES).optional().default("full").describe('Data density: full (default) = all fields; structure = filepath/size/lines/imports/exports/refs; semantic = filepath/role/summary/technologies'),
     }).strict(),
     annotations: {
       title: 'Query project files by path, structure, or semantics',
@@ -461,6 +463,7 @@ server.registerTool(
       const scope = args.scope;
       const maxResults = args.max || QUERY_RESULT_MAX;
       const format = args.format || FORMAT_GROUPED;
+      const verbosity: VerbosityType = args.verbosity ?? 'full';
 
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const primarySummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
@@ -518,7 +521,7 @@ server.registerTool(
         const groupValues = Object.values(grouped);
         const fallbackToFlat = limited.length === 1 || groupValues.every(g => g.files.length === 1);
         if (fallbackToFlat) {
-          output = createFlatOutput(limited);
+          output = createFlatOutput(limited, verbosity);
         } else {
           output = {
             total: limited.length,
@@ -528,14 +531,14 @@ server.registerTool(
           };
         }
       } else {
-        output = createFlatOutput(limited);
+        output = createFlatOutput(limited, verbosity);
       }
 
       writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
       const queryResult: CallToolResult = { 
         content: [{ 
           type: 'text', 
-          text: outputToFluentText(output as FluentOutput), 
+          text: outputToFluentText(output as FluentOutput, verbosity), 
           annotations: { 
             audience: ['assistant'], 
             priority: 0.3,
@@ -565,34 +568,46 @@ type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summa
 type FluentGroup = { folderPath: string; technologies?: string[]; files: (FluentFile & { fileName: string })[] };
 type FluentOutput = { grouped?: FluentGroup[]; results?: (FluentFile & { path: string })[] };
 
-function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean): string {
-  const techStr = includeTech && file.technologies?.length ? ` | ${file.technologies.join(', ')}` : '';
+function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean, verbosity: VerbosityType = 'full'): string {
+  const showTech = verbosity !== 'structure' && includeTech && (file.technologies?.length ?? 0) > 0;
+  const techStr = showTech ? ` | ${file.technologies!.join(', ')}` : '';
   const meta = `<!-- ${name}${file.lineCount !== undefined ? ` (Lines: ${file.lineCount}, Chars: ${file.sizeChars})` : ''}${file.role ? ` [${file.role}]` : ''}${techStr} -->`;
   const parts: string[] = [meta];
-  if (file.summary) parts.push(file.summary);
-  if (file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
-  if (file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
-  if (file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
-  if (file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
+  if (verbosity !== 'structure' && file.summary) parts.push(file.summary);
+  if (verbosity !== 'structure' && file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
+  if (verbosity !== 'semantic' && file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
+  if (verbosity !== 'semantic' && file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
+  if (verbosity !== 'semantic' && file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
   return parts.join('\n');
 }
 
-function outputToFluentText(output: FluentOutput): string {
+function outputToFluentText(output: FluentOutput, verbosity: VerbosityType = 'full'): string {
   if (output.grouped) {
     return output.grouped.map(group => {
-      const techStr = group.technologies?.length ? ` | ${group.technologies.join(', ')}` : '';
+      const showTech = verbosity !== 'structure' && (group.technologies?.length ?? 0) > 0;
+      const techStr = showTech ? ` | ${group.technologies!.join(', ')}` : '';
       const header = `<!-- ${group.folderPath}${techStr} -->`;
-      const files = group.files.map(f => fileEntryToFluent(f.fileName, f, false)).join('\n\n');
+      const files = group.files.map(f => fileEntryToFluent(f.fileName, f, false, verbosity)).join('\n\n');
       return `${header}\n${files}`;
     }).join('\n\n');
   }
-  return (output.results ?? []).map(item => fileEntryToFluent(item.path, item, true)).join('\n\n');
+  return (output.results ?? []).map(item => fileEntryToFluent(item.path, item, true, verbosity)).join('\n\n');
 }
 
-function createFlatOutput(items: ScoredFileSummary[]): unknown {
+function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType = 'full'): unknown {
   return {
     total: items.length,
-    results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => rest),
+    results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => {
+      if (verbosity === 'structure') {
+        const { summary: _s, technologies: _t, analysisDelta: _a, ...structRest } = rest;
+        return structRest;
+      }
+      if (verbosity === 'semantic') {
+        const { imports: _i, exports: _e, refs: _r, lineCount: _lc, sizeChars: _sc, ...semanticRest } = rest;
+        return semanticRest;
+      }
+      return rest;
+    }),
   };
 }
 
