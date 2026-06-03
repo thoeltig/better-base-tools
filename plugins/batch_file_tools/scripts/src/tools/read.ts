@@ -9,6 +9,23 @@ import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason }
 
 const SEARCH_MERGE_GAP = 3;
 
+function formatRelativeTime(mtimeMs: number): string {
+  const totalMinutes = Math.floor((Date.now() - mtimeMs) / 60000);
+  if (totalMinutes < 1) return '< 1min';
+  const totalHours = Math.floor(totalMinutes / 60);
+  const totalDays = Math.floor(totalHours / 24);
+  const years = Math.floor(totalDays / 365);
+  const months = Math.floor((totalDays % 365) / 30);
+  const days = totalDays % 30;
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  if (years > 0) return months > 0 ? `${years}y ${months}mo` : `${years}y`;
+  if (months > 0) return days > 0 ? `${months}mo ${days}d` : `${months}mo`;
+  if (totalDays > 0) return hours > 0 ? `${totalDays}d ${hours}h` : `${totalDays}d`;
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`;
+  return `${minutes}min`;
+}
+
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
 
 export async function handleBatchRead(
@@ -204,7 +221,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       const cachedFile = fileCache.get(req.path);
       const raw = cachedFile?.ok ? cachedFile.content : (s.isFile() ? await readFile(resolved, "utf8") : "");
       const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
-      const baseInfo = { size: s.size, lines: lineCount, mtime: new Date(s.mtimeMs).toISOString(), isFile: s.isFile() };
+      const baseInfo = { size: s.size, lines: lineCount, lastChanged: formatRelativeTime(s.mtimeMs) };
       const fileDir = dirname(resolved);
       const refs = extractRefs(raw).map(ref => {
         const abs = resolve(fileDir, ref);
