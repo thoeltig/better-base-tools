@@ -295,7 +295,7 @@ export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, 
     const prompt = basePrompt
       ? basePrompt.replace(
           'Return only the JSON array. No markdown, no explanation.',
-          `Load the 'submit_analysis' tool and submit your analysis with the tool. When you are finished return only 'Done' as output.`
+          `Use ToolSearch with query 'submit_analysis' to load the 'submit_analysis' tool, then call it with your analysis results. Do not invoke any other skills or tools. When you are finished return only 'Done', no additional output or explanation needed.`
         )
       : '';
     fs.writeFileSync(fp, prompt);
