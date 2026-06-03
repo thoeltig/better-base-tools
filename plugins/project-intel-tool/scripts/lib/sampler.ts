@@ -216,7 +216,7 @@ function parseResponse(text: string): SamplingFileSummary[] {
 
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
 
-export async function runSamplingBackground(
+export async function runSampling(
   batches: SamplingBatch[],
   server: SamplingServer,
   knowledgeDir: string,

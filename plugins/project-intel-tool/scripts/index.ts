@@ -10,7 +10,7 @@ import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries, mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
-import { buildSamplingBatches, runSamplingBackground, writeBatchFiles, SamplingServer } from './lib/sampler.js';
+import { buildSamplingBatches, runSampling, writeBatchFiles, SamplingServer } from './lib/sampler.js';
 import {
   ENV_INCLUDE_PATHS,
   ENV_EXCLUDE_PATHS,
@@ -202,15 +202,14 @@ function prepareAnalysisBatches(
   return buildSamplingBatches(filesToScan, fileMap, existingSummaries, config, projectRoot);
 }
 
-async function runFullScanBackground(
+async function runFullScan(
   filesToScan: string[],
   knowledgeDir: string,
   projectRoot: string,
-): Promise<void> {
+): Promise<{ filesScanned: number; batchCount: number }> {
   try {
     const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
-
-    await runSamplingBackground(
+    await runSampling(
       batches,
       server.server as unknown as SamplingServer,
       knowledgeDir,
@@ -218,8 +217,7 @@ async function runFullScanBackground(
       shutdownController.signal,
       samplerLog
     );
-  } catch (err) {
-    writeMcpLogLine('error', `Background scan error: ${err instanceof Error ? err.message : String(err)}`, 'scan');
+    return { filesScanned: filesToScan.length, batchCount: batches.length };
   } finally {
     isScanning = false;
     releaseLock();
@@ -278,7 +276,7 @@ server.registerTool(
   'scan',
   {
     title: 'Scan project and generate AI file summaries',
-    description: 'Scan the current project directory and generate AI summaries in the background. Returns immediately with the number of files being processed. Use query after scanning.',
+    description: 'Scan the current project directory and generate AI summaries. Blocks until complete. Use query after scanning.',
     inputSchema: z.object({
       scanLocation: z.string().optional()
         .describe('Sub-folder to scan relative to the project root. Default: entire project.'),
@@ -324,10 +322,9 @@ server.registerTool(
           return createOutputMessage('A scan is already in progress for this project.');
         }
         isScanning = true;
-        runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
-          .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
-        writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
-        return createOutputMessage(`Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`);
+        const { filesScanned, batchCount } = await runFullScan(filesToScan, knowledgeDir, projectRoot);
+        writeMcpLogLine('info', `scan complete — ${filesScanned} file(s) in ${batchCount} batch(es)`, 'scan');
+        return createOutputMessage(`Scan complete. Analysed ${filesScanned} file(s) in ${batchCount} batch(es). Use query to search.`);
       }
 
       // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
