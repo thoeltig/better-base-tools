@@ -8,6 +8,27 @@ export const ReadMode = z.enum([
   .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
 
+export function buildReadInput(includeFileinfo: boolean) {
+  const mode = includeFileinfo
+    ? z.enum(["compact", "verbatim", "fileinfo"]).default("compact")
+    : z.enum(["compact", "verbatim"]).default("compact");
+  const modeDesc = includeFileinfo
+    ? "'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. 'fileinfo'= metadata (size, lines, lastChanged, refs[]) — use before reading content."
+    : "'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring.";
+  const request = z.object({
+    path: z.string().min(1).max(260)
+      .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
+    mode: mode.describe(modeDesc),
+    offset: z.number().int().min(1).optional()
+      .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
+    count: z.number().int().min(1).optional()
+      .describe("read: max lines to return; search: context lines around each match (default 0)"),
+    searchTerm: z.string().min(1).optional()
+      .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
+  }).strict();
+  return z.object({ requests: z.array(request).min(1) }).strict();
+}
+
 export const Reason = z.enum([
     "not_absolute",
     "not_found",
