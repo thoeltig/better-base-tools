@@ -117,6 +117,7 @@ export interface FluentGroup {
 }
 
 export type FluentOutput = {
+  total?: number;
   grouped?: FluentGroup[];
   results?: FluentFileInFlatOutput[];
 }

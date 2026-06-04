@@ -58,6 +58,7 @@ export function generateQueryOutput(queryResult: ScoredFileSummary[], format: Fo
       output = createFlatOutput(queryResult, verbosity);
     } else {
       output = {
+        total: queryResult.length,
         grouped: groupValues
           .sort((a, b) => b.folderScore - a.folderScore)
           .map(({ folderScore: _fs, ...rest }) => rest),
@@ -120,6 +121,7 @@ export function outputToFluentText(output: FluentOutput, verbosity: VerbosityTyp
 
 function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType = 'full'): FluentOutput {
   return {
+    total: items.length,
     results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => {
       if (verbosity === 'structure') {
         const { summary: _s, technologies: _t, analysisDelta: _a, ...structRest } = rest;
@@ -134,7 +136,7 @@ function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType =
   };
 }
 
-function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
+export function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
   let score = 0;
   const pathLower = itemPath.toLowerCase();
   const sumLower = (summary.summary || '').toLowerCase();
