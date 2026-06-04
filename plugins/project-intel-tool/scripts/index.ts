@@ -9,15 +9,12 @@ import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
-import { getOrCreateSummaries, mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
-import { buildFileMap } from './lib/file-map.js';
-import { buildSamplingBatches, runSampling, writeBatchFiles, SamplingServer, SamplerProgress } from './lib/sampler.js';
+import { mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
+import { runSampling, writeBatchFiles } from './lib/sampler.js';
 import {
   ENV_INCLUDE_PATHS,
   ENV_EXCLUDE_PATHS,
   FORMAT_GROUPED,
-  GroupedScoredFileSummary,
-  HierarchicalGrouping,
   KNOWLEDGE_DIRECTORY,
   QUERY_RESULT_MAX,
   SAMPLING_TOKEN_BUDGET,
@@ -29,7 +26,14 @@ import {
   ToolContentResult,
   VERBOSITY_VALUES,
   VerbosityType,
+  FORMAT_VALUES,
+  FluentOutput,
+  AnalysisSubmission,
 } from './types.js';
+import { generateQueryOutput, outputToFluentText, query } from './lib/query-engine.js';
+import { prepareAnalysisBatches } from './lib/analysis-batch.js';
+import { acquireLock, acquireSubmitLock, releaseLock } from './lib/lock.js';
+import { parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 
 const server = new McpServer(
   { 
@@ -44,10 +48,6 @@ const server = new McpServer(
 );
 
 let validRootDirectories: string[] = [];
-
-const LOCK_FILE = 'summaries.lock';
-const LOCK_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
-
 let isScanning = false;
 
 // MCP harnesses like Claude Code do not support sampling or logging via the MCP protocol.
@@ -71,80 +71,7 @@ const scanConfig: ScanConfig = {
   excludePaths: parseConfigArg('exclude', ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean),
 };
 
-function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
-  const envVal = process.env[envName];
-  if (envVal !== undefined && envVal !== '') return envVal;
-  const prefix = `--${argName}=`;
-  const exact = process.argv.find(a => a.startsWith(prefix));
-  if (exact) return exact.slice(prefix.length);
-  const idx = process.argv.indexOf(`--${argName}`);
-  if (idx >= 0) {
-    if (process.argv[idx + 1] && !process.argv[idx + 1]!.startsWith('--')) return process.argv[idx + 1]!;
-    return 'true';
-  }
-  return defaultVal;
-}
-
-function parseConfigArgRecord(argName: string, envName: string): Record<string, unknown> {
-  const raw = parseConfigArg(argName, envName, '');
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
-    console.error(`[config] ${envName}: expected a JSON object, ignoring`);
-  } catch {
-    console.error(`[config] ${envName}: invalid JSON, ignoring`);
-  }
-  return {};
-}
-
-let activeLockPath: string | null = null;
-
 const shutdownController = new AbortController();
-
-function isLockStale(lock: { pid: number; startedAt: string }): boolean {
-  try {
-    process.kill(lock.pid, 0);
-    return Date.now() - new Date(lock.startedAt).getTime() > LOCK_MAX_AGE_MS;
-  } catch (err: any) {
-    return err.code !== 'EPERM'; // ESRCH = dead; EPERM = alive, no permission
-  }
-}
-
-function acquireLock(knowledgeDir: string): boolean {
-  const lockPath = path.join(knowledgeDir, LOCK_FILE);
-  if (fs.existsSync(lockPath)) {
-    try {
-      const lock = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
-      if (!isLockStale(lock)) return false;
-    } catch { /* corrupt lock — treat as stale */ }
-  }
-  try {
-    const tmpPath = lockPath + '.tmp';
-    fs.writeFileSync(tmpPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-    fs.renameSync(tmpPath, lockPath);
-    activeLockPath = lockPath;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function releaseLock(): void {
-  if (!activeLockPath) return;
-  try { fs.unlinkSync(activeLockPath); } catch { /* ignore */ }
-  activeLockPath = null;
-}
-
-async function acquireSubmitLock(knowledgeDir: string, timeoutMs = 30_000, intervalMs = 200): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (acquireLock(knowledgeDir)) return true;
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
-  return false;
-}
-
 let isShuttingDown = false;
 
 async function shutdown(source: string): Promise<void> {
@@ -171,6 +98,11 @@ async function shutdown(source: string): Promise<void> {
   process.exit(0);
 }
 
+process.stdin.on('end', () => void shutdown('stdin:end'));
+process.stdin.on('close', () => void shutdown('stdin:close'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+
 function createOutputMessage(msg: string, isError?: boolean | undefined): {
   isError: boolean | undefined;
   content: ToolContentResult[];
@@ -188,11 +120,6 @@ function createOutputMessage(msg: string, isError?: boolean | undefined): {
   };
 }
 
-process.stdin.on('end', () => void shutdown('stdin:end'));
-process.stdin.on('close', () => void shutdown('stdin:close'));
-process.on('SIGTERM', () => void shutdown('SIGTERM'));
-process.on('SIGINT', () => void shutdown('SIGINT'));
-
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
     try {
@@ -203,10 +130,6 @@ function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): vo
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
-}
-
-function samplerLog(level: 'info' | 'warning' | 'error', msg: string): void {
-  writeMcpLogLine(level, msg, 'sampler');
 }
 
 async function reportProgress(
@@ -228,46 +151,6 @@ async function reportProgress(
       },
     });
   } catch { /* ignore if client doesn't support progress */ }
-}
-
-function prepareAnalysisBatches(
-  filesToScan: string[],
-  knowledgeDir: string,
-  projectRoot: string,
-  config: ScanConfig,
-): ReturnType<typeof buildSamplingBatches> {
-  const existingSummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
-  const allProjectFiles = [...new Set([
-    ...filesToScan,
-    ...[...existingSummaries.files.entries()].filter(([, v]) => !v.deleted)
-      .map(([abs]) => path.relative(toAbsReal(projectRoot, '.'), abs).replace(/\\/g, '/')),
-  ])];
-  const fileMap = buildFileMap(filesToScan, projectRoot, allProjectFiles);
-  return buildSamplingBatches(filesToScan, fileMap, existingSummaries, config, projectRoot);
-}
-
-async function runFullScan(
-  filesToScan: string[],
-  knowledgeDir: string,
-  projectRoot: string,
-  onProgress?: SamplerProgress,
-): Promise<{ filesScanned: number; batchCount: number }> {
-  try {
-    const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
-    await runSampling(
-      batches,
-      server.server as unknown as SamplingServer,
-      knowledgeDir,
-      projectRoot,
-      shutdownController.signal,
-      samplerLog,
-      onProgress
-    );
-    return { filesScanned: filesToScan.length, batchCount: batches.length };
-  } finally {
-    isScanning = false;
-    releaseLock();
-  }
 }
 
 async function updateValidRootDirectories(): Promise<void> {
@@ -368,12 +251,29 @@ server.registerTool(
           return createOutputMessage('A scan is already in progress for this project.');
         }
         isScanning = true;
-        const onProgress = USE_MCP_PROGRESS
-          ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg)
-          : undefined;
-        const { filesScanned, batchCount } = await runFullScan(filesToScan, knowledgeDir, projectRoot, onProgress);
-        writeMcpLogLine('info', `scan complete — ${filesScanned} file(s) in ${batchCount} batch(es)`, 'scan');
-        return createOutputMessage(`Scan complete. Analysed ${filesScanned} file(s) in ${batchCount} batch(es). Use query to search.`);
+        const samplerLog = (level: LoggingLevel, msg: string,) => writeMcpLogLine(level, msg, 'sampler');
+        const onProgress = USE_MCP_PROGRESS ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg) : undefined;
+        try {
+          const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
+          await runSampling(
+            batches,
+            server,
+            knowledgeDir,
+            projectRoot,
+            shutdownController.signal,
+            samplerLog,
+            onProgress
+          );
+          writeMcpLogLine('info', `scan complete — ${filesToScan.length} file(s) in ${batches.length} batch(es)`, 'scan');
+          return createOutputMessage(`Scan complete. Analysed ${filesToScan.length} file(s) in ${batches.length} batch(es). Use query to search.`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          writeMcpLogLine('error', `scan error — ${message}`, 'scan');
+          return createOutputMessage(message, true);
+        } finally {
+          isScanning = false;
+          releaseLock();
+        }
       }
 
       // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
@@ -423,17 +323,7 @@ if (!USE_MCP_SAMPLING) {
     {
       title: 'Submit file analysis results from subagent',
       description: 'Called by analysis subagents to submit file summaries into project knowledge. Serializes concurrent writes — multiple subagents can safely call this in parallel.',
-      inputSchema: z.object({
-        results: z.array(z.object({
-          path: z.string(),
-          summary: z.string().optional(),
-          role: z.enum(ROLE_VALUES).optional(),
-          technologies: z.array(z.string()).optional(),
-          searchTags: z.array(z.string()).optional(),
-          exports: z.array(z.string()).optional(),
-          imports: z.array(z.string()).optional(),
-        })),
-      }).strict(),
+      inputSchema: AnalysisSubmission,
       annotations: {
         title: 'Submit file analysis results from subagent',
         readOnlyHint: false,
@@ -479,7 +369,7 @@ server.registerTool(
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),
       max: z.number().optional().default(QUERY_RESULT_MAX).describe(`Max results (default: ${QUERY_RESULT_MAX})`),
-      format: z.enum(['grouped', 'flat']).optional().default("grouped").describe('Output format: grouped (default) or flat'),
+      format: z.enum(FORMAT_VALUES).optional().default(FORMAT_GROUPED).describe('Output format: grouped (default) or flat'),
       role: z.enum(ROLE_VALUES).optional().describe('Filter results to files with this role'),
       verbosity: z.enum(VERBOSITY_VALUES).optional().default("full").describe('Data density: full (default) = all fields; structure = filepath/size/lines/imports/exports/refs; semantic = filepath/role/summary/technologies'),
     }).strict(),
@@ -511,80 +401,14 @@ server.registerTool(
       const format = args.format || FORMAT_GROUPED;
       const verbosity: VerbosityType = args.verbosity ?? 'full';
 
-      const projectRoot = path.dirname(path.resolve(knowledgeDir));
-      const primarySummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
-      const scored: ScoredFileSummary[] = [];
+      const scoredFiles: ScoredFileSummary[] = query(knowledgeDir, keywords, scope, maxResults, args.role);
+      const output: FluentOutput = generateQueryOutput(scoredFiles, format, verbosity);
+      writeMcpLogLine('info', `query done — ${scoredFiles.length} result(s)`, 'query');
 
-      const scoreFiles = (summaries: ReturnType<typeof getOrCreateSummaries>, pathPrefix: string, summaryProjectRoot: string) => {
-        summaries.files.forEach((summary, absPath) => {
-          if (summary.deleted) return;
-          const relPath = path.relative(summaryProjectRoot, absPath).replace(/\\/g, '/');
-          const prefixedPath = pathPrefix ? `${pathPrefix}/${relPath}`.replace(/\/\//g, '/') : relPath;
-          if (scope && !prefixedPath.startsWith(scope)) return;
-          if (args.role && summary.role !== args.role) return;
-          const score = calculateConfidence(keywords, prefixedPath, summary);
-          if (score > 0) {
-            const { lastUpdated: _ld, ...summaryRest } = summary;
-            scored.push({ fileScore: score, path: prefixedPath, ...summaryRest });
-          }
-        });
-      };
-
-      scoreFiles(primarySummaries, '', projectRoot);
-
-      for (const ref of primarySummaries.subKnowledge) {
-        const subDir = path.resolve(projectRoot, ref.knowledgeDir);
-        if (fs.existsSync(subDir)) {
-          const subProjectRoot = path.dirname(path.resolve(subDir));
-          const subSummaries = getOrCreateSummaries(subDir, subProjectRoot);
-          scoreFiles(subSummaries, ref.location, subProjectRoot);
-        }
-      }
-
-      scored.sort((a, b) => b.fileScore - a.fileScore);
-      const limited = scored.slice(0, maxResults);
-
-      let output: unknown;
-      if (format === FORMAT_GROUPED) {
-        const grouped: Record<string, HierarchicalGrouping> = {};
-        limited.forEach(item => {
-          const folderPath = path.dirname(item.path).replace(/\\/g, '/') || '.';
-          if (!grouped[folderPath]) {
-            grouped[folderPath] = { folderPath, folderScore: 0, files: [] };
-          }
-          const group = grouped[folderPath]!;
-          group.folderScore += item.fileScore;
-          if (item.technologies?.length) {
-            const set = new Set(group.technologies ?? []);
-            item.technologies.forEach(t => set.add(t));
-            group.technologies = [...set];
-          }
-          const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...restFields } = item;
-          const f: GroupedScoredFileSummary = { fileName, ...restFields };
-          group.files.push(f);
-        });
-        const groupValues = Object.values(grouped);
-        const fallbackToFlat = limited.length === 1 || groupValues.every(g => g.files.length === 1);
-        if (fallbackToFlat) {
-          output = createFlatOutput(limited, verbosity);
-        } else {
-          output = {
-            total: limited.length,
-            grouped: groupValues
-              .sort((a, b) => b.folderScore - a.folderScore)
-              .map(({ folderScore: _fs, ...rest }) => rest),
-          };
-        }
-      } else {
-        output = createFlatOutput(limited, verbosity);
-      }
-
-      writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
       const queryResult: CallToolResult = { 
         content: [{ 
           type: 'text', 
-          text: outputToFluentText(output as FluentOutput, verbosity), 
+          text: outputToFluentText(output, verbosity), 
           annotations: { 
             audience: ['assistant'], 
             priority: 0.3,
@@ -592,14 +416,16 @@ server.registerTool(
           }
         }]
       };
-      if (USE_USER_AUDIENCE) queryResult.content.push({
-        type: 'text',
-        text: `Found ${limited.length} knowledge entr${limited.length === 1 ? 'y' : 'ies'}`,
-        annotations: { 
-          audience: ['user'], 
-          priority: 0
-        }
-      });
+      if (USE_USER_AUDIENCE)  {
+          queryResult.content.push({
+          type: 'text',
+          text: `Found ${scoredFiles.length} knowledge entr${scoredFiles.length === 1 ? 'y' : 'ies'}`,
+          annotations: { 
+            audience: ['user'], 
+            priority: 0
+          }
+        });
+      }
       if (USE_STRUCTURED_CONTENT) queryResult.structuredContent = output as Record<string, unknown>;
       return queryResult;
     } catch (err) {
@@ -609,75 +435,6 @@ server.registerTool(
     }
   }
 );
-
-type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summary?: string; analysisDelta?: string; imports?: string[]; exports?: string[]; refs?: string[]; technologies?: string[] };
-type FluentGroup = { folderPath: string; technologies?: string[]; files: (FluentFile & { fileName: string })[] };
-type FluentOutput = { grouped?: FluentGroup[]; results?: (FluentFile & { path: string })[] };
-
-function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean, verbosity: VerbosityType = 'full'): string {
-  const showTech = verbosity !== 'structure' && includeTech && (file.technologies?.length ?? 0) > 0;
-  const techStr = showTech ? ` | ${file.technologies!.join(', ')}` : '';
-  const meta = `<!-- ${name}${file.lineCount !== undefined ? ` (Lines: ${file.lineCount}, Chars: ${file.sizeChars})` : ''}${file.role ? ` [${file.role}]` : ''}${techStr} -->`;
-  const parts: string[] = [meta];
-  if (verbosity !== 'structure' && file.summary) parts.push(file.summary);
-  if (verbosity !== 'structure' && file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
-  if (verbosity !== 'semantic' && file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
-  if (verbosity !== 'semantic' && file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
-  if (verbosity !== 'semantic' && file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
-  return parts.join('\n');
-}
-
-function outputToFluentText(output: FluentOutput, verbosity: VerbosityType = 'full'): string {
-  if (output.grouped) {
-    return output.grouped.map(group => {
-      const showTech = verbosity !== 'structure' && (group.technologies?.length ?? 0) > 0;
-      const techStr = showTech ? ` | ${group.technologies!.join(', ')}` : '';
-      const header = `<!-- ${group.folderPath}${techStr} -->`;
-      const files = group.files.map(f => fileEntryToFluent(f.fileName, f, false, verbosity)).join('\n\n');
-      return `${header}\n${files}`;
-    }).join('\n\n');
-  }
-  return (output.results ?? []).map(item => fileEntryToFluent(item.path, item, true, verbosity)).join('\n\n');
-}
-
-function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType = 'full'): unknown {
-  return {
-    total: items.length,
-    results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => {
-      if (verbosity === 'structure') {
-        const { summary: _s, technologies: _t, analysisDelta: _a, ...structRest } = rest;
-        return structRest;
-      }
-      if (verbosity === 'semantic') {
-        const { imports: _i, exports: _e, refs: _r, lineCount: _lc, sizeChars: _sc, ...semanticRest } = rest;
-        return semanticRest;
-      }
-      return rest;
-    }),
-  };
-}
-
-function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
-  let score = 0;
-  const pathLower = itemPath.toLowerCase();
-  const sumLower = (summary.summary || '').toLowerCase();
-  const baseline = summary.sizeCharsWhenAnalysed;
-  const current = summary.sizeChars;
-  const semanticWeight = (baseline && current)
-    ? Math.min(baseline, current) / Math.max(baseline, current)
-    : 1;
-  keywords.forEach(k => {
-    if (sumLower.includes(k)) score += 6 * semanticWeight;
-    if (summary.searchTags?.some((t: string) => t.toLowerCase().includes(k))) score += 3 * semanticWeight;
-    if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
-    if (summary.imports?.some((i: string) => i.toLowerCase().includes(k))) score += 4;
-    if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;
-    if (pathLower.includes(k)) score += 4;
-    if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2 * semanticWeight;
-    if (summary.role?.toLowerCase().includes(k)) score += 2 * semanticWeight;
-  });
-  return score;
-}
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

@@ -11,12 +11,9 @@ import {
   DEFAULT_SCAN_CONFIG,
   BATCHES_DIRECTORY,
   ROLE_VALUES,
+  AnalysisSubmission,
 } from '../types.js';
-
-// Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
-export type SamplingServer = {
-  request(req: unknown, schema: unknown): Promise<{ content: { type: string; text: string } }>;
-};
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 
 // Build intra-scan-set dependency graph (excludes already-summarized files)
 function buildDepGraph(files: string[], fileMap: Map<string, FileRefs>): Map<string, Set<string>> {
@@ -200,26 +197,12 @@ ${fileSections.join('\n\n')}
 Return only the JSON array. No markdown, no explanation.`;
 }
 
-function parseResponse(text: string): SamplingFileSummary[] {
-  const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-  try {
-    const parsed = JSON.parse(clean);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    const arrMatch = clean.match(/\[[\s\S]*\]/);
-    if (arrMatch) return JSON.parse(arrMatch[0]);
-    const objMatch = clean.match(/\{[\s\S]*\}/);
-    if (objMatch) return [JSON.parse(objMatch[0])];
-    throw new Error(`Cannot parse sampling response: ${text.substring(0, 200)}`);
-  }
-}
-
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
 export type SamplerProgress = (done: number, total: number, message: string) => Promise<void> | void;
 
 export async function runSampling(
   batches: SamplingBatch[],
-  server: SamplingServer,
+  server: McpServer,
   knowledgeDir: string,
   projectRoot: string,
   signal: AbortSignal,
@@ -237,7 +220,7 @@ export async function runSampling(
       if (!prompt) { log('warning', `Batch ${i + 1} has no readable files, skipping`); continue; }
       log('info', `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s) (~${batch.estimatedTokens} tokens)`);
 
-      const response = await server.request(
+      const response = await server.server.request(
         {
           method: 'sampling/createMessage',
           params: {
@@ -252,15 +235,14 @@ export async function runSampling(
             },
           },
         },
-        undefined
+        AnalysisSubmission
       );
 
       if (signal.aborted) { log('info', 'Aborted after response, discarding'); return; }
 
-      if (response?.content?.type === 'text') {
-        const results = parseResponse(response.content.text);
-        mergeSamplingResults(knowledgeDir, results, projectRoot);
-        log('info', `Batch ${i + 1} saved: ${results.length} file(s)`);
+      if (response?.results) {
+        mergeSamplingResults(knowledgeDir, response.results as SamplingFileSummary[], projectRoot);
+        log('info', `Batch ${i + 1} saved: ${response.results.length} file(s)`);
       }
     } catch (err) {
       log('error', `Batch ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);

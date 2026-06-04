@@ -6,6 +6,8 @@ export const SUMMARIES_FILE: string = 'summaries.json';
 export const SCAN_FILE: string = 'scan.json';
 export const FORMAT_FLAT: string = 'flat';
 export const FORMAT_GROUPED: string = 'grouped';
+export const FORMAT_VALUES = [FORMAT_FLAT, FORMAT_GROUPED] as const;
+export type FormatType = typeof FORMAT_VALUES[number];
 export const VERBOSITY_VALUES = ['full', 'structure', 'semantic'] as const;
 export type VerbosityType = typeof VERBOSITY_VALUES[number];
 export const ROLE_VALUES = ['implementation', 'executable', 'helperScript', 'test', 'configuration', 'build', 'documentation', 'data'] as const;
@@ -87,6 +89,38 @@ export interface SamplingBatch {
 }
 
 // Query output
+
+export interface FluentFile { 
+  lineCount?: number;
+  sizeChars?: number;
+  role?: string;
+  summary?: string;
+  analysisDelta?: string;
+  imports?: string[];
+  exports?: string[];
+  refs?: string[];
+  technologies?: string[];
+}
+
+export interface FluentFileInGroupedOutput extends FluentFile {
+  fileName: string;
+}
+
+export interface FluentFileInFlatOutput extends FluentFile {
+  path: string;
+}
+
+export interface FluentGroup { 
+  folderPath: string;
+  technologies?: string[];
+  files: FluentFileInGroupedOutput[];
+}
+
+export type FluentOutput = {
+  grouped?: FluentGroup[];
+  results?: FluentFileInFlatOutput[];
+}
+
 export interface HierarchicalGrouping {
   folderPath: string;
   folderScore: number;
@@ -133,3 +167,15 @@ export const ToolContentResult = z.object({
   }).strip().strict();
   
 export type ToolContentResult = z.infer<typeof ToolContentResult>;
+
+export const AnalysisSubmission = z.object({
+  results: z.array(z.object({
+    path: z.string(),
+    summary: z.string(),
+    role: z.enum(ROLE_VALUES).optional(),
+    technologies: z.array(z.string()).optional(),
+    searchTags: z.array(z.string()).optional()
+  }).strip().strict()),
+}).strip().strict();
+
+export type AnalysisSubmission = z.infer<typeof AnalysisSubmission>;
