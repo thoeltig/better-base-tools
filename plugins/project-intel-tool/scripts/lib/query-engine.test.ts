@@ -251,7 +251,7 @@ describe('outputToFluentText', () => {
   it('structure verbosity still includes imports and exports', () => {
     const output = { results: [{ path: 'src/a.ts', imports: { 'zod': ['z'] }, exports: ['parse'] }] };
     const text = outputToFluentText(output, 'structure');
-    expect(text).toContain('imports: zod: z');
+    expect(text).toContain('imports: z from zod');
     expect(text).toContain('exports: parse');
   });
 

@@ -100,7 +100,7 @@ function renderImports(imports: Record<string, string[]> | undefined): string | 
   return entries
     .map(([src, names]) => {
       const label = src.includes('/') ? basename(src) : src;
-      return names.length > 0 ? `${label}: ${names.join(', ')}` : label;
+      return names.length > 0 ? `${names.join(', ')} from ${label}` : label;
     })
     .join(' | ');
 }

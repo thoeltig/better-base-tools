@@ -90,7 +90,7 @@ Each result includes `sizeChars` and `lineCount`, which the model uses to decide
 <!-- src/auth/index.ts (Lines: 142, Chars: 4820) [implementation] | TypeScript, JWT, bcrypt -->
 Main authentication module entry point...
 unanalysed: +12 lines +340 chars
-imports: jwt: sign, verify | bcrypt: hash, compare | express: Router, Request, Response
+imports: sign, verify from jwt | hash, compare from bcrypt | Router, Request, Response from express
 exports: authenticate, logout, middleware
 referenced: src/auth/session.ts, src/auth/token.ts
 ```
