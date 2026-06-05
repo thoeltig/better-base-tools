@@ -69,7 +69,8 @@ Searches the knowledge base by keywords and returns a ranked list of files and d
 |---|---|---|
 | Summary | +6 | No |
 | Exports | +4 | Yes |
-| Imports | +4 | Yes |
+| Imports (source path / package) | +4 | Yes |
+| Imports (imported names) | +3 | Yes |
 | Path | +4 | Yes |
 | Refs | +3 | Yes |
 | SearchTags | +3 | No |
@@ -89,7 +90,7 @@ Each result includes `sizeChars` and `lineCount`, which the model uses to decide
 <!-- src/auth/index.ts (Lines: 142, Chars: 4820) [implementation] | TypeScript, JWT, bcrypt -->
 Main authentication module entry point...
 unanalysed: +12 lines +340 chars
-imports: jwt, bcrypt, express
+imports: jwt: sign, verify | bcrypt: hash, compare | express: Router, Request, Response
 exports: authenticate, logout, middleware
 referenced: src/auth/session.ts, src/auth/token.ts
 ```
@@ -158,7 +159,7 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
     "sizeChars": 4820,
     "lineCount": 142,
     "exports": ["authenticate", "logout", "middleware"],
-    "imports": ["jwt", "bcrypt", "express"],
+    "imports": {"jwt": ["sign", "verify"], "bcrypt": ["hash", "compare"], "express": ["Router", "Request", "Response"]},
     "refs": ["src/auth/session.ts", "src/auth/token.ts"],
     "summary": "Main authentication module entry point that exports auth functions and middleware for the Express API. Handles JWT creation, bcrypt password comparison, and session attachment. Acts as the single integration point for all auth consumers.",
     "role": "implementation",
@@ -169,7 +170,7 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
 }
 ```
 
-The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `refs` maps intra-project file connections. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
+The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `imports` is a map of source path or package name to a list of imported names (e.g. `{"zod": ["z"], "./types": ["SamplingBatch"]}`) for TypeScript/JavaScript; C# namespace keys map to empty arrays. `refs` captures intra-project file path mentions without named bindings: side-effect imports, dynamic `import()`, `require()` calls, and path mentions in markdown or text files. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
 Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across all sub-project knowledge bases.
 
 ---

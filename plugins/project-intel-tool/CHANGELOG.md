@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- **`imports` structure** — changed from `string[]` (flat list of package or file names) to `Record<string, string[]>` (source path or package name → list of imported names). For TypeScript/JavaScript, named, default, namespace, and `import type` specifiers are all captured per source. For C#, namespace keys map to empty arrays. Dynamic `import()`, `require()`, and bare side-effect local imports go to `refs` instead of `imports` since they carry no named bindings.
+- **Import scoring in `query`** — source path or package name match now scores +4; imported name match scores +3 as a separate signal (previously all import matches scored +4 flat)
+
 ## [1.4.1] - 2026-06-04
 
 ### Fixed
