@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted, isSummariesFile, toAbsReal } from './summary-merger.js';
-import { KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
+import { FileSummary, KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
 import { buildFileMap } from './file-map.js';
 
 export interface ScanResult {
@@ -307,7 +307,7 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
     for (let i = 0; i < unique.length; i++) {
       const relPath = unique[i]!;
       const absPath = uniqueAbs[i]!;
-      const fm = fileMap.get(relPath) ?? { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 };
+      const fm = fileMap.get(relPath) ?? { imports: {}, exports: [], refs: [], sizeChars: 0, lineCount: 0 };
       const existing = summaries.files.get(absPath) ?? {};
       const refs = fm.refs.filter(r => r !== summariesRelPath);
       const wasAnalyzed = !!existing.summary;
@@ -322,14 +322,17 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
           analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
         }
       }
-      summaries.files.set(absPath, {
+      const fileEntry: FileSummary = {
         ...existing,
         sizeChars: fm.sizeChars,
         lineCount: fm.lineCount,
-        ...(fm.exports.length > 0 ? { exports: fm.exports } : {}),
-        ...(fm.imports.length > 0 ? { imports: fm.imports } : {}),
-        ...(refs.length > 0 ? { refs } : {}),
         deleted: false,
+      };
+      if (fm.exports.length > 0) fileEntry.exports = fm.exports;
+      if (Object.keys(fm.imports).length > 0) fileEntry.imports = fm.imports;
+      if (refs.length > 0) fileEntry.refs = refs;
+      summaries.files.set(absPath, {
+        ...fileEntry,
         ...(analysisDelta !== undefined ? { analysisDelta } : {}),
       });
     }

@@ -93,6 +93,18 @@ function groupScoredFiles(limited: ScoredFileSummary[]) : HierarchicalGrouping[]
   return Object.values(grouped);
 }
 
+function renderImports(imports: Record<string, string[]> | undefined): string | null {
+  if (!imports) return null;
+  const entries = Object.entries(imports);
+  if (entries.length === 0) return null;
+  return entries
+    .map(([src, names]) => {
+      const label = src.includes('/') ? basename(src) : src;
+      return names.length > 0 ? `${label}: ${names.join(', ')}` : label;
+    })
+    .join(' | ');
+}
+
 function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean, verbosity: VerbosityType = 'full'): string {
   const showTech = verbosity !== 'structure' && includeTech && (file.technologies?.length ?? 0) > 0;
   const techStr = showTech ? ` | ${file.technologies!.join(', ')}` : '';
@@ -100,7 +112,10 @@ function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean,
   const parts: string[] = [meta];
   if (verbosity !== 'structure' && file.summary) parts.push(file.summary);
   if (verbosity !== 'structure' && file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
-  if (verbosity !== 'semantic' && file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
+  if (verbosity !== 'semantic') {
+    const importsStr = renderImports(file.imports);
+    if (importsStr) parts.push(`imports: ${importsStr}`);
+  }
   if (verbosity !== 'semantic' && file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
   if (verbosity !== 'semantic' && file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
   return parts.join('\n');
@@ -149,7 +164,11 @@ export function calculateConfidence(keywords: string[], itemPath: string, summar
     if (sumLower.includes(k)) score += 6 * semanticWeight;
     if (summary.searchTags?.some((t: string) => t.toLowerCase().includes(k))) score += 3 * semanticWeight;
     if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
-    if (summary.imports?.some((i: string) => i.toLowerCase().includes(k))) score += 4;
+    if (summary.imports) {
+      if (Object.keys(summary.imports).some((src: string) => src.toLowerCase().includes(k))) score += 4;
+      const names = (Object.values(summary.imports) as string[][]).flat();
+      if (names.some((name: string) => name.toLowerCase().includes(k))) score += 3;
+    }
     if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;
     if (pathLower.includes(k)) score += 4;
     if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2 * semanticWeight;

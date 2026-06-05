@@ -8,7 +8,7 @@ const TEST_ROOT = '.';
 const abs = (p: string) => toAbsReal(TEST_ROOT, p);
 
 function makeFileRefs(overrides: Partial<FileRefs> = {}): FileRefs {
-  return { imports: [], exports: [], refs: [], sizeChars: 1000, lineCount: 40, ...overrides };
+  return { imports: {}, exports: [], refs: [], sizeChars: 1000, lineCount: 40, ...overrides };
 }
 
 function emptySummaries(): SummariesData {

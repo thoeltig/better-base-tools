@@ -45,8 +45,8 @@ export interface FileSummary {
   technologies?: string[];
   searchTags?: string[];
   exports?: string[];
-  imports?: string[];
-  refs?: string[];       // intra-project file references resolved from imports
+  imports?: Record<string, string[]>; // key: resolved local path or package name, value: imported names
+  refs?: string[]; // intra-project file references from non-import mentions (markdown links, text refs)
   sizeChars?: number;
   lineCount?: number;
   sizeCharsWhenAnalysed?: number;
@@ -76,7 +76,7 @@ export interface SamplingFileSummary {
   technologies?: string[];
   searchTags?: string[];
   exports?: string[];
-  imports?: string[];
+  imports?: Record<string, string[]>;
   refs?: string[];
   sizeChars?: number;
   lineCount?: number;
@@ -90,13 +90,13 @@ export interface SamplingBatch {
 
 // Query output
 
-export interface FluentFile { 
+export interface FluentFile {
   lineCount?: number;
   sizeChars?: number;
   role?: string;
   summary?: string;
   analysisDelta?: string;
-  imports?: string[];
+  imports?: Record<string, string[]>;
   exports?: string[];
   refs?: string[];
   technologies?: string[];

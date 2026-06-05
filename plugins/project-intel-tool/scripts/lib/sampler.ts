@@ -20,12 +20,13 @@ function buildDepGraph(files: string[], fileMap: Map<string, FileRefs>): Map<str
   const fileSet = new Set(files);
   const graph = new Map<string, Set<string>>();
   for (const file of files) {
-    const refs = fileMap.get(file);
+    const fr = fileMap.get(file);
     const deps = new Set<string>();
-    if (refs) {
-      refs.refs
-        .filter(r => fileSet.has(r))
-        .forEach(r => deps.add(r));
+    if (fr) {
+      // Local import deps (imports keys that are in the scan set)
+      Object.keys(fr.imports).filter(k => fileSet.has(k)).forEach(k => deps.add(k));
+      // Text-mention deps
+      fr.refs.filter(r => fileSet.has(r)).forEach(r => deps.add(r));
     }
     graph.set(file, deps);
   }
@@ -68,8 +69,10 @@ function buildBatch(
 ): SamplingBatch {
   const contextPaths = new Set<string>();
   for (const file of files) {
-    const refs = fileMap.get(file);
-    for (const dep of refs?.refs ?? []) {
+    const fr = fileMap.get(file);
+    // Check both import keys (local file imports) and refs (text mentions)
+    const allDeps = [...Object.keys(fr?.imports ?? {}), ...(fr?.refs ?? [])];
+    for (const dep of allDeps) {
       if (summarized.has(toAbs(dep)) && summaries.files.get(toAbs(dep))?.summary) {
         contextPaths.add(dep);
       }
