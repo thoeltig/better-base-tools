@@ -44,7 +44,8 @@ describe('parseFileRefs — TS/JS', () => {
   it('extracts external package names with named imports', () => {
     const result = parseFileRefs(
       'src/main.ts',
-      `import React from 'react'; import { z } from 'zod';`,
+      `import React from 'react';
+import { z } from 'zod';`,
       makeSet('src/main.ts'),
       ROOT
     );
@@ -56,7 +57,8 @@ describe('parseFileRefs — TS/JS', () => {
   it('extracts scoped package names with named imports', () => {
     const result = parseFileRefs(
       'src/main.ts',
-      `import Anthropic from '@anthropic-ai/sdk'; import { Server } from '@modelcontextprotocol/sdk/server/index.js';`,
+      `import Anthropic from '@anthropic-ai/sdk';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';`,
       makeSet('src/main.ts'),
       ROOT
     );
@@ -104,6 +106,17 @@ describe('parseFileRefs — TS/JS', () => {
     expect(result.exports).not.toContain('parse');
   });
 
+  it('resolves .js extension import to .ts file (TypeScript ESM style)', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import { foo } from './utils.js'`,
+      makeSet('src/main.ts', 'src/utils.ts'),
+      ROOT
+    );
+    expect(result.imports).toHaveProperty('src/utils.ts', ['foo']);
+    expect(result.refs).toHaveLength(0);
+  });
+
   it('handles require() calls — local goes to refs', () => {
     const result = parseFileRefs(
       'src/legacy.js',
@@ -136,7 +149,8 @@ describe('parseFileRefs — TS/JS', () => {
   it('merges named imports from duplicate static imports of same file', () => {
     const result = parseFileRefs(
       'src/main.ts',
-      `import { a } from './shared'; import { b } from './shared';`,
+      `import { a } from './shared';
+import { b } from './shared';`,
       makeSet('src/main.ts', 'src/shared.ts'),
       ROOT
     );

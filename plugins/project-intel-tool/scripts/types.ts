@@ -20,7 +20,6 @@ export const ENV_EXCLUDE_PATHS = 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS';
 
 export interface ScanConfig {
   maxTokensPerBatch: number;
-  minBatchTokens: number;
   charsPerToken: number;
   includePaths: string[];
   excludePaths: string[];
@@ -28,7 +27,6 @@ export interface ScanConfig {
 
 export const DEFAULT_SCAN_CONFIG: ScanConfig = {
   maxTokensPerBatch: SAMPLING_TOKEN_BUDGET,
-  minBatchTokens: 3_200,
   charsPerToken: 2.5,
   includePaths: [],
   excludePaths: [],
@@ -84,7 +82,8 @@ export interface SamplingFileSummary {
 
 export interface SamplingBatch {
   files: string[];
-  contextFiles: { path: string; summary: string }[];
+  fileRefs: Record<string, string[]>; // per-file import entries for intra-batch + context deps, formatted "key: name1, name2"
+  contextFiles: { path: string; summary: string; referencedBy: string[] }[];
   estimatedTokens: number;
 }
 

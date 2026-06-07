@@ -14,9 +14,9 @@ const RESOLVE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'];
 
 // Matches full static import: import [type] <specifiers> from 'module'
 // Group 1: specifier list, Group 2: module path
-const TS_IMPORT_FULL_RE = /\bimport\s+(?:type\s+)?({[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*(?:\s*,\s*(?:{[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*))??)\s+from\s+['"]([^'"]+)['"]/g;
+const TS_IMPORT_FULL_RE = /^import\s+(?:type\s+)?({[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*(?:\s*,\s*(?:{[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*))??)\s+from\s+['"]([^'"]+)['"]/gm;
 // Matches bare side-effect import: import 'module'
-const TS_IMPORT_BARE_RE = /\bimport\s+['"]([^'"]+)['"]/g;
+const TS_IMPORT_BARE_RE = /^import\s+['"]([^'"]+)['"]/gm;
 // Matches dynamic import: import('module')
 const TS_DYNAMIC_RE = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
 // Matches require: require('module')
@@ -56,6 +56,18 @@ function resolveImport(
     if (projectFileSet.has(withExt)) return withExt;
     const asIndex = rel + '/index' + ext;
     if (projectFileSet.has(asIndex)) return asIndex;
+  }
+
+  // Strip existing extension and retry (handles .js → .ts in TypeScript ESM imports)
+  const relNoExt = rel.replace(/\.[^/]+$/, '');
+  if (relNoExt !== rel) {
+    if (projectFileSet.has(relNoExt)) return relNoExt;
+    for (const ext of RESOLVE_EXTS) {
+      const withExt = relNoExt + ext;
+      if (projectFileSet.has(withExt)) return withExt;
+      const asIndex = relNoExt + '/index' + ext;
+      if (projectFileSet.has(asIndex)) return asIndex;
+    }
   }
   return null;
 }
@@ -118,11 +130,12 @@ function parseTsJs(
   const exports: string[] = [];
   const refs: string[] = [];
 
+  const importContent = content.split(/\r?\n/).slice(0, 100).join('\n');
   let m: RegExpExecArray | null;
 
   // Full static imports: capture specifiers + module path
   TS_IMPORT_FULL_RE.lastIndex = 0;
-  while ((m = TS_IMPORT_FULL_RE.exec(content)) !== null) {
+  while ((m = TS_IMPORT_FULL_RE.exec(importContent)) !== null) {
     const specStr = m[1] ?? '';
     const modulePath = m[2];
     if (!modulePath) continue;
@@ -137,7 +150,7 @@ function parseTsJs(
 
   // Bare side-effect imports: import 'module' — no specifiers
   TS_IMPORT_BARE_RE.lastIndex = 0;
-  while ((m = TS_IMPORT_BARE_RE.exec(content)) !== null) {
+  while ((m = TS_IMPORT_BARE_RE.exec(importContent)) !== null) {
     const modulePath = m[1];
     if (!modulePath) continue;
     if (modulePath.startsWith('.')) {
@@ -151,7 +164,7 @@ function parseTsJs(
 
   // Dynamic imports and require → local goes to refs, external adds empty entry
   TS_DYNAMIC_RE.lastIndex = 0;
-  while ((m = TS_DYNAMIC_RE.exec(content)) !== null) {
+  while ((m = TS_DYNAMIC_RE.exec(importContent)) !== null) {
     const modulePath = m[1];
     if (!modulePath) continue;
     if (modulePath.startsWith('.')) {
@@ -164,7 +177,7 @@ function parseTsJs(
   }
 
   TS_REQUIRE_RE.lastIndex = 0;
-  while ((m = TS_REQUIRE_RE.exec(content)) !== null) {
+  while ((m = TS_REQUIRE_RE.exec(importContent)) !== null) {
     const modulePath = m[1];
     if (!modulePath) continue;
     if (modulePath.startsWith('.')) {

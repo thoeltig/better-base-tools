@@ -1,6 +1,6 @@
 
 import { existsSync } from 'fs';
-import { basename, dirname, relative, resolve } from 'path';
+import { basename, dirname, extname, relative, resolve } from 'path';
 import { getOrCreateSummaries } from './summary-merger.js';
 import { 
   FileRole,
@@ -98,11 +98,12 @@ function renderImports(imports: Record<string, string[]> | undefined): string | 
   const entries = Object.entries(imports);
   if (entries.length === 0) return null;
   return entries
+    .filter(([, names]) => Array.isArray(names))
     .map(([src, names]) => {
-      const label = src.includes('/') ? basename(src) : src;
+      const label = extname(src) ? basename(src) : src;
       return names.length > 0 ? `${names.join(', ')} from ${label}` : label;
     })
-    .join(' | ');
+    .join(' | ') || null;
 }
 
 function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean, verbosity: VerbosityType = 'full'): string {
