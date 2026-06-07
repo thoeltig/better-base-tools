@@ -125,27 +125,6 @@
       "lineCountWhenAnalysed": 314,
       "role": "documentation"
     },
-    "plugins/batch_file_tools/CLAUDE.md": {
-      "sizeChars": 427,
-      "lineCount": 5,
-      "deleted": true,
-      "path": "plugins/batch_file_tools/CLAUDE.md",
-      "summary": "Usage guidelines for batch_file_tools plugin. Two key directives: (1) Always use batch_read and batch_edit instead of built-in Read/Edit/Write tools. (2) Bundle related operations into single calls before reading/editing to minimize round-trips and context noise.",
-      "technologies": [
-        "Markdown",
-        "Guidelines"
-      ],
-      "searchTags": [
-        "best-practices",
-        "batch-tools-usage",
-        "workflow",
-        "context-reduction"
-      ],
-      "lastUpdated": "2026-06-07T01:08:10.777Z",
-      "role": "documentation",
-      "sizeCharsWhenAnalysed": 427,
-      "lineCountWhenAnalysed": 5
-    },
     "plugins/batch_file_tools/hooks/hooks.json": {
       "sizeChars": 228,
       "lineCount": 14,
@@ -335,7 +314,7 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/index.ts",
-      "summary": "MCP server entrypoint (~400 lines). Registers batch_read and batch_edit tools. Parses config (env vars/args: logging, dry-run, formatting, fileinfo, meta). Implements elicitation workflow for unauthorized paths with session allow-list (read/edit separate). Progress reporting, MCP logging, process shutdown (stdin/SIGTERM/SIGINT), roots notification handler.",
+      "summary": "MCP server entrypoint. Registers batch_read and batch_edit tools. Parses config (env vars/args: logging, dry-run, formatting, fileinfo, meta). Implements elicitation workflow for unauthorized paths with session allow-list (read/edit separate). Progress reporting, MCP logging, process shutdown (stdin/SIGTERM/SIGINT), roots notification handler.",
       "technologies": [
         "TypeScript",
         "MCP",
@@ -819,7 +798,7 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/tools/read.ts",
-      "summary": "Core batch read handler (~700 lines). Implements request deduplication (fileinfo/search/range merging), glob expansion, file caching, search with regex+context-block merging (SEARCH_MERGE_GAP=3), fileinfo metadata (size/lines/lastChanged/refs extraction), multiple read modes with formatting normalization, offset/count pagination.",
+      "summary": "Core batch read handler. Implements request deduplication (fileinfo/search/range merging), glob expansion, file caching, search with regex+context-block merging (SEARCH_MERGE_GAP=3), fileinfo metadata (size/lines/lastChanged/refs extraction), multiple read modes with formatting normalization, offset/count pagination.",
       "technologies": [
         "TypeScript",
         "Node.js",
