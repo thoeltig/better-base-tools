@@ -9,6 +9,8 @@ import {
   SAMPLING_DELAY_MS,
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
+  BATCHES_DIRECTORY,
+  ROLE_VALUES,
 } from '../types.js';
 
 // Loosely typed to avoid hard MCP SDK coupling in lib; cast server to this in index.ts
@@ -186,10 +188,10 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
   return `Analyze the following ${batch.files.length} file(s). Return a JSON array with one object per file:
 [{
   "path": "<exact file path from input>",
-  "summary": "<one sentence, max 150 chars>",
-  "purpose": "<three sentences: what it does, key technical details, how it connects to the rest of the codebase — max 450 chars>",
-  "role": "<implementation|documentation|configuration|test|build|script>",
-  "technologies": ["<2-5 key techs>"]
+  "summary": "<explain content, purpose and key information for understanding this file's role in the codebase — max 450 chars>",
+  "role": "<${ROLE_VALUES.join('|')}>",
+  "technologies": ["<2-5 key techs>"],
+  "searchTags": ["<additional search words not in summary, role, or technologies that help locate this file>"]
 }]
 ${contextSection}
 Files to analyze:
@@ -213,14 +215,16 @@ function parseResponse(text: string): SamplingFileSummary[] {
 }
 
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
+export type SamplerProgress = (done: number, total: number, message: string) => Promise<void> | void;
 
-export async function runSamplingBackground(
+export async function runSampling(
   batches: SamplingBatch[],
   server: SamplingServer,
   knowledgeDir: string,
   projectRoot: string,
   signal: AbortSignal,
   log: SamplerLog = () => {},
+  onProgress?: SamplerProgress,
   delayMs: number = SAMPLING_DELAY_MS
 ): Promise<void> {
   log('info', `Starting: ${batches.length} batch(es)`);
@@ -262,6 +266,8 @@ export async function runSamplingBackground(
       log('error', `Batch ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
+    await onProgress?.(i + 1, batches.length, `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s)`);
+
     if (i < batches.length - 1) {
       await new Promise<void>(resolve => {
         const timer = setTimeout(resolve, delayMs);
@@ -273,8 +279,15 @@ export async function runSamplingBackground(
 }
 
 export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, projectRoot: string): string[] {
-  const batchDir = path.join(knowledgeDir, 'batches');
-  if (!fs.existsSync(batchDir)) fs.mkdirSync(batchDir, { recursive: true });
+  const batchDir = path.join(knowledgeDir, BATCHES_DIRECTORY);
+  if (fs.existsSync(batchDir)) {
+    for (const f of fs.readdirSync(batchDir)) {
+      if (/^batch-\d+\.txt$/.test(f))
+        try { fs.unlinkSync(path.join(batchDir, f)); } catch {}
+    }
+  } else {
+    fs.mkdirSync(batchDir, { recursive: true });
+  }
   const noopLog: SamplerLog = () => {};
   return batches.map((batch, i) => {
     const fp = path.join(batchDir, `batch-${i}.txt`);
@@ -282,7 +295,7 @@ export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, 
     const prompt = basePrompt
       ? basePrompt.replace(
           'Return only the JSON array. No markdown, no explanation.',
-          `Load the 'submit_analysis' tool and submit your analysis with the tool. When you are finished return only 'Done' as output.`
+          `Use ToolSearch with query 'submit_analysis' to load the 'submit_analysis' tool, then call it with your analysis results. Do not invoke any other skills or tools. When you are finished return only 'Done', no additional output or explanation needed.`
         )
       : '';
     fs.writeFileSync(fp, prompt);

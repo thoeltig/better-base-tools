@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { LoggingLevel } from '@modelcontextprotocol/sdk/types.js';
+import { RootsListChangedNotificationSchema, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { LoggingLevel, ServerRequest, ServerNotification } from '@modelcontextprotocol/sdk/types.js';
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import * as fs from 'fs';
@@ -10,7 +11,7 @@ import * as path from 'path';
 import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
 import { getOrCreateSummaries, mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { buildFileMap } from './lib/file-map.js';
-import { buildSamplingBatches, runSamplingBackground, writeBatchFiles, SamplingServer } from './lib/sampler.js';
+import { buildSamplingBatches, runSampling, writeBatchFiles, SamplingServer, SamplerProgress } from './lib/sampler.js';
 import {
   ENV_INCLUDE_PATHS,
   ENV_EXCLUDE_PATHS,
@@ -23,12 +24,23 @@ import {
   SamplingFileSummary,
   ScanConfig,
   DEFAULT_SCAN_CONFIG,
+  ROLE_VALUES,
   ScoredFileSummary,
+  ToolContentResult,
+  VERBOSITY_VALUES,
+  VerbosityType,
 } from './types.js';
 
 const server = new McpServer(
-  { name: 'project-intel-mcp-server', version: '1.0.0' },
-  { capabilities: { tools: {}, logging: {} } }
+  { 
+    name: 'project-intel-mcp-server', 
+    version: '1.4.1' },
+  { 
+    capabilities: { 
+      tools: {}, 
+      logging: {} 
+    }
+  }
 );
 
 let validRootDirectories: string[] = [];
@@ -44,6 +56,12 @@ let isScanning = false;
 // Enable only when the harness is known to support the respective MCP capability.
 const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
+const USE_MCP_PROGRESS = parseConfigArg('mcp-progress', 'PROJECT_INTEL_TOOL_MCP_PROGRESS', 'false') === 'true';
+const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
+const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT', 'false') === 'true';
+const SCAN_META = parseConfigArgRecord('scan-meta', 'PROJECT_INTEL_TOOL_SCAN_META');
+const QUERY_META = parseConfigArgRecord('query-meta', 'PROJECT_INTEL_TOOL_QUERY_META');
+const SUBMIT_ANALYSIS_META = parseConfigArgRecord('submit-analysis-meta', 'PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META');
 
 const scanConfig: ScanConfig = {
   maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
@@ -65,6 +83,19 @@ function parseConfigArg(argName: string, envName: string, defaultVal: string): s
     return 'true';
   }
   return defaultVal;
+}
+
+function parseConfigArgRecord(argName: string, envName: string): Record<string, unknown> {
+  const raw = parseConfigArg(argName, envName, '');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    console.error(`[config] ${envName}: expected a JSON object, ignoring`);
+  } catch {
+    console.error(`[config] ${envName}: invalid JSON, ignoring`);
+  }
+  return {};
 }
 
 let activeLockPath: string | null = null;
@@ -114,21 +145,61 @@ async function acquireSubmitLock(knowledgeDir: string, timeoutMs = 30_000, inter
   return false;
 }
 
-function shutdown(): void {
-  console.error('[server] Shutdown signal received, aborting background tasks');
-  shutdownController.abort();
-  releaseLock();
+let isShuttingDown = false;
+
+async function shutdown(source: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  try {
+    console.error(`project-intel-mcp-server: Release resources`);
+    shutdownController.abort();
+    releaseLock();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error releasing resources from project-intel-mcp-server: ${message}`);
+  }
+  
+  try {
+    console.error(`project-intel-mcp-server: Shutdown via ${source}`);
+    await server.server.close(); 
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Error shutting down project-intel-mcp-server via ${source}: ${message}`);
+  }
+
   process.exit(0);
 }
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+function createOutputMessage(msg: string, isError?: boolean | undefined): {
+  isError: boolean | undefined;
+  content: ToolContentResult[];
+}{
+  return { 
+    isError, 
+    content: [{ 
+      type: 'text', 
+      text: isError ? `Error: ${msg}` : msg,
+      annotations: {
+        audience: ["assistant", "user"],
+        priority: 0
+      }
+    }]
+  };
+}
+
+process.stdin.on('end', () => void shutdown('stdin:end'));
+process.stdin.on('close', () => void shutdown('stdin:close'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
     try {
       server.sendLoggingMessage({ level, data, logger });
-    } catch { /* ignore if client doesn't support logging */ }
+    } catch {
+      console.error(`[${logger ?? 'server'}] ${data}`);
+    }
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
@@ -136,6 +207,27 @@ function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): vo
 
 function samplerLog(level: 'info' | 'warning' | 'error', msg: string): void {
   writeMcpLogLine(level, msg, 'sampler');
+}
+
+async function reportProgress(
+  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  progress: number,
+  total: number,
+  message?: string
+): Promise<void> {
+  const token = extra._meta?.progressToken;
+  if (token === undefined) return;
+  try {
+    await extra.sendNotification({
+      method: 'notifications/progress',
+      params: { 
+        progressToken: token,
+        progress,
+        total,
+        message
+      },
+    });
+  } catch { /* ignore if client doesn't support progress */ }
 }
 
 function prepareAnalysisBatches(
@@ -154,24 +246,24 @@ function prepareAnalysisBatches(
   return buildSamplingBatches(filesToScan, fileMap, existingSummaries, config, projectRoot);
 }
 
-async function runFullScanBackground(
+async function runFullScan(
   filesToScan: string[],
   knowledgeDir: string,
   projectRoot: string,
-): Promise<void> {
+  onProgress?: SamplerProgress,
+): Promise<{ filesScanned: number; batchCount: number }> {
   try {
     const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
-
-    await runSamplingBackground(
+    await runSampling(
       batches,
       server.server as unknown as SamplingServer,
       knowledgeDir,
       projectRoot,
       shutdownController.signal,
-      samplerLog
+      samplerLog,
+      onProgress
     );
-  } catch (err) {
-    writeMcpLogLine('error', `Background scan error: ${err instanceof Error ? err.message : String(err)}`, 'scan');
+    return { filesScanned: filesToScan.length, batchCount: batches.length };
   } finally {
     isScanning = false;
     releaseLock();
@@ -192,7 +284,7 @@ async function updateValidRootDirectories(): Promise<void> {
         .filter((p): p is string => p !== null && p.length > 0);
     }
   } catch (err) {
-    writeMcpLogLine('warning', `Failed to fetch roots: ${err instanceof Error ? err.message : String(err)}`, 'roots');
+    writeMcpLogLine('warning', `Failed to fetch roots: ${err instanceof Error ? err.message : String(err)}`, 'permissions');
   }
 }
 
@@ -213,13 +305,11 @@ server.server.oninitialized = async () => {
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
   await updateValidRootDirectories();
   if (validRootDirectories.length === 0) {
-    writeMcpLogLine('warning', 'All roots removed. Tools will fail until roots are restored.', 'roots');
+    writeMcpLogLine('warning', 'All roots removed. Tools will fail until roots are restored.', 'permissions');
   } else {
-    writeMcpLogLine('info', `Roots updated: ${validRootDirectories[0]}`, 'roots');
+    writeMcpLogLine('info', `Roots updated: ${validRootDirectories[0]}`, 'permissions');
   }
 });
-
-
 
 function assertRoots(): string | null {
   if (validRootDirectories.length === 0) return null;
@@ -232,13 +322,10 @@ server.registerTool(
   'scan',
   {
     title: 'Scan project and generate AI file summaries',
-    description:
-      'Scan the current project directory and generate AI summaries in the background. ' +
-      'Returns immediately with the number of files being processed. Use query after scanning.',
+    description: 'Scan the current project directory and generate AI summaries. Blocks until complete. Use query after scanning.',
     inputSchema: z.object({
-      scanLocation: z.string().optional().describe(
-        'Sub-folder to scan relative to the project root. Default: entire project.'
-      ),
+      scanLocation: z.string().optional()
+        .describe('Sub-folder to scan relative to the project root. Default: entire project.'),
     }).strict(),
     annotations: {
       title: 'Scan project and generate AI file summaries',
@@ -247,15 +334,16 @@ server.registerTool(
       idempotentHint: true,
       openWorldHint: false,
     },
+    _meta: SCAN_META,
   },
-  async (args) => {
+  async (args, extra) => {
     writeMcpLogLine('info', `scan — called${args.scanLocation ? ` (scope: ${args.scanLocation})` : ''}`, 'scan');
     if (isScanning) {
-      return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress.' }) }] };
+      return createOutputMessage('A scan is already in progress.');
     }
     const root = assertRoots();
     if (!root) {
-      return { isError: true, content: [{ type: 'text', text: 'No MCP roots available. Cannot determine project location.' }] };
+      return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
@@ -265,67 +353,66 @@ server.registerTool(
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const scanLocation = args.scanLocation ? path.resolve(root, args.scanLocation) : root;
       if (!toAbsReal(scanLocation, '.').startsWith(toAbsReal(root, '.'))) {
-        return { isError: true, content: [{ type: 'text', text: `scanLocation must be within the project root: ${root}` }] };
+        return createOutputMessage(`scanLocation must be within the project root: ${root}`, true);
       }
       const scanResult = await scanProject(scanLocation, knowledgeDir, scanConfig);
       const { filesToScan } = scanResult;
 
       if (filesToScan.length === 0) {
         writeMcpLogLine('info', 'scan — up_to_date', 'scan');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              status: 'up_to_date',
-              totalFiles: scanResult.projectStats.totalFilesInKnowledge,
-              message: 'All files are up to date. Use query to search.',
-            }),
-          }],
-        };
+        return createOutputMessage('All files are up to date. Use query to search.');
       }
 
       if (USE_MCP_SAMPLING) {
         if (!acquireLock(knowledgeDir)) {
-          return { content: [{ type: 'text', text: JSON.stringify({ status: 'scanning', message: 'A scan is already in progress for this project.' }) }] };
+          return createOutputMessage('A scan is already in progress for this project.');
         }
         isScanning = true;
-        runFullScanBackground(filesToScan, knowledgeDir, projectRoot)
-          .catch(err => writeMcpLogLine('error', `Background scan crashed: ${err instanceof Error ? err.message : String(err)}`, 'scan'));
-        writeMcpLogLine('info', `scan — launched background scan for ${filesToScan.length} file(s)`, 'scan');
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              status: 'scanning',
-              filesToScan: filesToScan.length,
-              message: `Structural data for ${filesToScan.length} file(s) will be available shortly. AI descriptions follow in the background. Query at any time.`,
-            }),
-          }],
-        };
+        const onProgress = USE_MCP_PROGRESS
+          ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg)
+          : undefined;
+        const { filesScanned, batchCount } = await runFullScan(filesToScan, knowledgeDir, projectRoot, onProgress);
+        writeMcpLogLine('info', `scan complete — ${filesScanned} file(s) in ${batchCount} batch(es)`, 'scan');
+        return createOutputMessage(`Scan complete. Analysed ${filesScanned} file(s) in ${batchCount} batch(es). Use query to search.`);
       }
 
       // Subagent mode: pre-populate structural data, write batch task files, return for main model orchestration
       const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
       const batchFiles = writeBatchFiles(batches, knowledgeDir, projectRoot);
       writeMcpLogLine('info', `scan — wrote ${batches.length} batch file(s) for subagent analysis`, 'scan');
-      return {
+      const analysisInstructions = {
+        status: 'analysis_required',
+        batchCount: batches.length,
+        batchFiles,
+        instruction:
+          `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
+          'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
+          'Prompt for the subagent: Follow the instructions in the provided file.',
+      };
+      const scanToolResult: CallToolResult = {
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            status: 'analysis_required',
-            batchCount: batches.length,
-            batchFiles,
-            instruction:
-              `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
-              'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
-              'Prompt for the subagent: Follow the instructions in the provided file.',
-          }),
+          text: JSON.stringify(analysisInstructions), 
+          annotations: { 
+            audience: ['assistant'], 
+            priority: 0.1
+          }
         }],
       };
+      if (USE_USER_AUDIENCE) scanToolResult.content.push({
+        type: 'text',
+        text: `File analysis by ${batches.length} subagents required`,
+        annotations: { 
+          audience: ['user'], 
+          priority: 0
+        }
+      });
+      if (USE_STRUCTURED_CONTENT) scanToolResult.structuredContent = analysisInstructions;
+      return scanToolResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `scan error — ${message}`, 'scan');
-      return { isError: true, content: [{ type: 'text', text: `scan error: ${message}` }] };
+      return createOutputMessage(message, true);
     }
   }
 );
@@ -335,16 +422,14 @@ if (!USE_MCP_SAMPLING) {
     'submit_analysis',
     {
       title: 'Submit file analysis results from subagent',
-      description:
-        'Called by analysis subagents to submit file summaries into project knowledge. ' +
-        'Serializes concurrent writes — multiple subagents can safely call this in parallel.',
+      description: 'Called by analysis subagents to submit file summaries into project knowledge. Serializes concurrent writes — multiple subagents can safely call this in parallel.',
       inputSchema: z.object({
         results: z.array(z.object({
           path: z.string(),
           summary: z.string().optional(),
-          purpose: z.string().optional(),
-          role: z.string().optional(),
+          role: z.enum(ROLE_VALUES).optional(),
           technologies: z.array(z.string()).optional(),
+          searchTags: z.array(z.string()).optional(),
           exports: z.array(z.string()).optional(),
           imports: z.array(z.string()).optional(),
         })),
@@ -355,30 +440,29 @@ if (!USE_MCP_SAMPLING) {
         destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false,
-      }
+      },
+      _meta: SUBMIT_ANALYSIS_META,
     },
     async (args) => {
       writeMcpLogLine('info', `submit_analysis — ${args.results.length} file(s) queued`, 'submit');
       const root = assertRoots();
       if (!root) {
-        return { isError: true, content: [{ type: 'text', text: 'No MCP roots available.' }] };
+        return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
       }
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
       if (!await acquireSubmitLock(knowledgeDir)) {
-        return { isError: true, content: [{ type: 'text', text: 'submit_analysis: timed out waiting for write lock' }] };
+        return createOutputMessage('Wait for write timed out, try again in 10s', true);
       }
       try {
         const projectRoot = path.dirname(path.resolve(knowledgeDir));
         mergeSamplingResults(knowledgeDir, args.results as SamplingFileSummary[], projectRoot);
         writeMcpLogLine('info', `submit_analysis — merged ${args.results.length} file(s)`, 'submit');
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ status: 'success', filesProcessed: args.results.length }) }],
-        };
+        return createOutputMessage(`Analysis for ${args.results.length} files submitted successfully`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         writeMcpLogLine('error', `submit_analysis error — ${message}`, 'submit');
-        return { isError: true, content: [{ type: 'text', text: `submit_analysis error: ${message}` }] };
+        return createOutputMessage(message, true);
       } finally {
         releaseLock();
       }
@@ -389,47 +473,43 @@ if (!USE_MCP_SAMPLING) {
 server.registerTool(
   'query',
   {
-    title: 'Search project file summaries by keywords',
-    description:
-      'Search project file summaries by keywords. Searches primary knowledge and any sub-project knowledge. ' +
-      'Returns ranked results. Deleted files are excluded.',
+    title: 'Query project files by path, structure, or semantics',
+    description: 'Search project files by keywords matched against: file path, exports, imports, refs, searchTags, technologies, role, and semantic summary. Available immediately on session start without scanning — structural data (imports, exports, refs, lines, chars) is always current; semantic fields are confidence-weighted by changeDelta (size ratio since last scan) so stale summaries rank lower automatically. Accepts file names, folder paths, and semantic terms as keywords. Use scope to narrow to a subdirectory, role to filter by file type.',
     inputSchema: z.object({
       keywords: z.string().describe('Space-separated search terms'),
       scope: z.string().optional().describe('Limit results to files under this directory path'),
-      max: z.number().optional().describe(`Max results (default: ${QUERY_RESULT_MAX})`),
-      format: z.string().optional().describe('Output format: grouped (default) or flat'),
+      max: z.number().optional().default(QUERY_RESULT_MAX).describe(`Max results (default: ${QUERY_RESULT_MAX})`),
+      format: z.enum(['grouped', 'flat']).optional().default("grouped").describe('Output format: grouped (default) or flat'),
+      role: z.enum(ROLE_VALUES).optional().describe('Filter results to files with this role'),
+      verbosity: z.enum(VERBOSITY_VALUES).optional().default("full").describe('Data density: full (default) = all fields; structure = filepath/size/lines/imports/exports/refs; semantic = filepath/role/summary/technologies'),
     }).strict(),
     annotations: {
-      title: 'Search project file summaries by keywords',
+      title: 'Query project files by path, structure, or semantics',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
     },
-    _meta:{
-      "anthropic/maxResultSizeChars": 500000,
-      "anthropic/alwaysLoad": true
-    }
+    _meta: QUERY_META,
   },
   async (args) => {
     writeMcpLogLine('info', `query — keywords: "${args.keywords}"`, 'query');
     const root = assertRoots();
     if (!root) {
-      return { isError: true, content: [{ type: 'text', text: 'No MCP roots available. Cannot determine project location.' }] };
+      return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
       if (!fs.existsSync(knowledgeDir)) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: 'No knowledge found. Run scan first.' }) }],
-        };
+        return createOutputMessage('No knowledge found. Run scan first.', true);
       }
 
       const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-      const scope = args.scope || '';
+      const scope = args.scope;
       const maxResults = args.max || QUERY_RESULT_MAX;
       const format = args.format || FORMAT_GROUPED;
+      const verbosity: VerbosityType = args.verbosity ?? 'full';
 
       const projectRoot = path.dirname(path.resolve(knowledgeDir));
       const primarySummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
@@ -441,6 +521,7 @@ server.registerTool(
           const relPath = path.relative(summaryProjectRoot, absPath).replace(/\\/g, '/');
           const prefixedPath = pathPrefix ? `${pathPrefix}/${relPath}`.replace(/\/\//g, '/') : relPath;
           if (scope && !prefixedPath.startsWith(scope)) return;
+          if (args.role && summary.role !== args.role) return;
           const score = calculateConfidence(keywords, prefixedPath, summary);
           if (score > 0) {
             const { lastUpdated: _ld, ...summaryRest } = summary;
@@ -473,52 +554,127 @@ server.registerTool(
           }
           const group = grouped[folderPath]!;
           group.folderScore += item.fileScore;
+          if (item.technologies?.length) {
+            const set = new Set(group.technologies ?? []);
+            item.technologies.forEach(t => set.add(t));
+            group.technologies = [...set];
+          }
           const fileName = path.basename(item.path);
-          const { path: _p, technologies: _t, lastUpdated: _ld, ...restFields } = item;
+          const { path: _p, technologies: _t, lastUpdated: _ld, deleted: _del, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...restFields } = item;
           const f: GroupedScoredFileSummary = { fileName, ...restFields };
           group.files.push(f);
         });
-        output = {
-          query: args.keywords,
-          keywords,
-          scope: scope || 'all',
-          total: limited.length,
-          grouped: Object.values(grouped).sort((a, b) => b.folderScore - a.folderScore),
-        };
+        const groupValues = Object.values(grouped);
+        const fallbackToFlat = limited.length === 1 || groupValues.every(g => g.files.length === 1);
+        if (fallbackToFlat) {
+          output = createFlatOutput(limited, verbosity);
+        } else {
+          output = {
+            total: limited.length,
+            grouped: groupValues
+              .sort((a, b) => b.folderScore - a.folderScore)
+              .map(({ folderScore: _fs, ...rest }) => rest),
+          };
+        }
       } else {
-        output = {
-          query: args.keywords,
-          keywords,
-          scope: scope || 'all',
-          total: limited.length,
-          results: limited,
-        };
+        output = createFlatOutput(limited, verbosity);
       }
 
       writeMcpLogLine('info', `query done — ${limited.length} result(s)`, 'query');
-      return { content: [{ type: 'text', text: JSON.stringify(output) }] };
+      const queryResult: CallToolResult = { 
+        content: [{ 
+          type: 'text', 
+          text: outputToFluentText(output as FluentOutput, verbosity), 
+          annotations: { 
+            audience: ['assistant'], 
+            priority: 0.3,
+            lastModified: new Date().toISOString()
+          }
+        }]
+      };
+      if (USE_USER_AUDIENCE) queryResult.content.push({
+        type: 'text',
+        text: `Found ${limited.length} knowledge entr${limited.length === 1 ? 'y' : 'ies'}`,
+        annotations: { 
+          audience: ['user'], 
+          priority: 0
+        }
+      });
+      if (USE_STRUCTURED_CONTENT) queryResult.structuredContent = output as Record<string, unknown>;
+      return queryResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeMcpLogLine('error', `query error — ${message}`, 'query');
-      return { isError: true, content: [{ type: 'text', text: `query error: ${message}` }] };
+      return createOutputMessage(message, true);
     }
   }
 );
+
+type FluentFile = { lineCount?: number; sizeChars?: number; role?: string; summary?: string; analysisDelta?: string; imports?: string[]; exports?: string[]; refs?: string[]; technologies?: string[] };
+type FluentGroup = { folderPath: string; technologies?: string[]; files: (FluentFile & { fileName: string })[] };
+type FluentOutput = { grouped?: FluentGroup[]; results?: (FluentFile & { path: string })[] };
+
+function fileEntryToFluent(name: string, file: FluentFile, includeTech: boolean, verbosity: VerbosityType = 'full'): string {
+  const showTech = verbosity !== 'structure' && includeTech && (file.technologies?.length ?? 0) > 0;
+  const techStr = showTech ? ` | ${file.technologies!.join(', ')}` : '';
+  const meta = `<!-- ${name}${file.lineCount !== undefined ? ` (Lines: ${file.lineCount}, Chars: ${file.sizeChars})` : ''}${file.role ? ` [${file.role}]` : ''}${techStr} -->`;
+  const parts: string[] = [meta];
+  if (verbosity !== 'structure' && file.summary) parts.push(file.summary);
+  if (verbosity !== 'structure' && file.analysisDelta) parts.push(`unanalysed: ${file.analysisDelta}`);
+  if (verbosity !== 'semantic' && file.imports?.length) parts.push(`imports: ${file.imports.join(', ')}`);
+  if (verbosity !== 'semantic' && file.exports?.length) parts.push(`exports: ${file.exports.join(', ')}`);
+  if (verbosity !== 'semantic' && file.refs?.length) parts.push(`referenced: ${file.refs.join(', ')}`);
+  return parts.join('\n');
+}
+
+function outputToFluentText(output: FluentOutput, verbosity: VerbosityType = 'full'): string {
+  if (output.grouped) {
+    return output.grouped.map(group => {
+      const showTech = verbosity !== 'structure' && (group.technologies?.length ?? 0) > 0;
+      const techStr = showTech ? ` | ${group.technologies!.join(', ')}` : '';
+      const header = `<!-- ${group.folderPath}${techStr} -->`;
+      const files = group.files.map(f => fileEntryToFluent(f.fileName, f, false, verbosity)).join('\n\n');
+      return `${header}\n${files}`;
+    }).join('\n\n');
+  }
+  return (output.results ?? []).map(item => fileEntryToFluent(item.path, item, true, verbosity)).join('\n\n');
+}
+
+function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType = 'full'): unknown {
+  return {
+    total: items.length,
+    results: items.map(({ deleted: _del, lastUpdated: _ld, sizeCharsWhenAnalysed: _sca, lineCountWhenAnalysed: _lcwa, fileScore: _score, searchTags: _stags, ...rest }) => {
+      if (verbosity === 'structure') {
+        const { summary: _s, technologies: _t, analysisDelta: _a, ...structRest } = rest;
+        return structRest;
+      }
+      if (verbosity === 'semantic') {
+        const { imports: _i, exports: _e, refs: _r, lineCount: _lc, sizeChars: _sc, ...semanticRest } = rest;
+        return semanticRest;
+      }
+      return rest;
+    }),
+  };
+}
 
 function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
   let score = 0;
   const pathLower = itemPath.toLowerCase();
   const sumLower = (summary.summary || '').toLowerCase();
-  const purposeLower = (summary.purpose || '').toLowerCase();
+  const baseline = summary.sizeCharsWhenAnalysed;
+  const current = summary.sizeChars;
+  const semanticWeight = (baseline && current)
+    ? Math.min(baseline, current) / Math.max(baseline, current)
+    : 1;
   keywords.forEach(k => {
-    if (purposeLower.includes(k)) score += 6;
-    if (sumLower.includes(k)) score += 6;
+    if (sumLower.includes(k)) score += 6 * semanticWeight;
+    if (summary.searchTags?.some((t: string) => t.toLowerCase().includes(k))) score += 3 * semanticWeight;
     if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
     if (summary.imports?.some((i: string) => i.toLowerCase().includes(k))) score += 4;
     if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;
     if (pathLower.includes(k)) score += 4;
-    if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2;
-    if (summary.role?.toLowerCase().includes(k)) score += 2;
+    if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2 * semanticWeight;
+    if (summary.role?.toLowerCase().includes(k)) score += 2 * semanticWeight;
   });
   return score;
 }

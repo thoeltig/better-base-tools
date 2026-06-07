@@ -1,8 +1,15 @@
+import { z } from "zod";
+
 export const KNOWLEDGE_DIRECTORY: string = '.knowledge';
+export const BATCHES_DIRECTORY: string = 'batches';
 export const SUMMARIES_FILE: string = 'summaries.json';
 export const SCAN_FILE: string = 'scan.json';
 export const FORMAT_FLAT: string = 'flat';
 export const FORMAT_GROUPED: string = 'grouped';
+export const VERBOSITY_VALUES = ['full', 'structure', 'semantic'] as const;
+export type VerbosityType = typeof VERBOSITY_VALUES[number];
+export const ROLE_VALUES = ['implementation', 'executable', 'helperScript', 'test', 'configuration', 'build', 'documentation', 'data'] as const;
+export type FileRole = typeof ROLE_VALUES[number];
 export const QUERY_RESULT_MAX: number = 25;
 export const SAMPLING_DELAY_MS: number = 1500;
 export const SAMPLING_TOKEN_BUDGET: number = 50_000;
@@ -32,14 +39,17 @@ export interface SubKnowledgeRef {
 
 export interface FileSummary {
   summary?: string;
-  purpose?: string;
-  role?: string;
+  role?: FileRole;
   technologies?: string[];
+  searchTags?: string[];
   exports?: string[];
   imports?: string[];
   refs?: string[];       // intra-project file references resolved from imports
   sizeChars?: number;
   lineCount?: number;
+  sizeCharsWhenAnalysed?: number;
+  lineCountWhenAnalysed?: number;
+  analysisDelta?: string;
   deleted?: boolean;
   lastUpdated?: string;
 }
@@ -60,9 +70,9 @@ export interface SummariesData {
 export interface SamplingFileSummary {
   path: string;
   summary?: string;
-  purpose?: string;
   role?: string;
   technologies?: string[];
+  searchTags?: string[];
   exports?: string[];
   imports?: string[];
   refs?: string[];
@@ -80,6 +90,7 @@ export interface SamplingBatch {
 export interface HierarchicalGrouping {
   folderPath: string;
   folderScore: number;
+  technologies?: string[];
   files: GroupedScoredFileSummary[];
 }
 
@@ -91,7 +102,6 @@ export interface ScoredFileSummary extends FileSummary {
 export interface GroupedScoredFileSummary extends FileSummary {
   fileName: string;
   path?: string;
-  fileScore: number;
 }
 
 // Session start hook
@@ -104,3 +114,22 @@ export interface HookResponse {
     additionalContext: string;
   };
 }
+
+export const AudienceType = z.enum([
+    'user',
+    'assistant'
+  ]);
+export type AudienceType = z.infer<typeof AudienceType>;
+
+export const ToolContentResult = z.object({
+    type: z.literal("text"),
+    text: z.string(),
+    annotations: z.object({
+        audience: z.array(AudienceType).optional(),
+        priority: z.number().min(0.0).max(1.0).optional(),
+        lastModified: z.string().optional()
+    }).strip().strict().optional(),
+    _meta: z.record(z.string(), z.unknown()).optional()
+  }).strip().strict();
+  
+export type ToolContentResult = z.infer<typeof ToolContentResult>;

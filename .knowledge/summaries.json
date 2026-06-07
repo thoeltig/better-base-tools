@@ -1,227 +1,336 @@
 {
-  "generated": "2026-05-30T01:25:12.636Z",
+  "generated": "2026-06-03T22:14:10.380Z",
   "files": {
     ".claude-plugin/marketplace.json": {
-      "path": ".claude-plugin/marketplace.json",
       "sizeChars": 498,
-      "lineCount": 22,
+      "lineCount": 21,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Marketplace configuration declaring the better-base-tools plugin with two sub-plugins: batch_file_tools and project-intel-tool.",
-      "purpose": "Defines the plugin's metadata for the Claude Code marketplace, including the owner (Thore Höltig), version (1.1.0), and description positioning it as a tool for reducing turns and tokens. Lists the two plugins bundled within: batch_file_tools for batch file I/O and project-intel-tool for project intelligence. Integrates with the Claude Code plugin ecosystem.",
-      "role": "configuration",
+      "path": ".claude-plugin/marketplace.json",
+      "summary": "Plugin marketplace manifest for better-base-tools v1.2.0. Declares two plugins: batch_file_tools and project-intel-tool. Provides metadata for plugin discovery and installation.",
       "technologies": [
         "JSON",
-        "plugin-metadata"
-      ]
+        "plugin system",
+        "marketplace"
+      ],
+      "searchTags": [
+        "plugin registry",
+        "metadata",
+        "version",
+        "dependencies"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.570Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 498,
+      "lineCountWhenAnalysed": 21
     },
     ".gitignore": {
-      "path": ".gitignore",
       "sizeChars": 84,
-      "lineCount": 10,
+      "lineCount": 9,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Standard gitignore excluding build artifacts, dependencies, logs, temp files, and test coverage.",
-      "purpose": "Prevents tracking of Node.js dependencies (node_modules, dist), test outputs (.vitest, coverage), log files, OS files (.DS_Store), and temporary project files (Claude_Temp_Files). Maintains a clean repository by excluding build and runtime artifacts that should not be versioned.",
-      "role": "configuration",
+      "path": ".gitignore",
+      "summary": "Specifies patterns for files and directories to exclude from version control. Ignores build artifacts (.claude/, Claude_Temp_Files/, node_modules/, dist/), logs, OS files (.DS_Store), coverage reports, and vitest cache.",
       "technologies": [
-        "gitignore"
-      ]
+        "git"
+      ],
+      "searchTags": [
+        "ignore patterns",
+        "version control",
+        "build exclusions",
+        "temporary files"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.569Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 84,
+      "lineCountWhenAnalysed": 9
     },
     "LICENSE": {
-      "path": "LICENSE",
       "sizeChars": 1090,
-      "lineCount": 22,
+      "lineCount": 21,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "MIT License copyright 2026 Thore Höltig permitting free use with attribution and no liability.",
-      "purpose": "Grants permission to use, modify, and distribute the software freely under MIT terms. Provides legal protection by disclaiming warranties and limiting liability. Allows commercial and private use with proper attribution, essential for open-source projects on GitHub.",
-      "role": "documentation",
+      "path": "LICENSE",
+      "summary": "MIT License grant for better-base-tools (2026) by Thore Höltig. Permits free use, modification, and distribution with attribution and liability disclaimer.",
       "technologies": [
-        "license",
         "MIT"
-      ]
+      ],
+      "searchTags": [
+        "licensing",
+        "copyright",
+        "open source",
+        "legal"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.569Z",
+      "role": "documentation",
+      "sizeCharsWhenAnalysed": 1090,
+      "lineCountWhenAnalysed": 21
     },
     "plugins/batch_file_tools/.claude-plugin/plugin.json": {
-      "path": "plugins/batch_file_tools/.claude-plugin/plugin.json",
       "sizeChars": 549,
       "lineCount": 14,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Plugin manifest for batch_file_tools declaring v1.1.5 with author, repository, and keyword metadata.",
-      "purpose": "Registers batch_file_tools as a Claude Code plugin with semantic versioning (1.1.5), author info linking to GitHub, and descriptive keywords (tokens, efficiency, file-reading, context-optimization). Enables plugin discovery and installation via the Claude Code ecosystem.",
-      "role": "configuration",
+      "path": "plugins/batch_file_tools/.claude-plugin/plugin.json",
+      "summary": "Plugin manifest for batch_file_tools. Declares name, description, version (1.2.3), author (Thore Höltig), homepage and repository URLs, MIT license, and keywords. No external plugin dependencies.",
       "technologies": [
-        "JSON",
-        "plugin-manifest"
-      ]
+        "JSON"
+      ],
+      "searchTags": [
+        "plugin manifest",
+        "metadata",
+        "registration",
+        "claude plugin",
+        "batch_file_tools"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.378Z",
+      "sizeCharsWhenAnalysed": 549,
+      "lineCountWhenAnalysed": 14,
+      "role": "configuration"
     },
     "plugins/batch_file_tools/.mcp.json": {
-      "path": "plugins/batch_file_tools/.mcp.json",
       "sizeChars": 153,
-      "lineCount": 9,
+      "lineCount": 8,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "MCP server configuration pointing the batch_file_tools server to a Node.js script.",
-      "purpose": "Registers the batch_file_tools MCP server with the command to spawn it via Node.js, using a built script from the plugin root. Enables Claude to invoke batch file operations through the MCP protocol.",
-      "role": "configuration",
+      "path": "plugins/batch_file_tools/.mcp.json",
+      "summary": "MCP server configuration for batch_file_tools plugin. Specifies Node.js command to run the compiled server at plugins/batch_file_tools/scripts/dist/index.js.",
       "technologies": [
-        "JSON",
         "MCP",
         "Node.js"
-      ]
+      ],
+      "searchTags": [
+        "MCP servers",
+        "server configuration",
+        "entry point",
+        "batch file tools"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.571Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 153,
+      "lineCountWhenAnalysed": 8
     },
     "plugins/batch_file_tools/CHANGELOG.md": {
-      "path": "plugins/batch_file_tools/CHANGELOG.md",
-      "sizeChars": 15190,
-      "lineCount": 227,
+      "sizeChars": 22953,
+      "lineCount": 306,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Complete version history from v0.1.0 (Apr 2022) through v1.1.5 (May 2026) documenting features, changes, and fixes.",
-      "purpose": "Tracks all changes in semantic versioning format with sections for Added, Changed, Fixed per release. Highlights key improvements: path normalization and caching in v1.1.5, elicitation and allow-lists in v0.9-0.8, glob expansion in v0.6-0.4, and core batch_read/batch_edit tools in v0.1. Serves as official release documentation and migration guide.",
-      "role": "documentation",
+      "path": "plugins/batch_file_tools/CHANGELOG.md",
+      "summary": "Full version history for batch_file_tools from v0.1.0 to v1.2.3. Documents all added features, bug fixes, breaking changes, and removed items per release. Key milestones: initial batch read/edit tools, elicitation, deduplication, verbatim_numbered removal, fileinfo opt-in, and shutdown reliability fixes.",
       "technologies": [
-        "changelog",
-        "semantic-versioning"
-      ]
+        "Markdown",
+        "Semantic Versioning",
+        "Common Changelog"
+      ],
+      "searchTags": [
+        "release notes",
+        "version history",
+        "batch_read",
+        "batch_edit",
+        "fileinfo",
+        "elicitation",
+        "verbatim_numbered",
+        "changelog"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.378Z",
+      "sizeCharsWhenAnalysed": 22953,
+      "lineCountWhenAnalysed": 306,
+      "role": "documentation"
     },
     "plugins/batch_file_tools/CLAUDE.md": {
-      "path": "plugins/batch_file_tools/CLAUDE.md",
       "sizeChars": 427,
-      "lineCount": 6,
+      "lineCount": 5,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Two-point guidance directing users to prefer batch_read/batch_edit tools and plan reads/edits in batches.",
-      "purpose": "Establishes tool-preference convention for the batch_file_tools plugin: always use batch_read and batch_edit instead of native Read/Edit/Write. Emphasizes planning reads and edits upfront, bundling related operations per call, and reducing context noise through fewer round-trips. Aligns with the plugin's core value proposition.",
-      "role": "documentation",
+      "path": "plugins/batch_file_tools/CLAUDE.md",
+      "summary": "Project instructions for batch_file_tools. Advises using batch_read/batch_edit over built-in tools and bundling related operations into single calls to reduce round-trips and context overhead.",
       "technologies": [
-        "markdown",
-        "guidelines"
-      ]
+        "project guidelines",
+        "tool usage"
+      ],
+      "searchTags": [
+        "best practices",
+        "workflow",
+        "optimization",
+        "tool preference",
+        "batch operations"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.572Z",
+      "role": "documentation",
+      "sizeCharsWhenAnalysed": 427,
+      "lineCountWhenAnalysed": 5
     },
     "plugins/batch_file_tools/hooks/hooks.json": {
-      "path": "plugins/batch_file_tools/hooks/hooks.json",
       "sizeChars": 228,
-      "lineCount": 15,
+      "lineCount": 14,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Hook configuration for SessionStart event running a Node.js script via hook system.",
-      "purpose": "Registers a SessionStart hook that fires a Node.js command to inject tool-preference guidance into each Claude session. Integrates batch_file_tools preferences automatically when the plugin loads, reducing user setup friction.",
-      "role": "configuration",
+      "path": "plugins/batch_file_tools/hooks/hooks.json",
+      "summary": "Hook configuration for batch_file_tools SessionStart event. Executes session-start.js on plugin load to validate build artifacts and initialize context.",
       "technologies": [
-        "JSON",
         "hooks",
-        "Node.js"
-      ]
+        "event system"
+      ],
+      "searchTags": [
+        "session hooks",
+        "plugin initialization",
+        "event handlers"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.574Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 228,
+      "lineCountWhenAnalysed": 14
     },
     "plugins/batch_file_tools/hooks/session-start.js": {
-      "path": "plugins/batch_file_tools/hooks/session-start.js",
       "sizeChars": 1025,
-      "lineCount": 41,
+      "lineCount": 40,
       "imports": [
         "fs",
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Node.js script that validates the MCP build and injects CLAUDE.md guidance on SessionStart.",
-      "purpose": "Checks build artifacts (dist/index.js) and CLAUDE.md file presence, returning guidance or error message to the harness. Reads CLAUDE.md and returns it as additionalContext for the session, automating tool-preference injection. Fails gracefully with actionable instructions if the build is missing.",
-      "role": "script",
+      "path": "plugins/batch_file_tools/hooks/session-start.js",
+      "summary": "Node.js hook script run at SessionStart. Validates MCP server build exists, reads CLAUDE.md for context injection, and responds with status. Helps detect misconfigured or incomplete plugin installations.",
       "technologies": [
         "Node.js",
         "JavaScript",
-        "filesystem"
-      ]
+        "file I/O"
+      ],
+      "searchTags": [
+        "initialization",
+        "validation",
+        "diagnostics",
+        "bootstrap"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.575Z",
+      "role": "helperScript",
+      "sizeCharsWhenAnalysed": 1025,
+      "lineCountWhenAnalysed": 40
     },
     "plugins/batch_file_tools/LICENSE": {
-      "path": "plugins/batch_file_tools/LICENSE",
       "sizeChars": 1090,
-      "lineCount": 22,
+      "lineCount": 21,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "MIT License copyright 2026 Thore Höltig—same terms as root LICENSE.",
-      "purpose": "Duplicates the MIT license at plugin level for standalone distribution and clarity. Permits free use, modification, and distribution of batch_file_tools with attribution and no warranty. Maintains consistent licensing across the multi-plugin repository.",
-      "role": "documentation",
+      "path": "plugins/batch_file_tools/LICENSE",
+      "summary": "MIT License for batch_file_tools (2026) by Thore Höltig. Standard open-source license allowing use, modification, and distribution with attribution.",
       "technologies": [
-        "license",
         "MIT"
-      ]
+      ],
+      "searchTags": [
+        "licensing",
+        "copyright",
+        "legal",
+        "batch_file_tools"
+      ],
+      "lastUpdated": "2026-06-02T21:31:30.573Z",
+      "role": "documentation",
+      "sizeCharsWhenAnalysed": 1090,
+      "lineCountWhenAnalysed": 21
     },
     "plugins/batch_file_tools/README.md": {
-      "path": "plugins/batch_file_tools/README.md",
-      "sizeChars": 6047,
-      "lineCount": 122,
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:26.877Z",
-      "summary": "Complete documentation for batch_file_tools covering benefits, tool modes, operations, requirements, and usage examples.",
-      "purpose": "Explains the plugin's value (−45% session duration, −58% tool calls, −51% cache tokens on test workload) with three read modes (compact, verbatim, verbatim_numbered, fileinfo) and five edit operations (replace, replace_all, insert_at_line, replace_range, write). Provides installation steps, JSON examples for both tools, error-handling features (nearest_anchor), and links to issues/repo. Central reference for users.",
-      "role": "documentation",
-      "technologies": [
-        "markdown",
-        "documentation",
-        "JSON"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/package-lock.json": {
-      "path": "plugins/batch_file_tools/scripts/package-lock.json",
-      "sizeChars": 101832,
-      "lineCount": 2957,
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.082Z",
-      "summary": "Dependency lock file for batch-tools MCP server v0.1.0 with Node SDK, TypeScript, Vitest, and esbuild toolchain.",
-      "purpose": "Locks exact versions of 200+ dependencies for the MCP server project. Ensures reproducible builds across environments using lockfileVersion 3. Includes development tools (TypeScript, Vitest, tsx) for building and testing, plus production dependencies (@modelcontextprotocol/sdk, zod) needed for runtime.",
-      "role": "build",
-      "technologies": [
-        "npm",
-        "Node.js 22+",
-        "TypeScript",
-        "Vitest",
-        "MCP SDK",
-        "esbuild"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/package.json": {
-      "path": "plugins/batch_file_tools/scripts/package.json",
-      "sizeChars": 1006,
-      "lineCount": 42,
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.082Z",
-      "summary": "NPM manifest for batch-tools-mcp-server v1.1.5, a batch-capable Read/Edit MCP server by Thore Höltig.",
-      "purpose": "Defines project metadata, dependencies, and build/test scripts for the MCP server. Specifies Node >=22 requirement, build via TypeScript, testing with Vitest, and binary entry point. Lists @modelcontextprotocol/sdk and zod as core dependencies plus dev tooling for TypeScript and testing.",
-      "role": "configuration",
-      "technologies": [
-        "npm",
-        "TypeScript",
-        "Vitest",
-        "MCP SDK",
-        "Zod"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/src/index.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/index.ts",
-      "sizeChars": 19548,
-      "lineCount": 361,
-      "imports": [
-        "@modelcontextprotocol/sdk",
-        "node:path",
-        "jsonrepair",
-        "node:stream"
+      "sizeChars": 10715,
+      "lineCount": 151,
+      "refs": [
+        "LICENSE"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "MCP server entry point managing stdio transport, tool registration, path authorization, and progress reporting for batch_read and batch_edit.",
-      "purpose": "Sets up the batch-tools-mcp-server with StdioServerTransport, registers batch_read and batch_edit tools with detailed descriptions and schemas, implements session-based path authorization via elicitInput, and manages progress callbacks. Handles root directories from MCP roots or CLI args, validates paths against allowed directories before tool execution, and includes commented JSON repair plans.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/README.md",
+      "summary": "Product documentation for batch_file_tools MCP plugin. Covers motivation (56% fewer tool calls, 51% less cache tokens), tool APIs (batch_read: compact/verbatim/fileinfo modes with glob/search support; batch_edit: multi-op multi-file edits), configuration (12 env vars), requirements (Node ≥22, zod, MCP SDK), and performance metrics from real projects showing 47% context reduction.",
+      "technologies": [
+        "MCP",
+        "Node.js",
+        "TypeScript"
+      ],
+      "searchTags": [
+        "API reference",
+        "configuration guide",
+        "performance metrics",
+        "tool documentation",
+        "feature overview"
+      ],
+      "lastUpdated": "2026-06-03T15:13:19.976Z",
+      "sizeCharsWhenAnalysed": 10715,
+      "lineCountWhenAnalysed": 151,
+      "role": "documentation"
+    },
+    "plugins/batch_file_tools/scripts/package-lock.json": {
+      "sizeChars": 101832,
+      "lineCount": 2956,
+      "deleted": false,
+      "path": "plugins/batch_file_tools/scripts/package-lock.json",
+      "summary": "NPM lockfile pinning exact versions of all dependencies and transitive dependencies for batch-tools-mcp-server. Contains 200+ packages including @modelcontextprotocol/sdk 1.29.0, zod 3.25.76, and dev dependencies for TypeScript, vitest, tsx, and build tools. Ensures reproducible builds and consistent dependency resolution across environments.",
+      "technologies": [
+        "npm",
+        "Node.js",
+        "dependencies"
+      ],
+      "searchTags": [
+        "lockfile",
+        "version-pinning",
+        "reproducible-builds",
+        "dependency-tree"
+      ],
+      "lastUpdated": "2026-06-02T21:31:29.650Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 101832,
+      "lineCountWhenAnalysed": 2956
+    },
+    "plugins/batch_file_tools/scripts/package.json": {
+      "sizeChars": 1006,
+      "lineCount": 41,
+      "deleted": false,
+      "path": "plugins/batch_file_tools/scripts/package.json",
+      "summary": "npm package manifest for the batch-tools-mcp-server Node.js package. Defines version 1.2.3, ESM module type, build/test/typecheck scripts using tsc and vitest, dist as the published directory, and runtime deps: @modelcontextprotocol/sdk 1.29.0 and zod 3.25.76. Requires Node >=22.",
+      "technologies": [
+        "Node.js",
+        "TypeScript",
+        "npm",
+        "MCP SDK",
+        "zod",
+        "vitest"
+      ],
+      "searchTags": [
+        "package manifest",
+        "npm",
+        "build",
+        "dependencies",
+        "mcp server",
+        "batch tools"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.378Z",
+      "sizeCharsWhenAnalysed": 1006,
+      "lineCountWhenAnalysed": 41,
+      "role": "configuration"
+    },
+    "plugins/batch_file_tools/scripts/src/index.ts": {
+      "sizeChars": 19026,
+      "lineCount": 353,
+      "imports": [
+        "@modelcontextprotocol/sdk",
+        "node:path"
+      ],
+      "deleted": false,
+      "path": "plugins/batch_file_tools/scripts/src/index.ts",
+      "summary": "MCP server entry point for batch_file_tools. Registers batch_read and batch_edit tools with configurable feature flags (fileinfo, dry-run, normalize-formatting, MCP logging, structured content, user audience). Handles path elicitation, session allow lists, progress reporting, and graceful shutdown via SIGTERM/SIGINT/stdin events with isShuttingDown guard.",
       "technologies": [
         "TypeScript",
+        "Node.js",
         "MCP SDK",
-        "Node.js"
-      ]
+        "zod"
+      ],
+      "searchTags": [
+        "mcp server",
+        "entry point",
+        "tool registration",
+        "elicitation",
+        "session allow list",
+        "shutdown",
+        "batch_read",
+        "batch_edit",
+        "config flags",
+        "SIGTERM",
+        "SIGINT"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 19026,
+      "lineCountWhenAnalysed": 353,
+      "role": "executable"
     },
     "plugins/batch_file_tools/scripts/src/lib/buffer.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/buffer.ts",
       "sizeChars": 1907,
-      "lineCount": 69,
+      "lineCount": 68,
       "exports": [
         "EditBuffer",
         "BufferLoadError"
@@ -231,19 +340,28 @@
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Manages file content as in-memory buffers with line/ending tracking for editing operations.",
-      "purpose": "Provides EditBuffer interface tracking file state (existed/exists, lines, line endings, resolved path) and utilities for loading files with ENOENT handling and writing buffers with automatic directory creation. Preserves byte-exact line endings (CRLF vs LF) for round-trip accuracy during edits.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/buffer.ts",
+      "summary": "Manages in-memory file buffers for edit operations. Handles loading file content while preserving line endings (CRLF vs LF), tracking file existence state, and writing modified buffers back to disk. Provides BufferLoadError for detailed error reporting during file I/O.",
       "technologies": [
         "TypeScript",
-        "Node.js fs"
-      ]
+        "Node.js fs",
+        "File I/O"
+      ],
+      "searchTags": [
+        "file loading",
+        "line endings",
+        "buffer management",
+        "write operations",
+        "existence tracking"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.536Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 1907,
+      "lineCountWhenAnalysed": 68
     },
     "plugins/batch_file_tools/scripts/src/lib/edit-ops.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/edit-ops.ts",
-      "sizeChars": 11458,
-      "lineCount": 345,
+      "sizeChars": 11802,
+      "lineCount": 344,
       "exports": [
         "OpSuccess",
         "OpFailure",
@@ -252,45 +370,31 @@
         "toOpResult"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Applies individual edit operations (replace, insert_at_line, replace_range, write, replace_all) to in-memory buffers.",
-      "purpose": "Core editing logic implementing each operation type with detailed success/failure results including line-by-line near-matches, ambiguity detection, and Levenshtein-based nearest_anchor hints for not-found errors. Handles whitespace normalization for fuzzy matching and preserves line endings on edits.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/edit-ops.ts",
+      "summary": "Core edit operation logic implementing replace, replace_all, insert_at_line, replace_range, and write operations on file buffers. Handles exact and fuzzy whitespace-normalized matching, overlap detection for line-addressed ops, newline conversion, and detailed error reporting with nearest-anchor hints.",
       "technologies": [
         "TypeScript",
-        "Levenshtein distance"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/src/lib/edit-text-parser.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/edit-text-parser.ts",
-      "sizeChars": 19552,
-      "lineCount": 655,
-      "exports": [
-        "ParseError",
-        "OpSlotOk",
-        "OpSlotUnparseable",
-        "OpSlot",
-        "ParsedEditFile",
-        "ParseEntry",
-        "ParseResult",
-        "parseEditText"
+        "String matching",
+        "Line operations"
       ],
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Parses line-based text format for batch edits (alternative JSON format with fence-delimited content).",
-      "purpose": "Implements line-by-line parser for edit operations using file/action/scalar headers, fence-delimited OLD/NEW blocks with collision-safe suffixes, and graceful recovery from parse errors. Returns structured ParseResult with unparseable slots, per-op error tracking, and recovery hints for broken actions.",
+      "searchTags": [
+        "edit operations",
+        "replace",
+        "insert",
+        "fuzzy matching",
+        "overlap detection",
+        "error hints",
+        "whitespace normalization"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.536Z",
       "role": "implementation",
-      "technologies": [
-        "TypeScript",
-        "Parsing"
-      ]
+      "sizeCharsWhenAnalysed": 11802,
+      "lineCountWhenAnalysed": 344
     },
     "plugins/batch_file_tools/scripts/src/lib/envelope.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/envelope.ts",
-      "sizeChars": 3573,
-      "lineCount": 95,
+      "sizeChars": 7933,
+      "lineCount": 195,
       "exports": [
-        "TextBlock",
         "formatReadContent",
         "formatEditContent"
       ],
@@ -298,19 +402,27 @@
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Formats read and edit tool outputs into text blocks with error summaries and anchor hints.",
-      "purpose": "Converts ReadOutput and EditOutput objects to human-readable TextBlock format with error categorization, nearest_anchor content extraction, file summary comments, and shortened relative paths. Handles partial failures, skipped operations, and dry-run annotations.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/envelope.ts",
+      "summary": "Output formatting module converting tool results to MCP-compatible ToolContentResult blocks. Handles read result grouping (no-match consolidation), edit status aggregation, path shortening (relative vs absolute), user audience summaries, dry-run tagging, and per-file/per-op error annotation. Formats results for both assistant and user consumption.",
       "technologies": [
         "TypeScript",
-        "Node.js path"
-      ]
+        "MCP Protocol"
+      ],
+      "searchTags": [
+        "output formatting",
+        "result envelope",
+        "audience annotation",
+        "error presentation",
+        "summary generation"
+      ],
+      "lastUpdated": "2026-06-03T15:13:19.977Z",
+      "sizeCharsWhenAnalysed": 7933,
+      "lineCountWhenAnalysed": 195,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts",
       "sizeChars": 1168,
-      "lineCount": 36,
+      "lineCount": 35,
       "exports": [
         "extractRefs"
       ],
@@ -319,19 +431,28 @@
         "side-effect"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Extracts file references from source code via regex patterns for ES/TS imports, require calls, markdown links, and path literals.",
-      "purpose": "Identifies relative and absolute file paths referenced in code content using regex patterns covering imports, requires, markdown syntax, and literal paths. Filters out http/https URLs and returns sorted unique list of refs for fileinfo dependency mapping.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts",
+      "summary": "Extracts file references from source code using regex patterns for ES/TS imports, CommonJS requires, Markdown links, and file path literals. Filters out HTTP/HTTPS URLs and returns deduplicated list of relative/absolute file paths.",
       "technologies": [
         "TypeScript",
-        "Regular expressions"
-      ]
+        "Regex",
+        "Pattern matching"
+      ],
+      "searchTags": [
+        "file references",
+        "import extraction",
+        "path literals",
+        "dependency detection",
+        "link extraction"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.536Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 1168,
+      "lineCountWhenAnalysed": 35
     },
     "plugins/batch_file_tools/scripts/src/lib/fs.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/fs.ts",
-      "sizeChars": 5650,
-      "lineCount": 186,
+      "sizeChars": 5725,
+      "lineCount": 185,
       "exports": [
         "ReadFileResult",
         "ReadFileError",
@@ -345,19 +466,30 @@
         "@modelcontextprotocol/sdk"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "File system utilities for safe path resolution, authorization checking, and root directory validation.",
-      "purpose": "Provides safe path guards resolving user home (~), validating paths against allowed directory lists, handling glob expansion, and distinguishing missing vs unauthorized vs io errors. Manages MCP root URIs and CLI-provided directories with realpath resolution for symlinks.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/fs.ts",
+      "summary": "Low-level filesystem operations with authorization checks. Handles path resolution, realpath symlink resolution, file reading, guard path validation against allowed directories. Provides comprehensive error mapping for ENOENT, EISDIR, EACCES, EPERM with detailed Reason enums.",
       "technologies": [
         "TypeScript",
-        "Node.js fs/promises"
-      ]
+        "Node.js fs",
+        "Path resolution",
+        "Authorization"
+      ],
+      "searchTags": [
+        "filesystem",
+        "path security",
+        "authorization",
+        "symlink resolution",
+        "error mapping",
+        "home directory expansion"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.536Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 5725,
+      "lineCountWhenAnalysed": 185
     },
     "plugins/batch_file_tools/scripts/src/lib/glob.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/glob.ts",
       "sizeChars": 1395,
-      "lineCount": 47,
+      "lineCount": 46,
       "exports": [
         "looksLikeGlob"
       ],
@@ -366,19 +498,28 @@
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Expands glob patterns and directory paths to sorted lists of real file paths.",
-      "purpose": "Detects glob patterns and expands them or bare directories to absolute real (symlink-resolved) file paths. Filters out non-regular files and sorts results. Single-level directory expansion; recursive expansion requires explicit ** glob pattern.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/glob.ts",
+      "summary": "Glob pattern expansion and directory traversal. Detects whether a path is a glob pattern or directory, expands globs to sorted real (symlink-resolved) file paths, filters out directories. Handles dangling symlinks gracefully.",
       "technologies": [
         "TypeScript",
-        "Node.js fs/promises"
-      ]
+        "Node.js glob",
+        "Pattern expansion"
+      ],
+      "searchTags": [
+        "glob expansion",
+        "directory traversal",
+        "file matching",
+        "symlink handling",
+        "pattern detection"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.537Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 1395,
+      "lineCountWhenAnalysed": 46
     },
     "plugins/batch_file_tools/scripts/src/lib/lines.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/lines.ts",
       "sizeChars": 3071,
-      "lineCount": 116,
+      "lineCount": 115,
       "exports": [
         "SplitResult",
         "LineEnding",
@@ -389,35 +530,29 @@
         "findAllNormalized"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Byte-exact line splitting preserving CRLF vs LF line endings for round-trip file editing.",
-      "purpose": "Splits content into lines and endings arrays separately enabling byte-exact reconstruction via joinLines. Tracks dominant line ending type, converts between LF/CRLF, and finds normalized matches accounting for cross-line ending differences. Core for preserving OS-specific line ending conventions.",
-      "role": "implementation",
-      "technologies": [
-        "TypeScript"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/src/lib/log.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/log.ts",
-      "sizeChars": 87,
-      "lineCount": 3,
-      "exports": [
-        "writeLogLine"
-      ],
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Simple stderr logging utility for batch tool messages.",
-      "purpose": "Writes log lines to stderr with newline appended. Used for initialization, tool progress, and error reporting visible to the MCP client.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/lines.ts",
+      "summary": "Byte-exact line splitting and joining preserving CRLF vs LF distinction. Tracks line endings separately from content to enable round-trip preservation. Provides normalized matching for cross-line-ending searches and newline conversion utilities.",
       "technologies": [
         "TypeScript",
-        "Node.js"
-      ]
+        "Line handling",
+        "Text processing"
+      ],
+      "searchTags": [
+        "line splitting",
+        "line endings",
+        "CRLF/LF",
+        "normalization",
+        "byte-exact",
+        "matching"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.537Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 3071,
+      "lineCountWhenAnalysed": 115
     },
     "plugins/batch_file_tools/scripts/src/lib/similarity.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/similarity.ts",
       "sizeChars": 4743,
-      "lineCount": 157,
+      "lineCount": 156,
       "exports": [
         "levenshtein",
         "findNearestLine",
@@ -425,19 +560,29 @@
         "buildNearestAnchor"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Implements Levenshtein distance and nearest-line finding for edit error hints.",
-      "purpose": "Provides levenshtein distance algorithm, similarity scoring, and findNearestLine to locate visually similar lines when an edit anchor is not found. Builds nearest_anchor windows around similar lines with uniqueness validation for safe hint generation.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/similarity.ts",
+      "summary": "Levenshtein distance algorithm for fuzzy string matching and finding nearest lines in files. Builds verbatim anchor windows around similar lines for error hints. Used in Phase 4 to help users fix edit failures with suggestions.",
       "technologies": [
         "TypeScript",
+        "String algorithms",
         "Levenshtein distance"
-      ]
+      ],
+      "searchTags": [
+        "fuzzy matching",
+        "similarity",
+        "Levenshtein",
+        "nearest neighbor",
+        "error hints",
+        "anchors"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.537Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 4743,
+      "lineCountWhenAnalysed": 156
     },
     "plugins/batch_file_tools/scripts/src/lib/transforms.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/lib/transforms.ts",
-      "sizeChars": 7165,
-      "lineCount": 229,
+      "sizeChars": 6779,
+      "lineCount": 208,
       "exports": [
         "FormatInput",
         "FormatOutput",
@@ -447,81 +592,87 @@
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Transforms file content for different read modes (compact, verbatim, verbatim_numbered, fileinfo).",
-      "purpose": "Implements mode-specific formatting: compact strips whitespace for non-indent-sensitive files or minifies JSON; verbatim preserves exact content; verbatim_numbered adds line numbers; fileinfo returns metadata and file references. Handles indent-sensitive languages, pagination, and newline normalization.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/lib/transforms.ts",
+      "summary": "Output formatting for different read modes (compact vs verbatim). Compact mode collapses non-indent-sensitive files to single line, minifies JSON, collapses whitespace. Indent-sensitive files (Python, YAML, Makefile) preserve structure. Normalizes indentation for display.",
       "technologies": [
         "TypeScript",
-        "JSON"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/src/tools/edit-text.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/tools/edit-text.ts",
-      "sizeChars": 6179,
-      "lineCount": 217,
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Orchestrates batch edits parsed from text format, bridging ParseResult to handleBatchEdit handler.",
-      "purpose": "Converts text-format parse results to EditInput, forwards to batch edit handler, and merges per-file results tracking parse errors and unparseable ops separately. Handles root/file-level stopOnError abort semantics and reports skipped operations for parse failures.",
+        "Text formatting",
+        "Language-aware parsing"
+      ],
+      "searchTags": [
+        "formatting modes",
+        "compact output",
+        "indentation",
+        "JSON minification",
+        "language detection"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.537Z",
       "role": "implementation",
-      "technologies": [
-        "TypeScript"
-      ]
+      "sizeCharsWhenAnalysed": 6779,
+      "lineCountWhenAnalysed": 208
     },
     "plugins/batch_file_tools/scripts/src/tools/edit.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/tools/edit.ts",
-      "sizeChars": 11631,
-      "lineCount": 407,
+      "sizeChars": 12204,
+      "lineCount": 412,
       "imports": [
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Core edit handler orchestrating multi-file, multi-op batch edits with phase sorting and overlap detection.",
-      "purpose": "Coordinates batch edit workflow: plans entries (glob expansion, deduplication, authorization), applies phase-1 ops (insert_at_line, replace_range) in reverse line order, then phase-2 (replace, replace_all, write), detects overlaps, enforces stopOnError semantics, supports dry-run, and reports partial/error status per file.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/tools/edit.ts",
+      "summary": "Main edit operation handler orchestrating batch file edits. Manages glob expansion, operation sequencing (line-addressed first, reverse order to avoid offset drift), phase-1 overlap detection, dry-run mode, and file I/O with progress callbacks. Generates detailed error results.",
       "technologies": [
         "TypeScript",
-        "Node.js"
-      ]
+        "Batch processing",
+        "File editing"
+      ],
+      "searchTags": [
+        "edit handler",
+        "batch operations",
+        "sequencing",
+        "phase1",
+        "overlap detection",
+        "dry-run",
+        "progress"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.538Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 12204,
+      "lineCountWhenAnalysed": 412
     },
     "plugins/batch_file_tools/scripts/src/tools/read.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/tools/read.ts",
-      "sizeChars": 11040,
-      "lineCount": 307,
+      "sizeChars": 12460,
+      "lineCount": 336,
       "imports": [
         "node:fs",
         "node:path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:33.366Z",
-      "summary": "Core read handler supporting multiple modes: fileinfo metadata, search with context, and content slicing.",
-      "purpose": "Processes batch read requests with glob expansion, deduplication, and caching. Implements fileinfo (stat + refs extraction), search (grep with context lines), and range reads (offset/limit). Formats output via transforms.ts and returns error/match counts. Handles authorization and missing files.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/tools/read.ts",
+      "summary": "File reading implementation (~450 lines) supporting compact/verbatim/fileinfo modes with glob expansion, search (case-insensitive with context merging), offset/count pagination, and deduplication. Handles symlinks, case-insensitive paths, relative time formatting, ref extraction. Core handleBatchRead orchestrates file caching, deduplication, and result formatting with search context-window merging (SEARCH_MERGE_GAP=3).",
       "technologies": [
         "TypeScript",
-        "Node.js"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/src/types.js": {
-      "path": "plugins/batch_file_tools/scripts/src/types.js",
-      "summary": "Type definitions for batch_read and batch_edit input/output schemas and operation types.",
-      "purpose": "Defines Zod schemas for ReadInput (requests with mode, offset, count, searchTerm), EditInput (files with ops and stopOnError), operation types (replace, replace_all, insert_at_line, replace_range, write), and output structures with error reason enums. Supports validation and TypeScript type inference.",
-      "role": "configuration",
-      "technologies": [
-        "TypeScript",
-        "Zod"
+        "Node.js fs",
+        "Regex"
       ],
-      "deleted": true,
-      "lastUpdated": "2026-05-28T08:41:33.366Z"
+      "searchTags": [
+        "read logic",
+        "glob expansion",
+        "search implementation",
+        "deduplication",
+        "caching",
+        "file I/O"
+      ],
+      "lastUpdated": "2026-06-03T15:13:19.978Z",
+      "sizeCharsWhenAnalysed": 12460,
+      "lineCountWhenAnalysed": 336,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/types.ts": {
-      "path": "plugins/batch_file_tools/scripts/src/types.ts",
-      "sizeChars": 9338,
-      "lineCount": 246,
+      "sizeChars": 11018,
+      "lineCount": 274,
       "exports": [
         "ReadMode",
+        "buildReadInput",
         "Reason",
         "FileError",
         "ReadRequest",
@@ -539,26 +690,36 @@
         "FileStatus",
         "FileResult",
         "EditOutput",
-        "EditTextInput"
+        "EditTextInput",
+        "AudienceType",
+        "ToolContentResult"
       ],
       "imports": [
         "zod"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Zod schema definitions for batch file tool input/output types including read modes, edit operations, and error handling.",
-      "purpose": "Defines comprehensive TypeScript types and Zod schemas for the batch file tools API. Covers read modes (compact, verbatim, verbatim_numbered, fileinfo), operation types (replace, insert_at_line, replace_range, write), and detailed error information with hints. Enforces validation constraints like absolute paths and operation-specific requirements.",
-      "role": "implementation",
+      "path": "plugins/batch_file_tools/scripts/src/types.ts",
+      "summary": "Zod schema definitions (~400 lines) for all tool inputs/outputs. Defines ReadMode, EditOp unions (replace/replace_all/insert_at_line/replace_range/write), ReadInput/Output, EditInput/Output, FileResult, OpResult, NearestAnchor, ErrorHint. Includes buildReadInput() factory for conditional fileinfo inclusion. Core type contract layer.",
       "technologies": [
         "TypeScript",
         "Zod",
-        "Schema validation"
-      ]
+        "JSON Schema"
+      ],
+      "searchTags": [
+        "schema definitions",
+        "type contracts",
+        "validation",
+        "input/output shapes",
+        "error types"
+      ],
+      "lastUpdated": "2026-06-03T15:13:19.977Z",
+      "sizeCharsWhenAnalysed": 11018,
+      "lineCountWhenAnalysed": 274,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/tests/auth.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/auth.test.ts",
-      "sizeChars": 4055,
-      "lineCount": 114,
+      "sizeChars": 4184,
+      "lineCount": 113,
       "imports": [
         "node:fs",
         "node:os",
@@ -566,20 +727,28 @@
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests authorization/access control for batch read and edit operations against allowed directories.",
-      "purpose": "Validates that the batch file tools properly reject unauthorized file access outside allowed directories. Tests both successful operations inside allowed dirs and rejections for paths outside, including edge cases like non-existent files and empty allowlist. Ensures security boundaries are enforced before operations execute.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/auth.test.ts",
+      "summary": "Test suite verifying authorization controls for read and edit operations. Tests that unauthorized directory access is rejected, that missing allowedDirectories blocks all access, and that nested path creation respects boundaries. Uses temporary directories for isolation.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Node.js fs/promises"
-      ]
+        "Vitest",
+        "Authorization testing"
+      ],
+      "searchTags": [
+        "auth tests",
+        "authorization",
+        "path security",
+        "integration tests",
+        "access control"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.538Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 4184,
+      "lineCountWhenAnalysed": 113
     },
     "plugins/batch_file_tools/scripts/tests/edit-control.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/edit-control.test.ts",
-      "sizeChars": 9258,
-      "lineCount": 286,
+      "sizeChars": 9325,
+      "lineCount": 285,
       "imports": [
         "node:fs",
         "node:os",
@@ -587,20 +756,29 @@
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests error control flow (stopOnError) and dryRun mode for edit operations across files and operations.",
-      "purpose": "Validates stopOnError behavior at file, operation, and root levels, ensuring errors properly cascade or allow continuation as configured. Tests dryRun mode prevents disk writes. Confirms op-level stopOnError overrides file-level, and file-level overrides root-level. Tests partial file status when some ops fail.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/edit-control.test.ts",
+      "summary": "Test suite for edit operation control flow: stopOnError at file/op/root levels, dryRun mode preventing disk writes, output filtering (non-ok ops only), and stopOnError resolution hierarchy. Tests abort semantics and cross-file behavior.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Node.js fs/promises"
-      ]
+        "Vitest",
+        "Control flow testing"
+      ],
+      "searchTags": [
+        "control flow",
+        "stopOnError",
+        "dryRun",
+        "op filtering",
+        "abort semantics",
+        "file operations"
+      ],
+      "lastUpdated": "2026-06-02T21:31:41.538Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 9325,
+      "lineCountWhenAnalysed": 285
     },
     "plugins/batch_file_tools/scripts/tests/edit-fuzzy.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/edit-fuzzy.test.ts",
       "sizeChars": 5563,
-      "lineCount": 120,
+      "lineCount": 119,
       "imports": [
         "node:fs",
         "node:os",
@@ -608,59 +786,28 @@
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests fuzzy whitespace matching fallback for replace operations across different indentation styles.",
-      "purpose": "Validates that normalized reads (2-space indent) can match files with different actual indentation (tabs, 4-space) via fuzzy whitespace matching. Ensures exact matches take precedence, preserves original file indentation style, and handles single-line substring matches correctly. Critical for Phase 4 compose workflow.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/edit-fuzzy.test.ts",
+      "summary": "Test suite for fuzzy whitespace-normalized matching in replace/replace_all operations. Verifies that indentation differences (tabs vs spaces, 2-space vs 4-space) don't prevent successful replacements, and that exact matches take precedence over fuzzy.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Node.js fs/promises"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/tests/edit-text-parser.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/edit-text-parser.test.ts",
-      "sizeChars": 18957,
-      "lineCount": 736,
-      "imports": [
-        "vitest"
+        "Vitest",
+        "Fuzzy matching"
       ],
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests the text-format edit parser for a human-readable edit syntax with FILE/ACTION/fence structure.",
-      "purpose": "Validates parsing of text-format edits with File headers, Action types, and content fences (<<<OLD/NEW>>>). Tests root scalars, multi-line content, sentinel collision handling, recovery from parse errors, and operation validation. Ensures malformed input produces helpful error messages with line numbers.",
-      "role": "test",
-      "technologies": [
-        "Vitest",
-        "TypeScript",
-        "Parsing"
-      ]
-    },
-    "plugins/batch_file_tools/scripts/tests/edit-text.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/edit-text.test.ts",
-      "sizeChars": 8861,
-      "lineCount": 303,
-      "imports": [
-        "node:fs",
-        "node:os",
-        "node:path",
-        "vitest"
+      "searchTags": [
+        "fuzzy matching",
+        "whitespace normalization",
+        "indentation",
+        "replace operations",
+        "edge cases"
       ],
-      "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Integration tests for text-format edit handler covering happy path, parser errors, and stopOnError behavior.",
-      "purpose": "Tests end-to-end text-format edit workflow including file creation, multi-op edits, multi-file operations, and dryRun. Validates parser error handling with proper recovery between files, op-level and file-level stopOnError semantics, and that partial files report mixed success/failure.",
+      "lastUpdated": "2026-06-02T21:31:41.538Z",
       "role": "test",
-      "technologies": [
-        "Vitest",
-        "TypeScript",
-        "Node.js fs/promises"
-      ]
+      "sizeCharsWhenAnalysed": 5563,
+      "lineCountWhenAnalysed": 119
     },
     "plugins/batch_file_tools/scripts/tests/edit.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/edit.test.ts",
-      "sizeChars": 20791,
-      "lineCount": 549,
+      "sizeChars": 21339,
+      "lineCount": 548,
       "imports": [
         "node:fs",
         "node:os",
@@ -668,37 +815,60 @@
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Comprehensive tests for batch edit operations including replace, insert_at_line, replace_range, write, and line-ending handling.",
-      "purpose": "Validates all edit operation types with edge cases: multi-line replaces, ambiguous/not_found errors with helpful hints, CRLF/LF auto-matching, phased execution order (line-addressed ops descending, content ops sequential), overlap detection, and nested directory creation. Tests file batching and error reporting.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/edit.test.ts",
+      "summary": "Comprehensive vitest suite testing batch file edit operations including write, insert_at_line, replace_range, replace, and replace_all ops. Validates file creation, CRLF preservation, line-ending auto-match, phased execution order, error handling with overlap detection, and multi-file batching across 548 lines.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Node.js fs/promises"
-      ]
+        "Vitest",
+        "Node.js"
+      ],
+      "searchTags": [
+        "batch editor",
+        "file operations",
+        "line manipulation",
+        "testing",
+        "file writing",
+        "CRLF handling",
+        "error scenarios"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.545Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 21339,
+      "lineCountWhenAnalysed": 548
     },
     "plugins/batch_file_tools/scripts/tests/envelope.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/envelope.test.ts",
-      "sizeChars": 6456,
-      "lineCount": 220,
+      "sizeChars": 11734,
+      "lineCount": 341,
+      "exports": [
+        "EditFile",
+        "main"
+      ],
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests formatting of read and edit operation results for presentation to LLM/user.",
-      "purpose": "Validates HTML comment formatting for read results (with meta headers and line counts) and edit results (with error summaries and nearest anchors). Tests dryRun prefixing, partial/error status reporting, ambiguous match line lists, and anchor block generation. Ensures content is embedded directly without JSON escaping.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/envelope.test.ts",
+      "summary": "Vitest test suite validating formatReadContent and formatEditContent envelope formatting functions. Tests output formatting for single/multiple files, verbatim/compact modes, search match blocks, context merging, error reporting, operation status summaries, and nearest anchor hints across 341 lines.",
       "technologies": [
-        "Vitest",
-        "TypeScript"
-      ]
+        "TypeScript",
+        "Vitest"
+      ],
+      "searchTags": [
+        "output formatting",
+        "envelope",
+        "content display",
+        "match reporting",
+        "anchor suggestions",
+        "file metadata"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.546Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 11734,
+      "lineCountWhenAnalysed": 341
     },
     "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts",
       "sizeChars": 3477,
-      "lineCount": 104,
+      "lineCount": 103,
       "imports": [
         "vitest",
         "react",
@@ -707,20 +877,27 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests extraction of file references from ES/CommonJS imports, dynamic imports, and markdown links.",
-      "purpose": "Validates regex-based extraction of relative file paths from various contexts (import/require/dynamic import/markdown) while filtering out npm packages and node builtins. Tests deduplication, alphabetic sorting, and handling of Windows absolute paths. Supports dependency mapping in project analysis.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts",
+      "summary": "Vitest test suite for extractRefs utility that identifies file references from code (ES imports, require, dynamic imports, markdown links) and extracts Windows paths. Tests relative path extraction, npm/node builtin filtering, deduplication, sorting, and multiformat reference detection across 103 lines.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Regex"
-      ]
+        "Vitest"
+      ],
+      "searchTags": [
+        "reference extraction",
+        "imports",
+        "file dependencies",
+        "path parsing",
+        "markdown links"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.546Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 3477,
+      "lineCountWhenAnalysed": 103
     },
     "plugins/batch_file_tools/scripts/tests/glob.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/glob.test.ts",
       "sizeChars": 8984,
-      "lineCount": 249,
+      "lineCount": 248,
       "imports": [
         "node:fs",
         "node:os",
@@ -728,37 +905,55 @@
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests glob expansion for batch operations with authorization checking and merge deduplication.",
-      "purpose": "Validates glob pattern expansion (* for single level, ** for recursive) applies operations to matched files. Tests per-file error reporting (e.g., not_found for individual files), authorization checking on resolved paths, operation compatibility (rejects insert_at_line/replace_range on globs), and merging of ops when glob/concrete paths resolve to same file.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/glob.test.ts",
+      "summary": "Vitest test suite for glob expansion in batch editing across multiple files. Validates glob patterns matching, directory traversal, incompatible operation rejection, authorization checks, path normalization, operation merging, and deduplication. Tests single-level and recursive directory matching across 248 lines.",
       "technologies": [
-        "Vitest",
         "TypeScript",
-        "Node.js path/fs"
-      ]
+        "Vitest",
+        "Node.js"
+      ],
+      "searchTags": [
+        "glob patterns",
+        "file selection",
+        "batch operations",
+        "path resolution",
+        "authorization",
+        "glob expansion"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.546Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 8984,
+      "lineCountWhenAnalysed": 248
     },
     "plugins/batch_file_tools/scripts/tests/lines.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/lines.test.ts",
       "sizeChars": 1890,
-      "lineCount": 70,
+      "lineCount": 69,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:28.130Z",
-      "summary": "Tests line splitting/joining with preservation of mixed CRLF/LF line endings.",
-      "purpose": "Validates splitLines/joinLines utility functions handle empty files, trailing newlines, mixed CRLF/LF, and bare carriage returns correctly. Ensures byte-exact round-trips and accurate line counts regardless of final newline. Critical for preserving file format during edits.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/lines.test.ts",
+      "summary": "Vitest test suite validating line splitting and joining utilities with focus on line-ending preservation. Tests splitLines and joinLines round-trip integrity with LF/CRLF mixed endings, trailing newline handling, and line counting across 69 lines.",
       "technologies": [
-        "Vitest",
-        "TypeScript"
-      ]
+        "TypeScript",
+        "Vitest"
+      ],
+      "searchTags": [
+        "line parsing",
+        "newline handling",
+        "CRLF",
+        "LF",
+        "file splitting",
+        "line endings"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.546Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 1890,
+      "lineCountWhenAnalysed": 69
     },
     "plugins/batch_file_tools/scripts/tests/read.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/read.test.ts",
-      "sizeChars": 19733,
-      "lineCount": 496,
+      "sizeChars": 21222,
+      "lineCount": 514,
       "imports": [
         "node:fs",
         "node:os",
@@ -767,185 +962,300 @@
         "react"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Comprehensive test suite for batch file reading with modes, deduplication, glob expansion, and error handling.",
-      "purpose": "Tests the handleBatchRead function across multiple read modes (verbatim, verbatim_numbered, compact, fileinfo), range slicing, search functionality, glob patterns, directory expansion, and deduplication logic. Validates content normalization, error states, symlink resolution, and the interaction between offset/limit parameters. Ensures the tool correctly handles edge cases like CRLF preservation, offset past EOF, and mode coalescing.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/read.test.ts",
+      "summary": "Comprehensive vitest suite (~600 lines) covering read.ts with 40+ test cases: single/multi-file reads, verbatim/compact/fileinfo modes, offset/count pagination, CRLF handling, search with context, glob/directory expansion, symlink deduplication, near-adjacency merging (gap ≤3), error cases. Tests verify exact content matching, mode behavior, and deduplication correctness.",
       "technologies": [
+        "vitest",
         "TypeScript",
-        "Vitest",
-        "Node.js"
-      ]
+        "fs/promises"
+      ],
+      "searchTags": [
+        "read tests",
+        "unit tests",
+        "integration tests",
+        "test fixtures",
+        "assertions",
+        "edge cases"
+      ],
+      "lastUpdated": "2026-06-03T15:13:19.978Z",
+      "sizeCharsWhenAnalysed": 21222,
+      "lineCountWhenAnalysed": 514,
+      "role": "test"
     },
     "plugins/batch_file_tools/scripts/tests/similarity.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/similarity.test.ts",
       "sizeChars": 4628,
-      "lineCount": 126,
+      "lineCount": 125,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Tests for Levenshtein distance and fuzzy nearest-line matching algorithms.",
-      "purpose": "Validates the levenshtein distance calculation for string similarity scoring. Tests findNearestLine function that matches fuzzy near-misses in file content by line, including multiline needle handling, similarity threshold enforcement, and file size cap logic. Validates buildNearestAnchor function that constructs unique context windows around matched lines to use as edit anchors. Tests uniqueness widening, edge cases at file boundaries, and CRLF preservation.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/similarity.test.ts",
+      "summary": "Vitest test suite for similarity matching utilities including levenshtein distance, line finding with fuzzy matching, and nearest anchor building. Tests typo tolerance, similarity thresholds, anchor windowing with uniqueness validation, and edge cases across 125 lines.",
       "technologies": [
         "TypeScript",
         "Vitest"
-      ]
+      ],
+      "searchTags": [
+        "fuzzy matching",
+        "levenshtein distance",
+        "similarity scoring",
+        "nearest anchor",
+        "typo detection"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.546Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 4628,
+      "lineCountWhenAnalysed": 125
     },
     "plugins/batch_file_tools/scripts/tests/transforms.test.ts": {
-      "path": "plugins/batch_file_tools/scripts/tests/transforms.test.ts",
-      "sizeChars": 11353,
-      "lineCount": 325,
+      "sizeChars": 9373,
+      "lineCount": 266,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Tests for file content formatting and transformation across multiple read modes.",
-      "purpose": "Validates formatForRead function transformations: verbatim_numbered adds line numbers and preserves absolute line positions; compact mode strips whitespace, collapses blank lines, normalizes indent (tabs→spaces), minifies JSON, and intelligently preserves intent-sensitive files (Python, Makefiles, YAML); verbatim mode normalizes indent (tab→2-space, 4-space→2-space) while preserving CRLF. Tests offset/limit slicing, CRLF preservation, file-type detection, and disableNormalizedFormatting flag. Validates returned_lines vs total_lines tracking.",
-      "role": "test",
+      "path": "plugins/batch_file_tools/scripts/tests/transforms.test.ts",
+      "summary": "Vitest test suite for content transformation functions in compact and verbatim read modes. Tests whitespace normalization, indent handling for Python/YAML/Makefiles, JSON minification, CRLF preservation, line-ending auto-conversion, and indent normalization across 266 lines.",
       "technologies": [
         "TypeScript",
         "Vitest"
-      ]
+      ],
+      "searchTags": [
+        "formatting",
+        "compaction",
+        "indent normalization",
+        "JSON minification",
+        "whitespace",
+        "content transformation"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.547Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 9373,
+      "lineCountWhenAnalysed": 266
     },
     "plugins/batch_file_tools/scripts/tsconfig.json": {
-      "path": "plugins/batch_file_tools/scripts/tsconfig.json",
       "sizeChars": 841,
-      "lineCount": 31,
+      "lineCount": 30,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "TypeScript configuration targeting ES2022 with strict type checking and bundling settings.",
-      "purpose": "Configures TypeScript compiler for batch_file_tools scripts with ES2022 target, NodeNext module resolution, strict mode enabled, and output to dist directory. Includes source maps, declaration files, and comprehensive strictness flags (noUnusedLocals, noImplicitReturns, noUncheckedIndexedAccess, exactOptionalPropertyTypes). Excludes dist and tests directories.",
-      "role": "configuration",
+      "path": "plugins/batch_file_tools/scripts/tsconfig.json",
+      "summary": "TypeScript compiler configuration targeting ES2022 with strict mode enabled. Outputs to dist/, sources in src/, enforces type safety with noImplicitAny, noUnusedLocals, exactOptionalPropertyTypes. Includes sourcemaps and declarations for library distribution. Strict checks prevent unsafe patterns.",
       "technologies": [
         "TypeScript",
-        "JSON"
-      ]
+        "compiler-config"
+      ],
+      "searchTags": [
+        "tsconfig",
+        "type-safety",
+        "strict-mode",
+        "build-output"
+      ],
+      "lastUpdated": "2026-06-02T21:31:29.651Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 841,
+      "lineCountWhenAnalysed": 30
     },
     "plugins/batch_file_tools/scripts/vitest.config.ts": {
-      "path": "plugins/batch_file_tools/scripts/vitest.config.ts",
       "sizeChars": 158,
-      "lineCount": 9,
+      "lineCount": 8,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Test runner configuration for batch_file_tools test suite.",
-      "purpose": "Configures Vitest with Node.js test environment, includes test discovery pattern matching tests/**/*.test.ts, and provides standard test execution setup for the batch_file_tools scripts module.",
-      "role": "configuration",
+      "path": "plugins/batch_file_tools/scripts/vitest.config.ts",
+      "summary": "Vitest test runner configuration defining test glob pattern (tests/**/*.test.ts), Node.js environment for running unit tests, and using defineConfig for type-safe setup. Minimal config focused on test discovery and Node environment execution.",
       "technologies": [
-        "Vitest",
-        "TypeScript"
-      ]
+        "vitest",
+        "TypeScript",
+        "testing"
+      ],
+      "searchTags": [
+        "test-config",
+        "test-runner",
+        "unit-tests"
+      ],
+      "lastUpdated": "2026-06-02T21:31:29.651Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 158,
+      "lineCountWhenAnalysed": 8
     },
     "plugins/project-intel-tool/.claude-plugin/plugin.json": {
-      "path": "plugins/project-intel-tool/.claude-plugin/plugin.json",
       "sizeChars": 741,
-      "lineCount": 15,
+      "lineCount": 14,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Plugin metadata for project-intel-tool reconnaissance system.",
-      "purpose": "Defines plugin manifest including name 'project-intel-tool', version 2.0.0, description highlighting semantic query capabilities before file exploration, author details, repository links, MIT license, and semantic keywords (tokens, efficiency, context-optimization, reconnaissance). No dependencies declared. Used by Claude Code plugin system for registration and discovery.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/.claude-plugin/plugin.json",
+      "summary": "Plugin manifest for project-intel-tool. Declares name, description, version (1.4.0), author (Thore Höltig), homepage and repository URLs, MIT license, and keywords including tokens, efficiency, reconnaissance, semantic, and exploration. No external plugin dependencies.",
       "technologies": [
         "JSON"
-      ]
+      ],
+      "searchTags": [
+        "plugin manifest",
+        "metadata",
+        "registration",
+        "claude plugin",
+        "project-intel-tool"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 741,
+      "lineCountWhenAnalysed": 14,
+      "role": "configuration"
     },
     "plugins/project-intel-tool/.mcp.json": {
-      "path": "plugins/project-intel-tool/.mcp.json",
       "sizeChars": 155,
-      "lineCount": 9,
+      "lineCount": 8,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "MCP server configuration for project-intel-tool plugin.",
-      "purpose": "Configures MCP (Model Context Protocol) server entry point to launch project-intel-tool using Node.js executing the built index.js from scripts/dist directory. Enables Claude to invoke the scan and query tools provided by this plugin.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/.mcp.json",
+      "summary": "MCP server configuration for project-intel-tool plugin specifying Node.js command and distribution script path entry point. Single-file configuration for Model Context Protocol integration.",
       "technologies": [
-        "JSON",
-        "MCP"
-      ]
+        "MCP",
+        "JSON"
+      ],
+      "searchTags": [
+        "MCP configuration",
+        "server setup",
+        "entry point"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.547Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 155,
+      "lineCountWhenAnalysed": 8
     },
     "plugins/project-intel-tool/CHANGELOG.md": {
-      "path": "plugins/project-intel-tool/CHANGELOG.md",
-      "sizeChars": 10027,
-      "lineCount": 167,
+      "sizeChars": 13553,
+      "lineCount": 227,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Version history and release notes for project-intel-tool from v1.0.0 through v1.6.1.0.",
-      "purpose": "Documents all notable changes across 8 released versions tracking features (scan/query commands, git incremental scanning, semantic scoring), improvements (output batching, knowledge directory auto-detection, performance optimizations), and fixes (duplicate handling, merge logic, timestamp comparison, entry ordering). Includes migration details for scan output batching in v1.6.0.0 and shows evolution from v1.0.0 initial release (scan/query) through incremental scanning, session hooks, and automatic cleanup features.",
-      "role": "documentation",
+      "path": "plugins/project-intel-tool/CHANGELOG.md",
+      "summary": "Full version history for project-intel-tool from v0.1.0 to v1.4.0. Documents scan/query/submit_analysis tool evolution, subagent and sampling modes, fluent output format, role/verbosity filters, blocking scan, analysisDelta, semantic weight penalty, and shutdown reliability improvements.",
       "technologies": [
-        "Markdown"
-      ]
+        "Markdown",
+        "Semantic Versioning",
+        "Keep a Changelog"
+      ],
+      "searchTags": [
+        "release notes",
+        "version history",
+        "scan",
+        "query",
+        "submit_analysis",
+        "sampling",
+        "subagent",
+        "analysisDelta",
+        "verbosity",
+        "role filter",
+        "changelog"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 13553,
+      "lineCountWhenAnalysed": 227,
+      "role": "documentation"
     },
     "plugins/project-intel-tool/hooks/hooks.json": {
-      "path": "plugins/project-intel-tool/hooks/hooks.json",
       "sizeChars": 241,
-      "lineCount": 15,
+      "lineCount": 14,
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.072Z",
-      "summary": "Hook configuration that triggers a SessionStart event calling the sessionstart.js script.",
-      "purpose": "Defines MCP plugin hooks for the project-intel-tool. When Claude Code initializes a session, it invokes the SessionStart hook which runs sessionstart.js to check project knowledge status. This allows the tool to provide real-time feedback about available file summaries and project structure.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/hooks/hooks.json",
+      "summary": "Hook configuration registering SessionStart event handler that invokes the compiled sessionstart-knowledge-check.js script. Single hook definition for project-intel-tool session lifecycle integration.",
       "technologies": [
         "JSON",
-        "MCP hooks"
-      ]
+        "Hooks"
+      ],
+      "searchTags": [
+        "session lifecycle",
+        "hooks",
+        "event handlers",
+        "startup"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.547Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 241,
+      "lineCountWhenAnalysed": 14
     },
     "plugins/project-intel-tool/hooks/sessionstart.js": {
       "sizeChars": 1182,
-      "lineCount": 45,
+      "lineCount": 44,
       "imports": [
         "fs",
         "path",
         "child_process"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.072Z",
       "path": "plugins/project-intel-tool/hooks/sessionstart.js",
-      "summary": "Entry point script that spawns the TypeScript sessionstart-knowledge-check module and pipes output.",
-      "purpose": "Wraps the compiled TypeScript knowledge check script for execution as a Node.js hook. Validates that the plugin is correctly installed by checking for the compiled dist file, provides helpful error messages if the build is missing, and spawns the actual checker with inherited stdio to pass responses back to the parent MCP harness.",
-      "role": "script",
+      "summary": "Node.js entry point script for SessionStart hook that validates plugin installation and build status. Spawns compiled sessionstart-knowledge-check.js with environment and working directory context, providing actionable error messages if build is missing across 44 lines.",
       "technologies": [
         "Node.js",
-        "child_process",
-        "shelljs"
-      ]
+        "JavaScript"
+      ],
+      "searchTags": [
+        "hook script",
+        "validation",
+        "build check",
+        "session start",
+        "error reporting"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.547Z",
+      "role": "executable",
+      "sizeCharsWhenAnalysed": 1182,
+      "lineCountWhenAnalysed": 44
     },
     "plugins/project-intel-tool/LICENSE": {
-      "path": "plugins/project-intel-tool/LICENSE",
       "sizeChars": 1090,
-      "lineCount": 22,
+      "lineCount": 21,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "MIT License for project-intel-tool plugin.",
-      "purpose": "Legal license document granting permission to use, modify, and distribute the project-intel-tool software under MIT terms. Copyright 2026 Thore Höltig. Standard MIT license with no warranty provisions.",
-      "role": "documentation",
+      "path": "plugins/project-intel-tool/LICENSE",
+      "summary": "MIT License document for project-intel-tool authored by Thore Höltig (c) 2026. Standard open-source license granting permissions for use, modification, and distribution with liability limitations.",
       "technologies": [
-        "Text"
-      ]
+        "License",
+        "Legal"
+      ],
+      "searchTags": [
+        "license",
+        "copyright",
+        "MIT",
+        "terms"
+      ],
+      "lastUpdated": "2026-06-02T21:31:45.547Z",
+      "role": "documentation",
+      "sizeCharsWhenAnalysed": 1090,
+      "lineCountWhenAnalysed": 21
     },
     "plugins/project-intel-tool/README.md": {
-      "path": "plugins/project-intel-tool/README.md",
-      "sizeChars": 17175,
-      "lineCount": 288,
+      "sizeChars": 21380,
+      "lineCount": 310,
+      "refs": [
+        "LICENSE"
+      ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Comprehensive documentation for project-intel reconnaissance system covering architecture, usage, performance, and design decisions.",
-      "purpose": "Complete user and developer guide for project-intel-tool including problem statement (reduce token waste from blind exploration), solution overview (scan-query-read workflow), quick start (three-step setup with SessionStart hook), command references (/scan and /query with parameters and auto-detection), semantic scoring algorithm, wave-based architecture, maintenance strategy, performance characteristics, design decision rationale, and troubleshooting. Provides asymmetric payoff analysis, comparison to alternatives (Explore agent, Grep), and applicability guidelines for projects 25+ files.",
-      "role": "documentation",
+      "path": "plugins/project-intel-tool/README.md",
+      "summary": "Comprehensive user documentation for project-intel-tool. Covers the two-layer data model (structural always-current + semantic via scan), session start hook behavior, MCP tools (query, scan, submit_analysis), scan modes (subagent default vs sampling), stored data schema, staleness signals, configuration env vars/args, best practices, design decisions, and troubleshooting.",
       "technologies": [
-        "Markdown"
-      ]
+        "Markdown",
+        "MCP",
+        "Node.js",
+        "TypeScript"
+      ],
+      "searchTags": [
+        "user guide",
+        "setup",
+        "configuration",
+        "query",
+        "scan",
+        "knowledge base",
+        "session start",
+        "subagent",
+        "sampling",
+        "file map",
+        "design decisions",
+        "troubleshooting",
+        "staleness",
+        "analysisDelta"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 21380,
+      "lineCountWhenAnalysed": 310,
+      "role": "documentation"
     },
     "plugins/project-intel-tool/scripts/index.ts": {
-      "path": "plugins/project-intel-tool/scripts/index.ts",
-      "sizeChars": 22042,
-      "lineCount": 536,
+      "sizeChars": 29931,
+      "lineCount": 691,
       "imports": [
         "@modelcontextprotocol/sdk",
         "url",
@@ -954,22 +1264,38 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.072Z",
-      "summary": "Main MCP server implementation for project knowledge scanning, querying, and file analysis.",
-      "purpose": "Implements the core MCP server that exposes three tools: scan (for background file analysis), submit_analysis (for subagents to submit results), and query (for keyword-based search). Manages file discovery, dependency ordering, token budgets, and coordinates with subagents via batch files when MCP sampling is unavailable. Handles locking, shutdown signals, and provides logging support.",
-      "role": "implementation",
+      "path": "plugins/project-intel-tool/scripts/index.ts",
+      "summary": "MCP server entry point for project-intel-tool. Registers scan, query, and conditionally submit_analysis tools. Implements lock-based concurrent scan protection, subagent batch file writing, optional MCP sampling mode, progress reporting, root directory tracking, fluent text output formatting, and semantic scoring with staleness weight penalty. Handles graceful shutdown with isShuttingDown guard.",
       "technologies": [
         "TypeScript",
-        "MCP SDK",
         "Node.js",
-        "file system",
-        "process management"
-      ]
+        "MCP SDK",
+        "zod"
+      ],
+      "searchTags": [
+        "mcp server",
+        "entry point",
+        "scan",
+        "query",
+        "submit_analysis",
+        "subagent",
+        "sampling",
+        "semantic scoring",
+        "fluent output",
+        "lock",
+        "shutdown",
+        "SIGTERM",
+        "SIGINT",
+        "knowledge base"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 29931,
+      "lineCountWhenAnalysed": 691,
+      "role": "executable"
     },
     "plugins/project-intel-tool/scripts/lib/file-map.test.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/file-map.test.ts",
       "sizeChars": 7062,
-      "lineCount": 234,
+      "lineCount": 233,
       "exports": [
         "formatDate",
         "parseUrl",
@@ -985,19 +1311,27 @@
         "@modelcontextprotocol/sdk"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:38.916Z",
-      "summary": "Test suite for parseFileRefs function covering TypeScript/JavaScript, C#, and text file analysis.",
-      "purpose": "Validates file reference extraction across TS/JS (import/export detection, relative path resolution with extension/index fallback, external package extraction, scoped packages), C# (using directive namespace imports, public type declaration exports), and text/markdown/JSON (bare and relative path mentions). Tests deduplication, correct sizeChars and lineCount calculation, and ignoring non-existent references. Ensures proper distinction between external imports and intra-project refs.",
-      "role": "test",
+      "path": "plugins/project-intel-tool/scripts/lib/file-map.test.ts",
+      "summary": "Vitest unit tests for parseFileRefs() function covering TS/JS/C#/markdown file reference parsing. Tests resolve relative imports (.ts extension, index.ts fallback), parent directory imports, external package extraction, scoped packages, named/re-exports, require()/import(), dynamic imports, deduplication, and text file path mentions. Validates sizeChars/lineCount calculation.",
       "technologies": [
         "TypeScript",
         "Vitest"
-      ]
+      ],
+      "searchTags": [
+        "unit-tests",
+        "file-references",
+        "import-resolution",
+        "export-extraction",
+        "test-coverage"
+      ],
+      "lastUpdated": "2026-06-02T21:32:17.874Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 7062,
+      "lineCountWhenAnalysed": 233
     },
     "plugins/project-intel-tool/scripts/lib/file-map.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/file-map.ts",
-      "sizeChars": 6220,
-      "lineCount": 182,
+      "sizeChars": 6870,
+      "lineCount": 190,
       "exports": [
         "FileRefs",
         "parseFileRefs",
@@ -1010,20 +1344,29 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Parses source files to extract imports, exports, and inter-file references.",
-      "purpose": "Analyzes code files (TypeScript/JavaScript, C#, and plain text) to build a dependency graph. Resolves relative imports to actual file paths, extracts public type/class exports, and identifies all mentions of project files. Computes file metrics like character count and line count. This structural data is used to order files for analysis and provide context when summarizing dependencies.",
-      "role": "implementation",
+      "path": "plugins/project-intel-tool/scripts/lib/file-map.ts",
+      "summary": "Parses source files (TS/JS/C#/text) to extract imports, exports, and intra-project file references. Uses regex patterns to resolve relative imports, extract named exports, and identify file path mentions. Handles extension resolution and cross-file dependency detection across multiple languages.",
       "technologies": [
         "TypeScript",
-        "regex parsing",
-        "file I/O"
-      ]
+        "regex",
+        "file parsing",
+        "dependency analysis"
+      ],
+      "searchTags": [
+        "import resolution",
+        "export extraction",
+        "file references",
+        "C# parsing",
+        "path resolution"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.428Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 6870,
+      "lineCountWhenAnalysed": 190
     },
     "plugins/project-intel-tool/scripts/lib/project-scanner.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
-      "sizeChars": 12325,
-      "lineCount": 344,
+      "sizeChars": 13534,
+      "lineCount": 357,
       "exports": [
         "ScanResult",
         "findKnowledgeDir"
@@ -1034,43 +1377,60 @@
         "child_process"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Scans the project to identify new, modified, and deleted files for analysis.",
-      "purpose": "Discovers project files using git or filesystem traversal, detects changes via git history or mtime comparison, and compares against existing summaries to determine what needs scanning. Handles include/exclude paths, respects ignore directories, detects sub-projects with their own knowledge bases, and returns statistics about project structure and analysis coverage.",
-      "role": "implementation",
+      "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
+      "summary": "Scans project directories to detect new, modified, and deleted files. Integrates with git for change detection and builds file metadata (size, line count, imports/exports). Discovers sub-projects with knowledge directories. Generates ScanResult with project statistics and files ready for analysis.",
       "technologies": [
         "TypeScript",
-        "Node.js",
         "git",
-        "file system"
-      ]
+        "file system",
+        "project scanning"
+      ],
+      "searchTags": [
+        "git integration",
+        "file change detection",
+        "directory scanning",
+        "project metadata",
+        "sub-knowledge discovery"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.429Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 13534,
+      "lineCountWhenAnalysed": 357
     },
     "plugins/project-intel-tool/scripts/lib/sampler.test.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/sampler.test.ts",
       "sizeChars": 6675,
-      "lineCount": 156,
+      "lineCount": 155,
       "imports": [
         "vitest"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Unit tests for the sampling batch builder covering ordering, dependencies, and token budgets.",
-      "purpose": "Tests the buildSamplingBatches function to ensure files are ordered correctly by topological dependency layers, that token budgets are respected across batches, and that context from already-analyzed files is included. Verifies circular dependency handling and ensures every file appears exactly once in the output.",
-      "role": "test",
+      "path": "plugins/project-intel-tool/scripts/lib/sampler.test.ts",
+      "summary": "Unit tests for buildSamplingBatches using vitest. Tests dependency ordering (ensures dependencies processed before dependents), token budget management, batch splitting, circular dependency handling, and context file inclusion. Validates that files appear in exactly one batch.",
       "technologies": [
+        "vitest",
         "TypeScript",
-        "Vitest",
         "unit testing"
-      ]
+      ],
+      "searchTags": [
+        "batch ordering",
+        "dependency graphs",
+        "token budgeting",
+        "circular deps",
+        "context files"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.430Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 6675,
+      "lineCountWhenAnalysed": 155
     },
     "plugins/project-intel-tool/scripts/lib/sampler.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/sampler.ts",
-      "sizeChars": 10260,
-      "lineCount": 292,
+      "sizeChars": 11051,
+      "lineCount": 304,
       "exports": [
         "SamplingServer",
         "buildSamplingBatches",
         "SamplerLog",
+        "SamplerProgress",
         "writeBatchFiles"
       ],
       "imports": [
@@ -1078,21 +1438,30 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Orchestrates batching, prompting, and subagent coordination for file analysis.",
-      "purpose": "Groups files into efficient batches respecting token budgets and topological ordering of dependencies. Builds analysis prompts with inline file content and context references, parses JSON responses, and coordinates with subagents via MCP sampling requests or pre-written batch files. Handles background execution with abort signals and provides logging for progress tracking.",
-      "role": "implementation",
+      "path": "plugins/project-intel-tool/scripts/lib/sampler.ts",
+      "summary": "Builds dependency-aware sampling batches for file analysis using topological sorting. Estimates token consumption per file and respects token budgets. Constructs prompts from file content, runs sampling via MCP server, parses JSON responses, and writes batch files. Handles indent-sensitive languages specially.",
       "technologies": [
         "TypeScript",
-        "MCP SDK",
-        "token estimation",
-        "JSON parsing"
-      ]
+        "topological sorting",
+        "MCP",
+        "token estimation"
+      ],
+      "searchTags": [
+        "batch building",
+        "prompt generation",
+        "sampling workflow",
+        "response parsing",
+        "indent-sensitive languages"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.430Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 10808,
+      "lineCountWhenAnalysed": 300,
+      "analysisDelta": "+4 lines +243 chars"
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts",
       "sizeChars": 11606,
-      "lineCount": 291,
+      "lineCount": 290,
       "imports": [
         "vitest",
         "fs",
@@ -1100,21 +1469,29 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Unit tests for summary storage, merging, and path normalization logic.",
-      "purpose": "Tests the persistence and retrieval of file summaries including path normalization (handling ./ prefixes, backslashes), collision resolution on duplicate keys, and merging of new/updated analysis results. Verifies that deleted files are marked without removal, that fields are preserved across updates, and that JSON storage is sorted for stable diffs.",
-      "role": "test",
+      "path": "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts",
+      "summary": "Vitest unit tests for summary-merger functions. Tests normalization of file paths (handles ./ prefix and backslashes), collision resolution for duplicate keys, round-trip serialization, file deletion marking, and sampling result merging. Validates JSON storage format stability.",
       "technologies": [
+        "vitest",
         "TypeScript",
-        "Vitest",
-        "unit testing",
-        "file I/O"
-      ]
+        "file I/O",
+        "JSON serialization"
+      ],
+      "searchTags": [
+        "path normalization",
+        "data persistence",
+        "collision handling",
+        "deleted files",
+        "round-trip testing"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.431Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 11606,
+      "lineCountWhenAnalysed": 290
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.ts": {
-      "path": "plugins/project-intel-tool/scripts/lib/summary-merger.ts",
-      "sizeChars": 3584,
-      "lineCount": 99,
+      "sizeChars": 4286,
+      "lineCount": 113,
       "exports": [
         "isSummariesFile",
         "toAbsReal",
@@ -1128,91 +1505,138 @@
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "Manages persistent storage, retrieval, and merging of file summary metadata.",
-      "purpose": "Handles reading/writing the summaries.json file with proper path normalization and collision resolution. Provides utilities for merging sampling results into the knowledge base, marking files as deleted, and serializing the in-memory summary map back to disk. Ensures stable JSON format with sorted keys for clean git diffs and supports sub-project knowledge references.",
-      "role": "implementation",
+      "path": "plugins/project-intel-tool/scripts/lib/summary-merger.ts",
+      "summary": "Manages file summary persistence in JSON format. Handles reading/writing summaries with path normalization (converts abs paths to relative, backslashes to forward slashes). Merges sampling results, marks files deleted, resolves key collisions keeping non-deleted/recent entries. Ensures stable sorted output for git diffs.",
       "technologies": [
         "TypeScript",
-        "Node.js",
-        "file I/O",
         "JSON",
-        "path normalization"
-      ]
+        "file I/O",
+        "path manipulation"
+      ],
+      "searchTags": [
+        "summary storage",
+        "path normalization",
+        "data merging",
+        "file persistence",
+        "git diff stability"
+      ],
+      "lastUpdated": "2026-06-02T22:04:49.431Z",
+      "role": "implementation",
+      "sizeCharsWhenAnalysed": 4286,
+      "lineCountWhenAnalysed": 113
     },
     "plugins/project-intel-tool/scripts/package-lock.json": {
-      "path": "plugins/project-intel-tool/scripts/package-lock.json",
       "sizeChars": 101273,
-      "lineCount": 2446,
+      "lineCount": 2445,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.295Z",
-      "summary": "Dependency lock file for project-intel-mcp-server with 150+ npm package entries.",
-      "purpose": "Locks npm dependencies to exact versions ensuring reproducible builds. Key deps: @modelcontextprotocol/sdk v1.29.0, zod v3.25.76, TypeScript v5.9.3, vitest v4.1.5. Supports Node.js >=22 and provides build/test/typecheck scripts.",
-      "role": "build",
+      "path": "plugins/project-intel-tool/scripts/package-lock.json",
+      "summary": "NPM lock file (v3) pinning dependencies for project-intel-mcp-server v1.6.1.0. Contains production deps (@modelcontextprotocol/sdk@1.29.0, zod@3.25.76) and 50+ dev dependencies including TypeScript, Vitest, Vite, and Rolldown. Node >=22 required. Used for reproducible builds and dependency management across platforms.",
       "technologies": [
         "npm",
         "Node.js",
         "TypeScript",
-        "vitest"
-      ]
+        "Vitest"
+      ],
+      "searchTags": [
+        "lockfile",
+        "dependencies",
+        "npm-packages",
+        "version-pinning",
+        "dev-dependencies"
+      ],
+      "lastUpdated": "2026-06-02T21:32:17.868Z",
+      "role": "build",
+      "sizeCharsWhenAnalysed": 101273,
+      "lineCountWhenAnalysed": 2445
     },
     "plugins/project-intel-tool/scripts/package.json": {
-      "path": "plugins/project-intel-tool/scripts/package.json",
       "sizeChars": 1362,
       "lineCount": 49,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.295Z",
-      "summary": "Package manifest for project-intel-mcp-server MCP server tool.",
-      "purpose": "Declares the project as an MCP server with entry point dist/index.js. Includes build/test/inspect scripts. Main deps: @modelcontextprotocol/sdk 1.29.0 and zod 3.25.76. Describes lightweight reconnaissance system providing file summaries via query/scan tools.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/scripts/package.json",
+      "summary": "npm package manifest for the project-intel-mcp-server Node.js package. Defines version 1.4.0, ESM module type, build/test/typecheck scripts using tsc and vitest, dist as the published directory, and runtime deps: @modelcontextprotocol/sdk 1.29.0 and zod 3.25.76. Requires Node >=22.",
       "technologies": [
-        "MCP",
         "Node.js",
-        "npm"
-      ]
+        "TypeScript",
+        "npm",
+        "MCP SDK",
+        "zod",
+        "vitest"
+      ],
+      "searchTags": [
+        "package manifest",
+        "npm",
+        "build",
+        "dependencies",
+        "mcp server",
+        "project intel"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.379Z",
+      "sizeCharsWhenAnalysed": 1362,
+      "lineCountWhenAnalysed": 49,
+      "role": "configuration"
     },
     "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts": {
-      "path": "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts",
-      "sizeChars": 3496,
-      "lineCount": 73,
+      "sizeChars": 3475,
+      "lineCount": 72,
       "imports": [
         "fs",
         "path"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.072Z",
-      "summary": "Hook script that checks if project knowledge exists and suggests scanning if needed.",
-      "purpose": "Runs at session start to evaluate the project's knowledge base status. Reports file summary counts, changed files, and unanalyzed files via hook response. Provides user-facing messages about project structure and recommends using the query tool for efficient project exploration. Guides users toward scanning when knowledge doesn't exist or is incomplete.",
-      "role": "script",
+      "path": "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts",
+      "summary": "Hook script for SessionStart event that checks project knowledge status and suggests scanning. Scans project root for existing .knowledge directory, reports file summaries count, changed/unanalyzed files. Outputs HookResponse JSON recommending users use query MCP tool for token-efficient project exploration. Guides users through knowledge generation workflow.",
       "technologies": [
         "TypeScript",
         "Node.js",
-        "project-scanner"
-      ]
+        "MCP"
+      ],
+      "searchTags": [
+        "hook",
+        "session-start",
+        "knowledge-check",
+        "project-scan",
+        "user-guidance"
+      ],
+      "lastUpdated": "2026-06-02T21:32:17.871Z",
+      "role": "executable",
+      "sizeCharsWhenAnalysed": 3475,
+      "lineCountWhenAnalysed": 72
     },
     "plugins/project-intel-tool/scripts/tsconfig.json": {
-      "path": "plugins/project-intel-tool/scripts/tsconfig.json",
       "sizeChars": 877,
-      "lineCount": 37,
+      "lineCount": 36,
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:19.295Z",
-      "summary": "TypeScript compiler configuration for strict ES2022 target.",
-      "purpose": "Configures TypeScript compilation to ES2022 with NodeNext modules and strict type checking. Enables declaration files and source maps. Includes lib, index, and hook scripts while excluding node_modules and dist.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/scripts/tsconfig.json",
+      "summary": "TypeScript compiler config targeting ES2022 with strict settings. Compiles lib/, index.ts, sessionstart-knowledge-check.ts to dist/. Enables declaration files, sourceMap, strict type checking, no-unused-locals/parameters, no-implicit-returns, exact optional properties. Excludes node_modules and dist from input.",
       "technologies": [
         "TypeScript"
-      ]
+      ],
+      "searchTags": [
+        "typescript-config",
+        "compiler-options",
+        "strict-mode",
+        "es2022"
+      ],
+      "lastUpdated": "2026-06-02T21:32:17.872Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 877,
+      "lineCountWhenAnalysed": 36
     },
     "plugins/project-intel-tool/scripts/types.ts": {
-      "path": "plugins/project-intel-tool/scripts/types.ts",
-      "sizeChars": 2743,
-      "lineCount": 107,
+      "sizeChars": 3888,
+      "lineCount": 135,
       "exports": [
         "KNOWLEDGE_DIRECTORY",
+        "BATCHES_DIRECTORY",
         "SUMMARIES_FILE",
         "SCAN_FILE",
         "FORMAT_FLAT",
         "FORMAT_GROUPED",
+        "VERBOSITY_VALUES",
+        "VerbosityType",
+        "ROLE_VALUES",
+        "FileRole",
         "QUERY_RESULT_MAX",
         "SAMPLING_DELAY_MS",
         "SAMPLING_TOKEN_BUDGET",
@@ -1229,35 +1653,65 @@
         "HierarchicalGrouping",
         "ScoredFileSummary",
         "GroupedScoredFileSummary",
-        "HookResponse"
+        "HookResponse",
+        "AudienceType",
+        "ToolContentResult"
+      ],
+      "imports": [
+        "zod"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-29T21:10:40.073Z",
-      "summary": "TypeScript type definitions and constants for the project-intel-tool MCP plugin.",
-      "purpose": "Centralizes all shared types, interfaces, and configuration constants used across the project-intel-tool. Defines data structures for scan results, file summaries, sampling batches, query outputs, and hook responses. Establishes configuration defaults and environment variable names for token budgets, batch sizes, and include/exclude paths.",
-      "role": "configuration",
+      "path": "plugins/project-intel-tool/scripts/types.ts",
+      "summary": "Shared TypeScript type definitions and constants for project-intel-tool. Defines ROLE_VALUES, VERBOSITY_VALUES, FileSummary, SummariesData, SamplingBatch, ScoredFileSummary, ScanConfig, HierarchicalGrouping, HookResponse, and ToolContentResult (zod schema). Central contract for all modules in the project-intel-tool scripts.",
       "technologies": [
         "TypeScript",
-        "type definitions"
-      ]
+        "zod"
+      ],
+      "searchTags": [
+        "types",
+        "interfaces",
+        "constants",
+        "FileSummary",
+        "ScoredFileSummary",
+        "ScanConfig",
+        "SamplingBatch",
+        "ROLE_VALUES",
+        "VERBOSITY_VALUES",
+        "zod schema",
+        "shared types"
+      ],
+      "lastUpdated": "2026-06-03T22:14:10.380Z",
+      "sizeCharsWhenAnalysed": 3888,
+      "lineCountWhenAnalysed": 135,
+      "role": "implementation"
     },
     "README.md": {
-      "path": "README.md",
-      "sizeChars": 1552,
-      "lineCount": 39,
+      "sizeChars": 2409,
+      "lineCount": 40,
       "refs": [
         "plugins/batch_file_tools/README.md",
-        "plugins/project-intel-tool/README.md"
+        "plugins/project-intel-tool/README.md",
+        "LICENSE"
       ],
       "deleted": false,
-      "lastUpdated": "2026-05-28T08:41:13.590Z",
-      "summary": "Main project documentation describing better-base-tools, a collection of Claude Code plugins for optimized file operations.",
-      "purpose": "Documents the better-base-tools project and its purpose as a collection of Claude Code plugins designed to improve efficiency by reducing tool call turns, duplicate operations, and token usage. Highlights the batch_file_tools plugin with its key features including multi-file reads, flexible read modes, content-based search, and glob pattern support. Serves as the entry point for developers to understand the project scope and installation procedures.",
-      "role": "documentation",
+      "path": "README.md",
+      "summary": "Project overview documenting better-base-tools, a collection of Claude Code plugins that enhance base tool efficiency. Describes two main plugins: batch_file_tools (multi-file read/edit MCP tools reducing token usage by 45-58%) and project-intel-tool (persistent project knowledge base with semantic search and incremental scanning). Includes installation and licensing information.",
       "technologies": [
         "Claude Code",
-        "Markdown"
-      ]
+        "MCP",
+        "Plugin Architecture"
+      ],
+      "searchTags": [
+        "project overview",
+        "plugin documentation",
+        "batch operations",
+        "semantic search",
+        "tool efficiency"
+      ],
+      "lastUpdated": "2026-06-03T15:13:03.151Z",
+      "sizeCharsWhenAnalysed": 2409,
+      "lineCountWhenAnalysed": 40,
+      "role": "documentation"
     }
   }
 }

@@ -126,11 +126,10 @@ describe("handleBatchRead", () => {
     expect(typeof info.size).toBe("number");
     expect(info.lines).toBe(2);
     expect(r.lines).toBe(2);
-    expect(typeof info.mtime).toBe("string");
-    expect(new Date(info.mtime).getTime()).toBeGreaterThan(0);
-    expect(info.ctimeMs).toBeUndefined();
-    expect(info.mtimeMs).toBeUndefined();
-    expect(info.isFile).toBe(true);
+    expect(typeof info.lastChanged).toBe("string");
+    expect(info.lastChanged.length).toBeGreaterThan(0);
+    expect(info.mtime).toBeUndefined();
+    expect(info.isFile).toBeUndefined();
     expect(info.refs).toBeUndefined();
   });
 
@@ -141,8 +140,8 @@ describe("handleBatchRead", () => {
     expect(r.mode_applied).toBe("fileinfo");
     const info = JSON.parse(r.content);
     expect(info.lines).toBe(4);
-    expect(typeof info.mtime).toBe("string");
-    expect(info.isFile).toBe(true);
+    expect(typeof info.lastChanged).toBe("string");
+    expect(info.isFile).toBeUndefined();
     expect(Array.isArray(info.refs)).toBe(true);
     expect(info.refs).toContain(join(workDir, "foo.js"));
     expect(info.refs).toContain(resolve(workDir, "../bar.js"));
@@ -305,7 +304,8 @@ describe("handleBatchRead", () => {
     expect(out.results.length).toBe(2);
     for (const r of out.results) {
       expect(r.mode_applied).toBe("fileinfo");
-      expect(JSON.parse(r.content).isFile).toBe(true);
+      expect(JSON.parse(r.content).isFile).toBeUndefined();
+      expect(typeof JSON.parse(r.content).lastChanged).toBe("string");
     }
   });
 });

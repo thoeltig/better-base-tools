@@ -58,9 +58,9 @@ async function main(): Promise<void> {
   if (unanalyzedFilesCount > 0) statusMessage += `, ${unanalyzedFilesCount} file(s) without AI analysis`;
 
   const additionaContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +
-  `The result will also provide you a quick overview of the used technologies, imports and exports, purpose, role and description of each file.` +
+  `The result will also provide you a quick overview of the used technologies, imports and exports, role and description of each file.` +
   `The tool is designed to provide you an efficent way to know what files you need for a task without reading the full files.` +
-  `\nFile map and structural information are always up to date, descriptions and purpose might need a reevaluation after file changes to check if the content still matches the summaries: ${statusMessage}`;
+  `\nFile map and structural information are always up to date, descriptions might need a reevaluation after file changes to check if the content still matches the summaries: ${statusMessage}`;
   outputHookResponse(statusMessage, additionaContext);
 }
 

@@ -7,6 +7,98 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-04
+
+### Fixed
+
+- **Subagent batch instruction** — replaced vague "Load the 'submit_analysis' tool" prompt with an explicit ToolSearch query (`query: 'submit_analysis'`) and a prohibition against invoking other skills or tools; reduces Haiku subagent error rate on batch analysis calls
+
+## [1.4.0] - 2026-06-04
+
+### Added
+
+- **`verbosity` parameter on `query`** — optional field controlling data density in results: `full` (default, current behaviour), `structure` (filepath/size/lines/role/analysisDelta/imports/exports/refs — no summary or technologies), `semantic` (filepath/role/technologies/summary/analysisDelta — no imports/exports/refs/lineCount/sizeChars)
+- **`PROJECT_INTEL_TOOL_MCP_PROGRESS` / `--mcp-progress`** — enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch; requires harness support for `notifications/progress` (default: `false`)
+
+### Changed
+
+- **`scan` is now blocking** — previously returned immediately while analysis ran in the background; now blocks until all batches are complete and returns `"Scan complete. Analysed N file(s) in M batch(es)."`. Gives the model an accurate signal that knowledge is ready to query and removes the need to race query calls against an incomplete scan.
+- **Improved process shutdown** — added `isShuttingDown` guard to prevent double cleanup on concurrent signals; added `stdin:end` and `stdin:close` handlers alongside `SIGTERM`/`SIGINT` for reliable termination on Windows and on MCP client crash; resource release and server close split into separate try/catch blocks with individual error logging
+
+## [1.3.2] - 2026-06-03
+
+### Fixed
+
+- **`query` fluent output missing `refs` field** — `FluentFile` type now includes `refs`; intra-project file references render as `referenced: ...` on a dedicated line below the summary
+- **`query` fluent output missing `analysisDelta`** — files with unanalysed changes now show `unanalysed: +N lines +N chars` below the summary, signalling that the semantic summary may be stale
+
+### Changed
+
+- **`query` fluent output connectivity fields** — `imports:` and `exports:` now each render on their own line instead of being joined with ` | `; consistent with `referenced:` line format
+
+## [1.3.1] - 2026-06-03
+
+### Fixed
+
+- **`query` grouped format fallback** — falls back to flat when only one result is returned, or when every folder group contains exactly one file (grouping only activates when at least one group has more than one entry)
+
+### Changed
+
+- **`query` tool description and title** — updated to accurately reflect that keywords match against file path, exports, imports, refs, searchTags, technologies, role, and semantic summary; clarified that structural data is always current without scanning; title changed to "Query project files by path, structure, or semantics"
+
+## [1.3.0] - 2026-06-02
+
+_Query output cleanup, role filter, and analysis schema overhaul._
+
+### Added
+
+- **`role` filter on `query`** — new optional `z.enum` parameter to filter results to a specific file role: `implementation`, `executable`, `helperScript`, `test`, `configuration`, `build`, `documentation`, `data`
+- **`searchTags` field** — analysis model generates additional search keywords not already present in summary, role, or technologies; used for scoring (`+3 × semanticWeight`) but excluded from query output
+
+### Changed
+
+- **Role values updated**: `script` renamed to `helperScript`; `executable` and `data` added; full set: `implementation | executable | helperScript | test | configuration | build | documentation | data`. Existing knowledge bases should be rescanned to reclassify files.
+- **`purpose` field removed**: replaced by an extended `summary` (~450 chars) covering content, purpose, and key information in a single field. Existing knowledge bases should be rescanned.
+- **`format` parameter typed**: `query` `format` is now `z.enum(['grouped', 'flat'])`; invalid values rejected at schema level
+- **Query output cleaned up**: `fileScore`, `folderScore`, `query`, and `keywords` removed from all query responses; `scope` only included when set by the caller
+
+### Fixed
+
+- **Stale batch files**: `writeBatchFiles` now clears existing files from `.knowledge/batches/` before writing, preventing orchestration agents from picking up batch files from a previous scan
+- **Knowledge directory indexed by git scanner**: `.knowledge/` is now excluded from git-based file scanning, preventing batch prompt files and summaries from being treated as project source files
+
+## [1.2.0] - 2026-06-02
+
+### Added
+
+- `PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE` / `--user-audience` — append a compact human-readable summary to tool results (e.g. `"Found 9 knowledge entries"`); requires harness support for `annotations.audience`; when unsupported the summary is visible to the model as redundant context (default: `false`)
+- `PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT` / `--mcp-structured-content` — include raw result objects as `structuredContent` in tool responses alongside `content[]`; leave disabled unless the harness handles both fields correctly (default: `false`)
+- `PROJECT_INTEL_TOOL_SCAN_META` / `--scan-meta`, `PROJECT_INTEL_TOOL_QUERY_META` / `--query-meta`, `PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META` / `--submit-analysis-meta` — JSON objects merged into the `_meta` field of each respective tool registration; use for harness-specific flags such as `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}` (default: `{}`)
+
+### Changed
+
+- Remove hardcoded `anthropic/maxResultSizeChars: 500000` and `anthropic/alwaysLoad: true` from `query` tool `_meta` — now configured via `PROJECT_INTEL_TOOL_QUERY_META`
+
+## [1.1.0] - 2026-06-01
+
+_Query freshness awareness and ref extraction improvements._
+
+### Added
+
+- **Analysis delta**: Query results now include `analysisDelta` (e.g. `+2 lines +50 chars`) on file entries when a file has been modified since its last semantic analysis, giving an at-a-glance signal of how much the content has drifted.
+- **Semantic weight penalty**: Semantic match scores (purpose, summary, role, technologies) are scaled by the ratio of current to baseline file size. Factual fields (exports, imports, refs, path) are unaffected — heavily rewritten files rank lower on semantic matches but still surface on structural ones
+- **Folder-level technologies**: Grouped query output now aggregates a deduplicated `technologies` list at the folder level
+
+### Fixed
+
+- **Line count off by one**: `lineCount` in structural data now correctly handles trailing newlines, matching the count returned by `fileinfo` mode in batch_file_tools
+- **Extension-less file refs**: `parseText` now captures references to extension-less files (e.g. `LICENSE`) via markdown link syntax, consistent with batch_file_tools ref extraction
+
+### Changed
+
+- **`deleted` and `lastUpdated` removed from query output**: Both were redundant (`deleted` is always false since deleted files are excluded; `lastUpdated` is an internal timestamp superseded by `analysisDelta`)
+- **`technologies` moved from per-file to folder-level in grouped output**
+
 ## [1.0.0] - 2026-05-29
 
 _Stable release: Instruction clarity, scan accuracy, and display improvements._
@@ -125,7 +217,14 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...HEAD
+[1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...ProjectIntelTools_v1.4.1
+[1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...ProjectIntelTools_v1.4.0
+[1.3.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.1...ProjectIntelTools_v1.3.2
+[1.3.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...ProjectIntelTools_v1.3.1
+[1.3.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.2.0...ProjectIntelTools_v1.3.0
+[1.2.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.1.0...ProjectIntelTools_v1.2.0
+[1.1.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.0.0...ProjectIntelTools_v1.1.0
 [1.0.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.6.0...ProjectIntelTools_v1.0.0
 [0.6.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.5.0...ProjectIntelTools_v0.6.0
 [0.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v0.4.0...ProjectIntelTools_v0.5.0

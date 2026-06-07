@@ -113,7 +113,11 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
   if (r.error) {
     hint = `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
   } else if (r.mode_applied === "fileinfo") {
-    hint = `<!-- File info for '${shortenPath(r.path)}' -->`;
+    const info = JSON.parse(r.content ?? "{}");
+    const meta = `Lines: ${r.lines}, Size: ${info.size}`;
+    const header = `<!-- ${shortenPath(r.path)} (${meta}) lastChanged: ${info.lastChanged} -->`;
+    const refsLine = info.refs?.length ? `\nreferenced: ${(info.refs as string[]).join(', ')}` : '';
+    return createToolOutputForAssistant(`${header}${refsLine}`);
   } else if (r.match_count !== undefined) {
     hint = `<!-- Found ${r.match_count} match(es) in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
   } else if (r.returned_lines === 0) {
