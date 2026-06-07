@@ -109,12 +109,12 @@ Runs AI analysis on all new, modified, and unanalyzed files and populates semant
 1. Calls `scanProject` (same as session start): structural data updated, soft delete missing files
 2. Collects all files needing AI analysis: new files, modified files, files without semantic data
 3. Parses each file to build a dependency graph (imports → refs between files in the scan set)
-4. Batches files using topological ordering so dependencies are analyzed before dependents
+4. Groups files by import cohesion (union-find) and topologically sorts within each group so dependencies are analyzed before dependents
 5. Injects already-analyzed dependencies as additional cross file context into each batch prompt
 6. Runs AI analysis per batch (see Scan Modes below)
 7. Merges semantic results into `.knowledge/summaries.json`
 
-Files within each topological layer are sorted by directory for folder affinity, then by filename. Batches grow until the estimated token budget is reached, at which point a new batch starts. A layer boundary triggers an early flush if the accumulated batch already exceeds the minimum batch size. This ensures related files land in the same batch and dependencies always precede dependents.
+Files are grouped by import cohesion: files that import each other or share an already-summarized dependency form a component via union-find. Within each component, files are topologically sorted so dependencies come before dependents. Components are packed into batches greedily by token budget; oversized components split in topological order. This ensures files that reference each other are analyzed together and each file's dependencies are visible — either as file content earlier in the same batch or as context summaries from a prior batch.
 
 Only changed and unanalyzed files are processed on each run. Subsequent scans on unchanged projects return immediately. Pass `scanLocation` to re-analyze only a subdirectory, which is faster when actively working in one area.
 
@@ -141,7 +141,7 @@ When MCP sampling is disabled, scan writes batch files to `.knowledge/batches/` 
 }
 ```
 
-Each batch file contains the compact content of the files to analyse, the summaries of the related files as additonal context and a prompt telling the subagent to use the `submit_analysis` tool to write results. This mode works in all harnesses which support subagnets. Alternatively the main agent can process the files and submit the analysis directly.
+Each batch file contains the compact content of the files to analyse, the summaries of the related files as additional context and a prompt telling the subagent to use the `submit_analysis` tool to write results. This mode works in all harnesses which support subagnets. Alternatively the main agent can process the files and submit the analysis directly.
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
@@ -170,7 +170,7 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
 }
 ```
 
-The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `imports` is a map of source path or package name to a list of imported names (e.g. `{"zod": ["z"], "./types": ["SamplingBatch"]}`) for TypeScript/JavaScript; C# namespace keys map to empty arrays. `refs` captures intra-project file path mentions without named bindings: side-effect imports, dynamic `import()`, `require()` calls, and path mentions in markdown or text files. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
+The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `imports` is a map of source path or package name to a list of imported names (e.g. `{"zod": ["z"], "src/lib/types.ts": ["SamplingBatch"]}`) for TypeScript/JavaScript; C# namespace keys map to empty arrays. `refs` captures intra-project file path mentions without named bindings: side-effect imports, dynamic `import()`, `require()` calls, and path mentions in markdown or text files. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
 Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across all sub-project knowledge bases.
 
 ---
@@ -218,7 +218,6 @@ All settings are configurable as environment variables or CLI arguments (`--name
 | `PROJECT_INTEL_TOOL_MCP_LOGGING` | `--mcp-logging` | Enable MCP logging protocol (stderr fallback otherwise) | `false` |
 | `PROJECT_INTEL_TOOL_MCP_PROGRESS` | `--mcp-progress` | Enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch | `false` |
 | `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `50000` |
-| `PROJECT_INTEL_TOOL_MIN_BATCH_TOKENS` | `--min-batch-tokens` | Min batch size before layer-boundary flush | `3200` |
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
 | `PROJECT_INTEL_TOOL_INCLUDE_PATHS` | `--include` | Comma-separated extra paths to include in scan | |
 | `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` | `--exclude` | Comma-separated paths to exclude from scan | |
@@ -288,7 +287,7 @@ Use `scanLocation` to scan subdirectories incrementally.
 - **Why git-based incremental scanning?** Git history gives accurate per-file modification tracking without stat races. Only changed files are re-analyzed. Non-git projects fall back to filesystem mtime.
 - **Why SessionStart hook?** The model starts blind each session. The hook provides immediate knowledge status and explicit instructions to use the query tool first, turning a passive tool into active guidance.
 - **Why automatic cleanup?** Query accuracy degrades if summaries reference files that no longer exist. Deleted files are marked as deleted automatically on every session start scan to exclude them when the models uses the query tool.
-- **Why topological batch ordering?** When a file depends on another, the dependency's summary is injected as context into the dependent's analysis prompt. Summaries are therefore written with knowledge of what their imports do, producing more accurate purpose and connection descriptions.
+- **Why cohesion-based batch clustering?** Files that import each other or share an already-summarized dependency are grouped into the same batch via union-find. Within each group, dependencies are analyzed before dependents (topological order). This means when a file is analyzed, its direct dependencies are either present as file content in the same batch or injected as context summaries from a prior batch — giving the analysis model accurate knowledge of what each import does.
 - **Why two scan modes?** Subagent mode works in any harness with no special capabilities. Sampling mode eliminates context pollution entirely for harnesses that support it. The default is subagent mode for maximum compatibility.
 
 ---

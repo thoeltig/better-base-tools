@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - **`imports` structure** — changed from `string[]` (flat list of package or file names) to `Record<string, string[]>` (source path or package name → list of imported names). For TypeScript/JavaScript, named, default, namespace, and `import type` specifiers are all captured per source. For C#, namespace keys map to empty arrays. Dynamic `import()`, `require()`, and bare side-effect local imports go to `refs` instead of `imports` since they carry no named bindings.
 - **Import scoring in `query`** — source path or package name match now scores +4; imported name match scores +3 as a separate signal (previously all import matches scored +4 flat)
+- **`query` imports label rendering** — package names (no file extension) now render as-is; only local file paths use `basename()` shortening. Fixes ambiguous `sdk` label when multiple scoped packages share the same basename.
+- **Batch clustering** — replaced folder-affinity topo-layer sort with cohesion-based union-find clustering: files connected by intra-scan imports/refs or by a shared already-summarized dependency form a component; files within each component are topo-sorted (deps first); components are packed into batches by token budget. Oversized components split in topo order.
+- **Batch prompt structure** — action instruction moved to immediately after the output schema (before context and files); context section changed to `<context path="..." referenced_by="file1,file2">\nsummary\n</context>` XML format; file tags extended with `imports="key: name1, name2 | ..."` attribute listing intra-batch and context-file imports per file.
+- **`minBatchTokens` removed** — `ScanConfig`, `DEFAULT_SCAN_CONFIG`, and the `--min-batch-tokens` / `PROJECT_INTEL_TOOL_MIN_BATCH_TOKENS` config option are removed; cohesion clustering packs components greedily so the layer-boundary flush threshold has no equivalent role.
+- **`.js` → `.ts` import resolution** — `resolveImport` in `file-map.ts` now strips the existing extension and retries with TypeScript extensions, resolving ESM-style `.js` imports to their `.ts` source files. Fixes missing import edges and context entries for TypeScript projects using ESM module syntax.
+
+### Fixed
+
+- **`renderImports` crash on old-format summaries** — added `Array.isArray` guard; knowledge base entries with the legacy `imports: string[]` format are skipped during rendering instead of throwing.
+- **Import extraction from string literals** — static import regexes (`TS_IMPORT_FULL_RE`, `TS_IMPORT_BARE_RE`) now anchored to line start (`^` with `m` flag); prevents false-positive imports being extracted from string literals in test files that contain import syntax as test data.
 
 ## [1.4.1] - 2026-06-04
 
