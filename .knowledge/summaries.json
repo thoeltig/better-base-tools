@@ -199,7 +199,7 @@
         "LICENSE"
       ],
       "path": "plugins/batch_file_tools/README.md",
-      "summary": "Complete documentation covering why batching (−58% tool calls, −46% context), mode reference (compact/verbatim/fileinfo), glob/search features, error recovery with nearest_anchor hints, 8 env var config options, performance benchmarks across real projects. ~1400 lines.",
+      "summary": "Complete documentation covering why batching (−58% tool calls, −46% context), mode reference (compact/verbatim/fileinfo), glob/search features, error recovery with nearest_anchor hints, 8 env var config options, performance benchmarks across real projects.",
       "technologies": [
         "Markdown",
         "MCP",
@@ -851,7 +851,7 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/types.ts",
-      "summary": "Central Zod schema definitions. ReadInput/Output/Request/Result with modes (compact/verbatim/fileinfo). EditInput/Output with ops (replace/replace_all/insert_at_line/replace_range/write). Error reasons, ToolContentResult formatting, validation for batch operations. ~400 lines.",
+      "summary": "Central Zod schema definitions. ReadInput/Output/Request/Result with modes (compact/verbatim/fileinfo). EditInput/Output with ops (replace/replace_all/insert_at_line/replace_range/write). Error reasons, ToolContentResult formatting, validation for batch operations.",
       "technologies": [
         "TypeScript",
         "Zod",
