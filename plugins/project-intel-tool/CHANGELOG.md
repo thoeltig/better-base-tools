@@ -22,6 +22,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **`renderImports` crash on old-format summaries** — added `Array.isArray` guard; knowledge base entries with the legacy `imports: string[]` format are skipped during rendering instead of throwing.
 - **Import extraction from string literals** — static import regexes (`TS_IMPORT_FULL_RE`, `TS_IMPORT_BARE_RE`) now anchored to line start (`^` with `m` flag); prevents false-positive imports being extracted from string literals in test files that contain import syntax as test data.
 
+## [1.4.2] - 2026-06-07
+
+### Added
+
+- **Unit tests** — Vitest suites covering scoring and filtering (`query-engine.test.ts`), config parsing (`config.test.ts`), file lock (`lock.test.ts`); all logic extracted from `index.ts` is now independently testable
+
+### Changed
+
+- **Code structure** — extracted all logic not directly tied to the MCP server out of `index.ts` into dedicated modules: `sampler.ts`, `config.ts`, `lock.ts`, and `analysis-batch.ts`
+- **Sampling output schema** — defined via Zod schema instead of manual JSON parsing; reduces fragility on malformed sampling responses
+- **`AnalysisSubmission` type** — introduced dedicated interface omitting `exports`/`imports` fields; `summary` is now mandatory
+
 ## [1.4.1] - 2026-06-04
 
 ### Fixed
@@ -232,8 +244,9 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...HEAD
-[1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...ProjectIntelTools_v1.4.1
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...HEAD
+[1.4.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...ProjectIntelTools_v1.4.2
+[1.4.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...ProjectIntelTools_v1.4.1
 [1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...ProjectIntelTools_v1.4.0
 [1.3.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.1...ProjectIntelTools_v1.3.2
 [1.3.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.0...ProjectIntelTools_v1.3.1
