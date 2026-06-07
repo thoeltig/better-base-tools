@@ -14,6 +14,28 @@ Every session models start blind into a project maze. Without prior context they
 
 ---
 
+## Token Savings vs Exploration Agents
+
+Orienting via `query` is significantly cheaper than spawning an exploration agent. The cost difference operates at two levels: the response the parent model receives, and the entire subagent session that exploration requires but `query` does not.
+
+**Why exploration is expensive.** An exploration agent operates under a chain of indirection: the user instructs the main model, the main model delegates to a subagent, and the subagent interprets the task on its own. How narrowly or broadly it searches depends on how clearly intent was communicated at each step. A well-scoped delegation results in a few targeted reads; a vague one triggers wide grep, glob, and file reads across the project structure — anywhere from moderate to high token usage. Either way, the subagent spins up a full session, reads file content across multiple turns, and returns a summary before the main model can act. Even when using a smaller, cheaper model for the subagent, this amounts to hundreds of thousands of tokens per exploration call. And the result is ephemeral: the next session starts blind again.
+
+The table below shows per-lookup averages measured across real sessions on a 68-file project:
+
+| Metric | Explore agent | `query` | Delta |
+|---|---|---|---|
+| Tool output to parent | ~14,000 chars | ~9,000 chars | ~−35% |
+| Subagent cache read tokens | ~577,000 | 0 | −100% |
+| Subagent cache write tokens | ~51,000 | 0 | −100% |
+| Subagent output tokens | ~3,700 | 0 | −100% |
+| Subagent assistant turns | ~5–10 | 0 | −100% |
+
+The subagent token cost is the dominant factor and scales with project size. `query` output also grows with project size but remains a single synchronous call with no spawned session, no file reads, and no multi-turn overhead. The knowledge built during scan is reused across every session, so the orientation cost is paid once rather than repeated on every lookup.
+
+Despite the cost difference, both approaches lead to the same follow-up: in measured sessions, a file read was the next action ~65–67% of the time after both `query` and exploration agents — confirming the orientation quality is equivalent.
+
+---
+
 ## Two-Layer Data Model
 
 The tool separates knowledge into two layers with different update frequencies.

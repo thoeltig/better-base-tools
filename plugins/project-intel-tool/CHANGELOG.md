@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-07
+
+### Added
+
+- **Token savings documentation** — added "Token Savings vs Exploration Agents" section to README with per-lookup cost comparison between `query` and Explore subagents, measured across sessions on a 68-file project and a larger Angular project
+
 ### Changed
 
 - **`imports` structure** — changed from `string[]` (flat list of package or file names) to `Record<string, string[]>` (source path or package name → list of imported names). For TypeScript/JavaScript, named, default, namespace, and `import type` specifiers are all captured per source. For C#, namespace keys map to empty arrays. Dynamic `import()`, `require()`, and bare side-effect local imports go to `refs` instead of `imports` since they carry no named bindings.
@@ -244,7 +250,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...HEAD
+[1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3
 [1.4.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...ProjectIntelTools_v1.4.2
 [1.4.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...ProjectIntelTools_v1.4.1
 [1.4.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.3.2...ProjectIntelTools_v1.4.0

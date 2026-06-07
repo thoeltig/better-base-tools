@@ -1,6 +1,6 @@
 {
     "name": "project-intel-mcp-server",
-    "version": "1.4.2",
+    "version": "1.4.3",
     "license": "MIT",
     "author": "Thore Höltig",
     "description": "Lightweight reconnaissance system that provides direction before exploration. Query for relevant files before reading them - avoid expensive blind exploration and context pollution.",
