@@ -20,12 +20,13 @@ function buildDepGraph(files: string[], fileMap: Map<string, FileRefs>): Map<str
   const fileSet = new Set(files);
   const graph = new Map<string, Set<string>>();
   for (const file of files) {
-    const refs = fileMap.get(file);
+    const fr = fileMap.get(file);
     const deps = new Set<string>();
-    if (refs) {
-      refs.refs
-        .filter(r => fileSet.has(r))
-        .forEach(r => deps.add(r));
+    if (fr) {
+      // Local import deps (imports keys that are in the scan set)
+      Object.keys(fr.imports).filter(k => fileSet.has(k)).forEach(k => deps.add(k));
+      // Text-mention deps
+      fr.refs.filter(r => fileSet.has(r)).forEach(r => deps.add(r));
     }
     graph.set(file, deps);
   }
@@ -60,30 +61,51 @@ function estimateTokens(filePath: string, fileMap: Map<string, FileRefs>, numCon
 function buildBatch(
   files: string[],
   fileMap: Map<string, FileRefs>,
-  _graph: Map<string, Set<string>>,
   summaries: SummariesData,
   summarized: Set<string>,
   charsPerToken: number,
   toAbs: (p: string) => string
 ): SamplingBatch {
-  const contextPaths = new Set<string>();
+  const fileSet = new Set(files);
+  const contextReferencedBy = new Map<string, Set<string>>();
+
   for (const file of files) {
-    const refs = fileMap.get(file);
-    for (const dep of refs?.refs ?? []) {
+    const fr = fileMap.get(file);
+    const allDeps = [...Object.keys(fr?.imports ?? {}), ...(fr?.refs ?? [])];
+    for (const dep of allDeps) {
       if (summarized.has(toAbs(dep)) && summaries.files.get(toAbs(dep))?.summary) {
-        contextPaths.add(dep);
+        const refs = contextReferencedBy.get(dep) ?? new Set<string>();
+        refs.add(file);
+        contextReferencedBy.set(dep, refs);
       }
     }
   }
-  const contextFiles = [...contextPaths].map(p => ({
+
+  const contextFiles = [...contextReferencedBy.entries()].map(([p, refBy]) => ({
     path: p,
     summary: summaries.files.get(toAbs(p))?.summary || '',
+    referencedBy: [...refBy],
   }));
+
+  const contextPathSet = new Set(contextReferencedBy.keys());
+  const fileRefs: Record<string, string[]> = {};
+  for (const file of files) {
+    const fr = fileMap.get(file);
+    if (!fr) continue;
+    const entries: string[] = [];
+    for (const [k, names] of Object.entries(fr.imports)) {
+      if (fileSet.has(k) || contextPathSet.has(k)) {
+        entries.push(names.length ? `${k}: ${names.join(', ')}` : k);
+      }
+    }
+    if (entries.length > 0) fileRefs[file] = entries;
+  }
+
   const estimatedTokens = 200 + files.reduce(
     (sum, f) => sum + estimateTokens(f, fileMap, contextFiles.length, charsPerToken),
     0
   );
-  return { files, contextFiles, estimatedTokens };
+  return { files, fileRefs, contextFiles, estimatedTokens };
 }
 
 export function buildSamplingBatches(
@@ -93,50 +115,103 @@ export function buildSamplingBatches(
   config: ScanConfig = DEFAULT_SCAN_CONFIG,
   projectRoot: string = '.'
 ): SamplingBatch[] {
-  const graph = buildDepGraph(filesToScan, fileMap);
-  const layers = topoLayers(graph);
-  const batches: SamplingBatch[] = [];
-
-  // summaries.files has abs keys; convert to relative for comparison with filesToScan/refs
+  const fileSet = new Set(filesToScan);
   const toAbs = (p: string) => toAbsReal(projectRoot, p);
   const summarized = new Set<string>(
     [...summaries.files.entries()].filter(([, v]) => !v.deleted && v.summary).map(([k]) => k)
   );
 
+  // Union-Find
+  const parent = new Map<string, string>();
+  for (const f of filesToScan) parent.set(f, f);
+  const find = (x: string): string => {
+    if (parent.get(x) !== x) parent.set(x, find(parent.get(x)!));
+    return parent.get(x)!;
+  };
+  const union = (x: string, y: string): void => {
+    const rx = find(x), ry = find(y);
+    if (rx !== ry) parent.set(rx, ry);
+  };
+
+  // Cohesion edge: A imports B or A refs B (both in scan set)
+  for (const file of filesToScan) {
+    const fr = fileMap.get(file);
+    for (const k of Object.keys(fr?.imports ?? {})) {
+      if (fileSet.has(k)) union(file, k);
+    }
+    for (const r of (fr?.refs ?? [])) {
+      if (fileSet.has(r)) union(file, r);
+    }
+  }
+
+  // Cohesion edge: A and B share a summarized intra-project dep
+  const summarizedDepToFiles = new Map<string, string[]>();
+  for (const file of filesToScan) {
+    for (const k of Object.keys(fileMap.get(file)?.imports ?? {})) {
+      const absK = toAbs(k);
+      if (summarized.has(absK)) {
+        const list = summarizedDepToFiles.get(absK) ?? [];
+        list.push(file);
+        summarizedDepToFiles.set(absK, list);
+      }
+    }
+  }
+  for (const files of summarizedDepToFiles.values()) {
+    for (let i = 1; i < files.length; i++) union(files[0]!, files[i]!);
+  }
+
+  // Group into components
+  const componentMap = new Map<string, string[]>();
+  for (const file of filesToScan) {
+    const root = find(file);
+    const list = componentMap.get(root) ?? [];
+    list.push(file);
+    componentMap.set(root, list);
+  }
+
+  // Topo-sort within each component (deps first), then sort components by first file
+  const sortedComponents = [...componentMap.values()].map(files => {
+    const subGraph = buildDepGraph(files, fileMap);
+    return topoLayers(subGraph).flatMap(l => [...l].sort((a, b) => a.localeCompare(b)));
+  }).sort((a, b) => (a[0] ?? '').localeCompare(b[0] ?? ''));
+
+  // Pack components into batches by token budget
+  const batches: SamplingBatch[] = [];
+  const summarizedNow = new Set(summarized);
   let carryFiles: string[] = [];
   let carryTokens = 200;
 
   const flush = () => {
     if (carryFiles.length === 0) return;
-    batches.push(buildBatch(carryFiles, fileMap, graph, summaries, summarized, config.charsPerToken, toAbs));
-    carryFiles.forEach(f => summarized.add(toAbs(f)));
+    batches.push(buildBatch(carryFiles, fileMap, summaries, summarizedNow, config.charsPerToken, toAbs));
+    carryFiles.forEach(f => summarizedNow.add(toAbs(f)));
     carryFiles = [];
     carryTokens = 200;
   };
 
-  for (let li = 0; li < layers.length; li++) {
-    const sorted = [...layers[li]!].sort((a, b) => {
-      const da = path.dirname(a);
-      const db = path.dirname(b);
-      return da !== db ? da.localeCompare(db) : a.localeCompare(b);
-    });
+  const addFile = (file: string) => {
+    const ft = estimateTokens(file, fileMap, 0, config.charsPerToken);
+    if (carryTokens + ft > config.maxTokensPerBatch && carryFiles.length > 0) flush();
+    carryFiles.push(file);
+    carryTokens += ft;
+  };
 
-    for (const file of sorted) {
-      const fileTokens = estimateTokens(
-        file, fileMap,
-        [...(graph.get(file) || [])].filter(d => summarized.has(toAbs(d))).length,
-        config.charsPerToken
-      );
-      if (carryTokens + fileTokens > config.maxTokensPerBatch && carryFiles.length > 0) {
-        flush();
-      }
-      carryFiles.push(file);
-      carryTokens += fileTokens;
-    }
-
-    const isLastLayer = li === layers.length - 1;
-    if (isLastLayer || carryTokens >= config.minBatchTokens) {
+  for (const component of sortedComponents) {
+    const componentTokens = component.reduce(
+      (sum, f) => sum + estimateTokens(f, fileMap, 0, config.charsPerToken), 0
+    );
+    if (componentTokens > config.maxTokensPerBatch) {
+      // Oversized component: flush current, split file-by-file in topo order
       flush();
+      for (const file of component) addFile(file);
+      flush();
+    } else if (carryTokens + componentTokens > config.maxTokensPerBatch) {
+      flush();
+      carryFiles.push(...component);
+      carryTokens += componentTokens;
+    } else {
+      carryFiles.push(...component);
+      carryTokens += componentTokens;
     }
   }
   flush();
@@ -162,7 +237,7 @@ function compactContent(content: string, ext: string): string {
   return content.replace(/\s+/g, ' ').trim();
 }
 
-function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog): string | null {
+function buildPrompt(batch: SamplingBatch, projectRoot: string, action: string, log: SamplerLog): string | null {
   const fileSections: string[] = [];
 
   for (const filePath of batch.files) {
@@ -170,7 +245,9 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
     try {
       const raw = fs.readFileSync(absPath, 'utf-8');
       const content = compactContent(raw, path.extname(filePath).toLowerCase());
-      fileSections.push(`<file path="${filePath}">\n${content}\n</file>`);
+      const refs = batch.fileRefs[filePath];
+      const importsAttr = refs?.length ? ` imports="${refs.join(' | ')}"` : '';
+      fileSections.push(`<file path="${filePath}"${importsAttr}>\n${content}\n</file>`);
     } catch {
       log('warning', `Cannot read ${filePath}, skipping`);
     }
@@ -179,7 +256,11 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
   if (fileSections.length === 0) return null;
 
   const contextSection = batch.contextFiles.length > 0
-    ? `\nReferenced files (context only, do not summarize these):\n${batch.contextFiles.map(c => `- ${c.path}: ${c.summary}`).join('\n')}\n`
+    ? `\n--- Additional Context ---\n${batch.contextFiles.map(c =>
+        `<context path="${c.path}" referenced_by="${c.referencedBy.join(',')}">
+${c.summary}
+</context>`
+      ).join('\n')}\n`
     : '';
 
   return `Analyze the following ${batch.files.length} file(s). Return a JSON array with one object per file:
@@ -190,11 +271,11 @@ function buildPrompt(batch: SamplingBatch, projectRoot: string, log: SamplerLog)
   "technologies": ["<2-5 key techs>"],
   "searchTags": ["<additional search words not in summary, role, or technologies that help locate this file>"]
 }]
-${contextSection}
-Files to analyze:
-${fileSections.join('\n\n')}
 
-Return only the JSON array. No markdown, no explanation.`;
+${action}
+${contextSection}
+--- Files to Analyze ---
+${fileSections.join('\n\n')}`;
 }
 
 export type SamplerLog = (level: 'info' | 'warning' | 'error', msg: string) => void;
@@ -216,7 +297,7 @@ export async function runSampling(
     if (signal.aborted) { log('info', 'Aborted'); return; }
 
     try {
-      const prompt = buildPrompt(batch, projectRoot, log);
+      const prompt = buildPrompt(batch, projectRoot, 'Return only the JSON array. No markdown, no explanation.', log);
       if (!prompt) { log('warning', `Batch ${i + 1} has no readable files, skipping`); continue; }
       log('info', `Batch ${i + 1}/${batches.length}: ${batch.files.length} file(s) (~${batch.estimatedTokens} tokens)`);
 
@@ -271,15 +352,10 @@ export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, 
     fs.mkdirSync(batchDir, { recursive: true });
   }
   const noopLog: SamplerLog = () => {};
+  const subagentAction = `Use ToolSearch with query 'submit_analysis' to load the 'submit_analysis' tool, then call it with your analysis results. Do not invoke any other skills or tools. When you are finished return only 'Done', no additional output or explanation needed.`;
   return batches.map((batch, i) => {
     const fp = path.join(batchDir, `batch-${i}.txt`);
-    const basePrompt = buildPrompt(batch, projectRoot, noopLog) ?? '';
-    const prompt = basePrompt
-      ? basePrompt.replace(
-          'Return only the JSON array. No markdown, no explanation.',
-          `Use ToolSearch with query 'submit_analysis' to load the 'submit_analysis' tool, then call it with your analysis results. Do not invoke any other skills or tools. When you are finished return only 'Done', no additional output or explanation needed.`
-        )
-      : '';
+    const prompt = buildPrompt(batch, projectRoot, subagentAction, noopLog) ?? '';
     fs.writeFileSync(fp, prompt);
     return fp;
   });

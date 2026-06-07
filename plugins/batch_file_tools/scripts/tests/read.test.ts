@@ -225,6 +225,33 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("match at lines");
   });
 
+  it("search: regex pattern matches lines", async () => {
+    const p = await fixture("regex-match.ts", "const foo = 1;\nconst bar = 2;\nlet baz = 3;\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "^const" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(2);
+    expect(r.content).toContain("const foo");
+    expect(r.content).toContain("const bar");
+    expect(r.content).not.toContain("let baz");
+  });
+
+  it("search: regex metacharacters work (word boundary, groups)", async () => {
+    const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo\\b" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("foo");
+    expect(r.content).not.toContain("fooBar");
+  });
+
+  it("search: invalid regex falls back to literal string match", async () => {
+    const p = await fixture("regex-invalid.ts", "fn(arg)\nno match\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "fn(" }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toContain("fn(arg)");
+  });
+
   it("glob read: expands to one result per matched file", async () => {
     const a = await fixture("glob_a.ts", "a\n");
     const b = await fixture("glob_b.ts", "b\n");

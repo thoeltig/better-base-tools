@@ -15,8 +15,8 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/main.ts', 'src/utils.ts'),
       ROOT
     );
-    expect(result.imports).toEqual([]);
-    expect(result.refs).toEqual(['src/utils.ts']);
+    expect(result.imports).toEqual({ 'src/utils.ts': ['foo'] });
+    expect(result.refs).toEqual([]);
   });
 
   it('resolves relative import via index.ts fallback', () => {
@@ -26,8 +26,8 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/main.ts', 'src/services/auth/index.ts'),
       ROOT
     );
-    expect(result.refs).toContain('src/services/auth/index.ts');
-    expect(result.imports).toHaveLength(0);
+    expect(result.imports).toHaveProperty('src/services/auth/index.ts', ['x']);
+    expect(result.refs).toHaveLength(0);
   });
 
   it('resolves parent directory import', () => {
@@ -37,11 +37,11 @@ describe('parseFileRefs — TS/JS', () => {
       makeSet('src/features/login.ts', 'src/shared/helper.ts'),
       ROOT
     );
-    expect(result.refs).toContain('src/shared/helper.ts');
-    expect(result.imports).toHaveLength(0);
+    expect(result.imports).toHaveProperty('src/shared/helper.ts', ['helper']);
+    expect(result.refs).toHaveLength(0);
   });
 
-  it('extracts external package names from non-relative imports', () => {
+  it('extracts external package names with named imports', () => {
     const result = parseFileRefs(
       'src/main.ts',
       `import React from 'react';
@@ -49,20 +49,21 @@ import { z } from 'zod';`,
       makeSet('src/main.ts'),
       ROOT
     );
-    expect(result.imports).toContain('react');
-    expect(result.imports).toContain('zod');
+    expect(result.imports).toHaveProperty('react', ['React']);
+    expect(result.imports).toHaveProperty('zod', ['z']);
     expect(result.refs).toHaveLength(0);
   });
 
-  it('extracts scoped package names from non-relative imports', () => {
+  it('extracts scoped package names with named imports', () => {
     const result = parseFileRefs(
       'src/main.ts',
-      `import Anthropic from '@anthropic-ai/sdk'; import { Server } from '@modelcontextprotocol/sdk/server/index.js';`,
+      `import Anthropic from '@anthropic-ai/sdk';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';`,
       makeSet('src/main.ts'),
       ROOT
     );
-    expect(result.imports).toContain('@anthropic-ai/sdk');
-    expect(result.imports).toContain('@modelcontextprotocol/sdk');
+    expect(result.imports).toHaveProperty('@anthropic-ai/sdk', ['Anthropic']);
+    expect(result.imports).toHaveProperty('@modelcontextprotocol/sdk', ['Server']);
   });
 
   it('ignores import not found in project file set', () => {
@@ -72,17 +73,17 @@ import { z } from 'zod';`,
       makeSet('src/main.ts'),
       ROOT
     );
-    expect(result.imports).toHaveLength(0);
+    expect(Object.keys(result.imports)).toHaveLength(0);
   });
 
   it('extracts named exports from export declarations', () => {
     const result = parseFileRefs(
       'src/utils.ts',
       `export const formatDate = () => {};
-export function parseUrl(url: string) {}
-export class UserService {}
-export interface Config {}
-export type UserId = string;`,
+       export function parseUrl(url: string) {}
+       export class UserService {}
+       export interface Config {}
+       export type UserId = string;`,
       makeSet('src/utils.ts'),
       ROOT
     );
@@ -102,10 +103,21 @@ export type UserId = string;`,
     );
     expect(result.exports).toContain('UserService');
     expect(result.exports).toContain('parseUrl');
-    expect(result.exports).not.toContain('parse'); // alias excluded
+    expect(result.exports).not.toContain('parse');
   });
 
-  it('handles require() calls', () => {
+  it('resolves .js extension import to .ts file (TypeScript ESM style)', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import { foo } from './utils.js'`,
+      makeSet('src/main.ts', 'src/utils.ts'),
+      ROOT
+    );
+    expect(result.imports).toHaveProperty('src/utils.ts', ['foo']);
+    expect(result.refs).toHaveLength(0);
+  });
+
+  it('handles require() calls — local goes to refs', () => {
     const result = parseFileRefs(
       'src/legacy.js',
       `const utils = require('./utils')`,
@@ -113,10 +125,10 @@ export type UserId = string;`,
       ROOT
     );
     expect(result.refs).toContain('src/utils.ts');
-    expect(result.imports).toHaveLength(0);
+    expect(Object.keys(result.imports)).toHaveLength(0);
   });
 
-  it('handles dynamic import()', () => {
+  it('handles dynamic import() — local goes to refs', () => {
     const result = parseFileRefs(
       'src/main.ts',
       `const mod = await import('./lazy')`,
@@ -124,7 +136,7 @@ export type UserId = string;`,
       ROOT
     );
     expect(result.refs).toContain('src/lazy.ts');
-    expect(result.imports).toHaveLength(0);
+    expect(Object.keys(result.imports)).toHaveLength(0);
   });
 
   it('returns correct sizeChars and lineCount', () => {
@@ -134,7 +146,7 @@ export type UserId = string;`,
     expect(result.lineCount).toBe(3);
   });
 
-  it('deduplicates refs', () => {
+  it('merges named imports from duplicate static imports of same file', () => {
     const result = parseFileRefs(
       'src/main.ts',
       `import { a } from './shared';
@@ -142,13 +154,116 @@ import { b } from './shared';`,
       makeSet('src/main.ts', 'src/shared.ts'),
       ROOT
     );
-    expect(result.refs.filter(r => r === 'src/shared.ts')).toHaveLength(1);
-    expect(result.imports).toHaveLength(0);
+    expect(result.imports['src/shared.ts']).toEqual(expect.arrayContaining(['a', 'b']));
+    expect(result.imports['src/shared.ts']).toHaveLength(2);
+    expect(result.refs).toHaveLength(0);
+  });
+
+  it('extracts namespace import alias', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import * as fs from 'fs';`,
+      makeSet('src/main.ts'),
+      ROOT
+    );
+    expect(result.imports).toHaveProperty('fs', ['fs']);
+  });
+
+  it('extracts type-only named import', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import type { Foo } from './types'`,
+      makeSet('src/main.ts', 'src/types.ts'),
+      ROOT
+    );
+    expect(result.imports).toHaveProperty('src/types.ts', ['Foo']);
+  });
+
+  it('extracts mixed default and named imports', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import React, { useState, useEffect } from 'react';`,
+      makeSet('src/main.ts'),
+      ROOT
+    );
+    expect(result.imports['react']).toEqual(expect.arrayContaining(['React', 'useState', 'useEffect']));
+  });
+
+  it('handles aliased imports — uses local alias name', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import { foo as bar } from './utils'`,
+      makeSet('src/main.ts', 'src/utils.ts'),
+      ROOT
+    );
+    expect(result.imports['src/utils.ts']).toContain('bar');
+    expect(result.imports['src/utils.ts']).not.toContain('foo');
+  });
+
+  it('handles multiline named imports', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import {\n  SamplingBatch,\n  ScanConfig,\n} from './types'`,
+      makeSet('src/main.ts', 'src/types.ts'),
+      ROOT
+    );
+    expect(result.imports['src/types.ts']).toEqual(expect.arrayContaining(['SamplingBatch', 'ScanConfig']));
+  });
+
+  it('bare side-effect import of local file goes to refs', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import './polyfill'`,
+      makeSet('src/main.ts', 'src/polyfill.ts'),
+      ROOT
+    );
+    expect(result.refs).toContain('src/polyfill.ts');
+    expect(Object.keys(result.imports)).toHaveLength(0);
+  });
+
+  it('extracts mixed default and named imports from local file', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import React, { useState } from './react-compat'`,
+      makeSet('src/main.ts', 'src/react-compat.ts'),
+      ROOT
+    );
+    expect(result.imports['src/react-compat.ts']).toEqual(expect.arrayContaining(['React', 'useState']));
+  });
+
+  it('extracts default and namespace import from local file', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import Default, * as NS from './utils'`,
+      makeSet('src/main.ts', 'src/utils.ts'),
+      ROOT
+    );
+    expect(result.imports['src/utils.ts']).toEqual(expect.arrayContaining(['Default', 'NS']));
+  });
+
+  it('extracts type namespace import', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import type * as Types from './types'`,
+      makeSet('src/main.ts', 'src/types.ts'),
+      ROOT
+    );
+    expect(result.imports['src/types.ts']).toEqual(['Types']);
+  });
+
+  it('extracts inline type modifier mixed with value import', () => {
+    const result = parseFileRefs(
+      'src/main.ts',
+      `import { type Foo, Bar } from './types'`,
+      makeSet('src/main.ts', 'src/types.ts'),
+      ROOT
+    );
+    expect(result.imports['src/types.ts']).toEqual(expect.arrayContaining(['Foo', 'Bar']));
   });
 });
 
 describe('parseFileRefs — C#', () => {
-  it('extracts using directives as namespace imports', () => {
+  it('extracts using directives as namespace imports with empty value arrays', () => {
     const result = parseFileRefs(
       'Services/UserService.cs',
       `using System;
@@ -157,9 +272,9 @@ using MyApp.Core.Models;`,
       makeSet('Services/UserService.cs'),
       ROOT
     );
-    expect(result.imports).toContain('System');
-    expect(result.imports).toContain('System.Collections.Generic');
-    expect(result.imports).toContain('MyApp.Core.Models');
+    expect(result.imports).toHaveProperty('System', []);
+    expect(result.imports).toHaveProperty('System.Collections.Generic', []);
+    expect(result.imports).toHaveProperty('MyApp.Core.Models', []);
   });
 
   it('extracts public class and interface exports', () => {
@@ -227,7 +342,7 @@ describe('parseFileRefs — text/markdown/JSON', () => {
       makeSet('notes.txt'),
       ROOT
     );
-    expect(result.imports).toHaveLength(0);
+    expect(Object.keys(result.imports)).toHaveLength(0);
     expect(result.exports).toHaveLength(0);
   });
 });

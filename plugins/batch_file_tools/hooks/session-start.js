@@ -22,7 +22,6 @@ if (!pluginRoot) {
 }
 
 const distPath = path.join(pluginRoot, 'scripts', 'dist', 'index.js');
-const claudeMdPath = path.join(pluginRoot, 'CLAUDE.md');
 
 if (!fs.existsSync(distPath)) {
   respond(
@@ -32,9 +31,7 @@ if (!fs.existsSync(distPath)) {
   process.exit(0);
 }
 
-try {
-  const content = fs.readFileSync(claudeMdPath, 'utf8');
-  respond(content);
-} catch (e) {
-  respond('batch_file_tools: Could not read CLAUDE.md: ' + e.message);
-}
+respond(
+  'Tool preference: Always use `batch_read` and `batch_edit` instead of the built-in Read, Edit, Write and Update tools.\n' +
+  'Workflow: Plan which files you need and in what order. Bundle related reads into one `batch_read` call and related edits into one `batch_edit` call — fewer round-trips means less context noise and more room for the actual task.'
+);

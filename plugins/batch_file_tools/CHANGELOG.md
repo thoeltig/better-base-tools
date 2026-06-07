@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-06-07
+
+### Changed
+
+- **`searchTerm` regex support in `batch_read`** — `searchTerm` now accepts a regex pattern (case-insensitive `RegExp` with `i` flag). Simple keyword strings continue to work identically since valid literals are also valid regex. Invalid patterns fall back to literal case-insensitive `includes` matching.
+- **Session start instructions inlined into hook script** — removed the `CLAUDE.md` file that the session start hook loaded to inject usage instructions; content is now embedded directly in the hook script, eliminating a file read on every session start.
+
 ## [1.2.3] - 2026-06-04
 
 ### Added
@@ -280,7 +287,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...HEAD
+[1.2.4]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...BatchFileTools_v1.2.4
 [1.2.3]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...BatchFileTools_v1.2.3
 [1.2.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.1...BatchFileTools_v1.2.2
 [1.2.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.0...BatchFileTools_v1.2.1

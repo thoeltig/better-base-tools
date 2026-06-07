@@ -46,8 +46,13 @@ describe('calculateConfidence', () => {
     expect(score).toBeGreaterThan(0);
   });
 
-  it('scores an imports match', () => {
-    const score = calculateConfidence(['zod'], 'src/foo.ts', { imports: ['zod', 'react'] });
+  it('scores an imports match on source key', () => {
+    const score = calculateConfidence(['zod'], 'src/foo.ts', { imports: { 'zod': ['z'], 'react': ['React'] } });
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it('scores an imports match on imported name', () => {
+    const score = calculateConfidence(['samplingbatch'], 'src/foo.ts', { imports: { 'types.ts': ['SamplingBatch'] } });
     expect(score).toBeGreaterThan(0);
   });
 
@@ -126,7 +131,7 @@ describe('generateQueryOutput — flat format', () => {
   });
 
   it('semantic verbosity omits imports, exports, lineCount, sizeChars', () => {
-    const items = [makeScored({ path: 'src/a.ts', imports: ['zod'], exports: ['foo'], lineCount: 10, sizeChars: 200 })];
+    const items = [makeScored({ path: 'src/a.ts', imports: { 'zod': ['z'] }, exports: ['foo'], lineCount: 10, sizeChars: 200 })];
     const output = generateQueryOutput(items, 'flat', 'semantic');
     const result = output.results?.[0] as any;
     expect(result.imports).toBeUndefined();
@@ -244,14 +249,14 @@ describe('outputToFluentText', () => {
   });
 
   it('structure verbosity still includes imports and exports', () => {
-    const output = { results: [{ path: 'src/a.ts', imports: ['zod'], exports: ['parse'] }] };
+    const output = { results: [{ path: 'src/a.ts', imports: { 'zod': ['z'] }, exports: ['parse'] }] };
     const text = outputToFluentText(output, 'structure');
-    expect(text).toContain('imports: zod');
+    expect(text).toContain('imports: z from zod');
     expect(text).toContain('exports: parse');
   });
 
   it('semantic verbosity omits imports, exports, refs', () => {
-    const output = { results: [{ path: 'src/a.ts', imports: ['zod'], exports: ['foo'], refs: ['src/b.ts'], summary: 'hello' }] };
+    const output = { results: [{ path: 'src/a.ts', imports: { 'zod': ['z'] }, exports: ['foo'], refs: ['src/b.ts'], summary: 'hello' }] };
     const text = outputToFluentText(output, 'semantic');
     expect(text).not.toContain('imports:');
     expect(text).not.toContain('exports:');

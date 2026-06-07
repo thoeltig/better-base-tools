@@ -2,9 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export interface FileRefs {
-  imports: string[];   // resolved intra-project paths (TS/JS) or namespace strings (C#)
-  exports: string[];   // named exports / public type names
-  refs: string[];      // all intra-project file path mentions
+  imports: Record<string, string[]>; // key: resolved local path or package name, value: imported names
+  exports: string[];                  // named exports / public type names
+  refs: string[];                     // intra-project file mentions from non-import text (markdown links, bare refs)
   sizeChars: number;
   lineCount: number;
 }
@@ -12,8 +12,15 @@ export interface FileRefs {
 const TS_JS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs']);
 const RESOLVE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'];
 
-// Matches: import ... from '...', import('...'), require('...')
-const TS_IMPORT_RE = /(?:import\s+(?:[\s\S]*?\s+from\s+)?|import\(|require\()['"]([^'"]+)['"]/g;
+// Matches full static import: import [type] <specifiers> from 'module'
+// Group 1: specifier list, Group 2: module path
+const TS_IMPORT_FULL_RE = /^import\s+(?:type\s+)?({[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*(?:\s*,\s*(?:{[^}]*}|\*\s+as\s+\w[\w$]*|\w[\w$]*))??)\s+from\s+['"]([^'"]+)['"]/gm;
+// Matches bare side-effect import: import 'module'
+const TS_IMPORT_BARE_RE = /^import\s+['"]([^'"]+)['"]/gm;
+// Matches dynamic import: import('module')
+const TS_DYNAMIC_RE = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+// Matches require: require('module')
+const TS_REQUIRE_RE = /\brequire\(\s*['"]([^'"]+)['"]\s*\)/g;
 // Matches: export [default] [abstract] class|function*?|const|let|var|interface|type|enum Name
 const TS_EXPORT_NAMED_RE = /\bexport\s+(?:default\s+)?(?:abstract\s+)?(?:declare\s+)?(?:class|function\*?|const|let|var|interface|type|enum)\s+(\w+)/g;
 // Matches: export { a, b as c }
@@ -50,7 +57,67 @@ function resolveImport(
     const asIndex = rel + '/index' + ext;
     if (projectFileSet.has(asIndex)) return asIndex;
   }
+
+  // Strip existing extension and retry (handles .js → .ts in TypeScript ESM imports)
+  const relNoExt = rel.replace(/\.[^/]+$/, '');
+  if (relNoExt !== rel) {
+    if (projectFileSet.has(relNoExt)) return relNoExt;
+    for (const ext of RESOLVE_EXTS) {
+      const withExt = relNoExt + ext;
+      if (projectFileSet.has(withExt)) return withExt;
+      const asIndex = relNoExt + '/index' + ext;
+      if (projectFileSet.has(asIndex)) return asIndex;
+    }
+  }
   return null;
+}
+
+function parseImportSpecifiers(specStr: string): string[] {
+  const trimmed = specStr.trim();
+  if (trimmed.startsWith('{')) {
+    return trimmed.slice(1, -1).split(',')
+      .map(s => {
+        const clean = s.trim().replace(/^type\s+/, '');
+        const parts = clean.split(/\s+as\s+/);
+        return (parts[1] ?? parts[0])?.trim() ?? '';
+      })
+      .filter(Boolean);
+  }
+  if (trimmed.startsWith('*')) {
+    const m = trimmed.match(/\*\s+as\s+(\w[\w$]*)/);
+    return m ? [m[1]!] : [];
+  }
+  // default or mixed: "Default" or "Default, { named }"
+  const commaIdx = trimmed.indexOf(',');
+  if (commaIdx === -1) return trimmed ? [trimmed] : [];
+  const defaultPart = trimmed.slice(0, commaIdx).trim();
+  const namedPart = trimmed.slice(commaIdx + 1).trim();
+  const names: string[] = defaultPart ? [defaultPart] : [];
+  if (namedPart.startsWith('{')) {
+    namedPart.slice(1, -1).split(',').forEach(n => {
+      const clean = n.trim().replace(/^type\s+/, '');
+      const alias = clean.split(/\s+as\s+/);
+      const name = (alias[1] ?? alias[0])?.trim();
+      if (name) names.push(name);
+    });
+  } else if (namedPart.startsWith('*')) {
+    const nsm = namedPart.match(/\*\s+as\s+(\w[\w$]*)/);
+    if (nsm?.[1]) names.push(nsm[1]);
+  }
+  return names;
+}
+
+function addImport(imports: Record<string, string[]>, source: string, names: string[]): void {
+  if (!imports[source]) imports[source] = [];
+  for (const n of names) {
+    if (!imports[source]!.includes(n)) imports[source]!.push(n);
+  }
+}
+
+function resolvePackage(modulePath: string): string {
+  return modulePath.startsWith('@')
+    ? modulePath.split('/').slice(0, 2).join('/')
+    : (modulePath.split('/')[0] ?? modulePath);
 }
 
 function parseTsJs(
@@ -59,21 +126,66 @@ function parseTsJs(
   projectFileSet: Set<string>,
   projectRoot: string
 ): Pick<FileRefs, 'imports' | 'exports' | 'refs'> {
-  const imports: string[] = []; // external package names
+  const imports: Record<string, string[]> = {};
   const exports: string[] = [];
-  const refs: string[] = [];   // resolved intra-project file paths
+  const refs: string[] = [];
 
-  TS_IMPORT_RE.lastIndex = 0;
+  const importContent = content.split(/\r?\n/).slice(0, 100).join('\n');
   let m: RegExpExecArray | null;
-  while ((m = TS_IMPORT_RE.exec(content)) !== null) {
-    const cap = m[1];
-    if (!cap) continue;
-    if (cap.startsWith('.')) {
-      const resolved = resolveImport(cap, filePath, projectFileSet, projectRoot);
+
+  // Full static imports: capture specifiers + module path
+  TS_IMPORT_FULL_RE.lastIndex = 0;
+  while ((m = TS_IMPORT_FULL_RE.exec(importContent)) !== null) {
+    const specStr = m[1] ?? '';
+    const modulePath = m[2];
+    if (!modulePath) continue;
+    const names = parseImportSpecifiers(specStr);
+    if (modulePath.startsWith('.')) {
+      const resolved = resolveImport(modulePath, filePath, projectFileSet, projectRoot);
+      if (resolved) addImport(imports, resolved, names);
+    } else {
+      addImport(imports, resolvePackage(modulePath), names);
+    }
+  }
+
+  // Bare side-effect imports: import 'module' — no specifiers
+  TS_IMPORT_BARE_RE.lastIndex = 0;
+  while ((m = TS_IMPORT_BARE_RE.exec(importContent)) !== null) {
+    const modulePath = m[1];
+    if (!modulePath) continue;
+    if (modulePath.startsWith('.')) {
+      const resolved = resolveImport(modulePath, filePath, projectFileSet, projectRoot);
       if (resolved && !refs.includes(resolved)) refs.push(resolved);
     } else {
-      const pkg = cap.startsWith('@') ? cap.split('/').slice(0, 2).join('/') : cap.split('/')[0]!;
-      if (pkg && !imports.includes(pkg)) imports.push(pkg);
+      const pkg = resolvePackage(modulePath);
+      if (!imports[pkg]) imports[pkg] = [];
+    }
+  }
+
+  // Dynamic imports and require → local goes to refs, external adds empty entry
+  TS_DYNAMIC_RE.lastIndex = 0;
+  while ((m = TS_DYNAMIC_RE.exec(importContent)) !== null) {
+    const modulePath = m[1];
+    if (!modulePath) continue;
+    if (modulePath.startsWith('.')) {
+      const resolved = resolveImport(modulePath, filePath, projectFileSet, projectRoot);
+      if (resolved && !refs.includes(resolved)) refs.push(resolved);
+    } else {
+      const pkg = resolvePackage(modulePath);
+      if (!imports[pkg]) imports[pkg] = [];
+    }
+  }
+
+  TS_REQUIRE_RE.lastIndex = 0;
+  while ((m = TS_REQUIRE_RE.exec(importContent)) !== null) {
+    const modulePath = m[1];
+    if (!modulePath) continue;
+    if (modulePath.startsWith('.')) {
+      const resolved = resolveImport(modulePath, filePath, projectFileSet, projectRoot);
+      if (resolved && !refs.includes(resolved)) refs.push(resolved);
+    } else {
+      const pkg = resolvePackage(modulePath);
+      if (!imports[pkg]) imports[pkg] = [];
     }
   }
 
@@ -98,7 +210,7 @@ function parseTsJs(
 }
 
 function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'refs'> {
-  const imports: string[] = [];
+  const imports: Record<string, string[]> = {};
   const exports: string[] = [];
 
   CS_USING_RE.lastIndex = 0;
@@ -106,7 +218,7 @@ function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'r
   while ((m = CS_USING_RE.exec(content)) !== null) {
     const cap = m[1];
     if (!cap) continue;
-    if (!imports.includes(cap)) imports.push(cap);
+    if (!imports[cap]) imports[cap] = [];
   }
 
   CS_TYPE_RE.lastIndex = 0;
@@ -121,6 +233,7 @@ function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'r
 
 function parseText(content: string, projectFileSet: Set<string>): Pick<FileRefs, 'imports' | 'exports' | 'refs'> {
   const refs: string[] = [];
+  const imports: Record<string, string[]> = {};
 
   REL_PATH_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -147,7 +260,7 @@ function parseText(content: string, projectFileSet: Set<string>): Pick<FileRefs,
     if (projectFileSet.has(p) && !refs.includes(p)) refs.push(p);
   }
 
-  return { imports: [], exports: [], refs };
+  return { imports, exports: [], refs };
 }
 
 export function parseFileRefs(
@@ -182,7 +295,7 @@ export function buildFileMap(files: string[], projectRoot: string, allProjectFil
       const content = fs.readFileSync(absPath, 'utf-8');
       map.set(filePath, parseFileRefs(filePath, content, projectFileSet, projectRoot));
     } catch {
-      map.set(filePath, { imports: [], exports: [], refs: [], sizeChars: 0, lineCount: 0 });
+      map.set(filePath, { imports: {}, exports: [], refs: [], sizeChars: 0, lineCount: 0 });
     }
   }
 

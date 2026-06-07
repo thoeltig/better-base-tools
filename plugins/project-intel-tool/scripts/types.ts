@@ -20,7 +20,6 @@ export const ENV_EXCLUDE_PATHS = 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS';
 
 export interface ScanConfig {
   maxTokensPerBatch: number;
-  minBatchTokens: number;
   charsPerToken: number;
   includePaths: string[];
   excludePaths: string[];
@@ -28,7 +27,6 @@ export interface ScanConfig {
 
 export const DEFAULT_SCAN_CONFIG: ScanConfig = {
   maxTokensPerBatch: SAMPLING_TOKEN_BUDGET,
-  minBatchTokens: 3_200,
   charsPerToken: 2.5,
   includePaths: [],
   excludePaths: [],
@@ -45,8 +43,8 @@ export interface FileSummary {
   technologies?: string[];
   searchTags?: string[];
   exports?: string[];
-  imports?: string[];
-  refs?: string[];       // intra-project file references resolved from imports
+  imports?: Record<string, string[]>; // key: resolved local path or package name, value: imported names
+  refs?: string[]; // intra-project file references from non-import mentions (markdown links, text refs)
   sizeChars?: number;
   lineCount?: number;
   sizeCharsWhenAnalysed?: number;
@@ -76,7 +74,7 @@ export interface SamplingFileSummary {
   technologies?: string[];
   searchTags?: string[];
   exports?: string[];
-  imports?: string[];
+  imports?: Record<string, string[]>;
   refs?: string[];
   sizeChars?: number;
   lineCount?: number;
@@ -84,19 +82,20 @@ export interface SamplingFileSummary {
 
 export interface SamplingBatch {
   files: string[];
-  contextFiles: { path: string; summary: string }[];
+  fileRefs: Record<string, string[]>; // per-file import entries for intra-batch + context deps, formatted "key: name1, name2"
+  contextFiles: { path: string; summary: string; referencedBy: string[] }[];
   estimatedTokens: number;
 }
 
 // Query output
 
-export interface FluentFile { 
+export interface FluentFile {
   lineCount?: number;
   sizeChars?: number;
   role?: string;
   summary?: string;
   analysisDelta?: string;
-  imports?: string[];
+  imports?: Record<string, string[]>;
   exports?: string[];
   refs?: string[];
   technologies?: string[];

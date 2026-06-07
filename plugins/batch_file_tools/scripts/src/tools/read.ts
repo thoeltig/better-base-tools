@@ -254,11 +254,18 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     const rawLines = file.content.replace(/\r\n/g, "\n").split("\n");
     if (rawLines[rawLines.length - 1] === "") rawLines.pop();
 
-    const needle = req.searchTerm.toLowerCase();
     const ctx = req.count ?? 0;
+    let matchLine: (line: string) => boolean;
+    try {
+      const re = new RegExp(req.searchTerm, "i");
+      matchLine = line => re.test(line);
+    } catch {
+      const needle = req.searchTerm.toLowerCase();
+      matchLine = line => line.toLowerCase().includes(needle);
+    }
     const matchIdxs: number[] = [];
     for (let i = 0; i < rawLines.length; i++) {
-      if ((rawLines[i] ?? "").toLowerCase().includes(needle)) matchIdxs.push(i);
+      if (matchLine(rawLines[i] ?? "")) matchIdxs.push(i);
     }
 
     if (matchIdxs.length === 0) {

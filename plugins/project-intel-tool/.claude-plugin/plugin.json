@@ -1,7 +1,7 @@
 {
   "name": "project-intel-tool",
   "description": "Lightweight reconnaissance system that provides direction before exploration. Query for relevant files before reading them - avoid expensive blind exploration and context pollution.",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "author": {
     "name": "Thore Höltig",
     "url": "https://github.com/thoeltig"

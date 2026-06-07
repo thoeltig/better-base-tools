@@ -8,7 +8,7 @@ const TEST_ROOT = '.';
 const abs = (p: string) => toAbsReal(TEST_ROOT, p);
 
 function makeFileRefs(overrides: Partial<FileRefs> = {}): FileRefs {
-  return { imports: [], exports: [], refs: [], sizeChars: 1000, lineCount: 40, ...overrides };
+  return { imports: {}, exports: [], refs: [], sizeChars: 1000, lineCount: 40, ...overrides };
 }
 
 function emptySummaries(): SummariesData {
@@ -32,22 +32,21 @@ describe('buildSamplingBatches — ordering', () => {
     expect(batches[0]?.files).toEqual(expect.arrayContaining(['a.ts', 'b.ts', 'c.ts']));
   });
 
-  it('dependent file appears in a later batch than its dependency', () => {
-    // a.ts imports b.ts → b.ts must be processed first
-    // Files must exceed minBatchTokens so each layer flushes independently
+  it('dependent file appears after its dependency within the same batch', () => {
+    // a.ts refs b.ts → cohesion groups them together, b.ts ordered first (dep-first)
     const files = ['a.ts', 'b.ts'];
     const fileMap = new Map([
       ['a.ts', makeFileRefs({ refs: ['b.ts'], sizeChars: 8_000 })],
       ['b.ts', makeFileRefs({ sizeChars: 8_000 })],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
-    const batchWithB = batches.findIndex(b => b.files.includes('b.ts'));
-    const batchWithA = batches.findIndex(b => b.files.includes('a.ts'));
-    expect(batchWithB).toBeLessThan(batchWithA);
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.files.indexOf('b.ts')).toBeLessThan(batch.files.indexOf('a.ts'));
   });
 
-  it('handles a chain A → B → C across three layers', () => {
-    // Files must exceed minBatchTokens so each layer flushes independently
+  it('handles a chain A → B → C: all cohesion-grouped, ordered C then B then A', () => {
+    // Cohesion merges the whole chain into one component; topo-sort orders deps first
     const files = ['a.ts', 'b.ts', 'c.ts'];
     const fileMap = new Map([
       ['a.ts', makeFileRefs({ refs: ['b.ts'], sizeChars: 8_000 })],
@@ -55,11 +54,13 @@ describe('buildSamplingBatches — ordering', () => {
       ['c.ts', makeFileRefs({ sizeChars: 8_000 })],
     ]);
     const batches = buildSamplingBatches(files, fileMap, emptySummaries());
-    const idxC = batches.findIndex(b => b.files.includes('c.ts'));
-    const idxB = batches.findIndex(b => b.files.includes('b.ts'));
-    const idxA = batches.findIndex(b => b.files.includes('a.ts'));
-    expect(idxC).toBeLessThan(idxB);
-    expect(idxB).toBeLessThan(idxA);
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    const posC = batch.files.indexOf('c.ts');
+    const posB = batch.files.indexOf('b.ts');
+    const posA = batch.files.indexOf('a.ts');
+    expect(posC).toBeLessThan(posB);
+    expect(posB).toBeLessThan(posA);
   });
 
   it('handles circular dependencies without infinite loop', () => {
