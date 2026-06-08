@@ -2,7 +2,7 @@
 
 An MCP server that maintains a persistent structural and semantic map of your project. Every session, a model gets file sizes, line counts, import/export graphs, and purpose summaries for every file — without reading a single one.
 
-> **Predecessor:** Rewrite of the [project-intel CLI plugin](https://github.com/thoeltig/claude-code-toolkit/tree/main/plugins/project-intel) from `claude-code-toolkit`, ported from slash commands to a native MCP server.
+> **Predecessor:** Rewrite of the [project-intel CLI plugin](https://github.com/thoeltig/claude-code-toolkit/tree/main/plugins/project-intel) from [claude-code-toolkit](https://github.com/thoeltig/claude-code-toolkit/), ported from slash commands to a native MCP server.
 
 ---
 
