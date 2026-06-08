@@ -1,6 +1,6 @@
 # project-intel-tool
 
-MCP server that maintains a persistent structural and semantic map of your project. Every session a model gets file sizes, line counts, import/export graphs, purpose and summary for every file, without reading a single file.
+An MCP server that maintains a persistent structural and semantic map of your project. Every session, a model gets file sizes, line counts, import/export graphs, and purpose summaries for every file — without reading a single one.
 
 > **Predecessor:** Rewrite of the [project-intel CLI plugin](https://github.com/thoeltig/claude-code-toolkit/tree/main/plugins/project-intel) from `claude-code-toolkit`, ported from slash commands to a native MCP server.
 
@@ -8,7 +8,7 @@ MCP server that maintains a persistent structural and semantic map of your proje
 
 ## The Problem
 
-Every session models start blind into a project maze. Without prior context they has to read many files to understand the project. Often 80% of that content is irrelevant. Exploration agents read full files to return a summary to the main model, which then has to re-read the same files to actually use the information. This is expensive in tokens and context space before any real work begins.
+Every session models start blind into a project maze. Without prior context, they have to read many files to understand the project, and often 80% of that content is irrelevant. Exploration agents read full files to return a summary to the main model, which then has to re-read the same files to actually use the information. This is expensive in tokens and context space before any real work begins.
 
 `project-intel` tries to solve this by storing a persistent knowledge base that gives the model an accurate structural and conceptual overview at session start, so context space is used for the actual task, not for orientation.
 
@@ -18,7 +18,7 @@ Every session models start blind into a project maze. Without prior context they
 
 Orienting via `query` is significantly cheaper than spawning an exploration agent. The cost difference operates at two levels: the response the parent model receives, and the entire subagent session that exploration requires but `query` does not.
 
-**Why exploration is expensive.** An exploration agent operates under a chain of indirection: the user instructs the main model, the main model delegates to a subagent, and the subagent interprets the task on its own. How narrowly or broadly it searches depends on how clearly intent was communicated at each step. A well-scoped delegation results in a few targeted reads; a vague one triggers wide grep, glob, and file reads across the project structure — anywhere from moderate to high token usage. Either way, the subagent spins up a full session, reads file content across multiple turns, and returns a summary before the main model can act. Even when using a smaller, cheaper model for the subagent, this amounts to hundreds of thousands of tokens per exploration call. And the result is ephemeral: the next session starts blind again.
+An exploration agent operates under a chain of indirection: the user instructs the main model, the main model delegates to a subagent, and the subagent interprets the task on its own. How narrowly or broadly it searches depends on how clearly intent was communicated at each step. A well-scoped delegation results in a few targeted reads; a vague one triggers wide grep, glob, and file reads across the project structure — anywhere from moderate to high token usage. Either way, the subagent spins up a full session, reads file content across multiple turns, and returns a summary before the main model can act. Even when using a smaller, cheaper model for the subagent, this amounts to hundreds of thousands of tokens per exploration call. And the result is ephemeral: the next session starts blind again.
 
 The table below shows per-lookup averages measured across real sessions on a 68-file project:
 
@@ -36,12 +36,21 @@ Despite the cost difference, both approaches lead to the same follow-up: in meas
 
 ---
 
+## What query results enable downstream
+
+The cost comparison above covers the orientation call itself. The downstream effect on which files get read — and how — is equally important.
+
+Each result includes `sizeChars` and `lineCount` before any file is opened. A 50-line file and a 2,000-line file call for different read strategies: full read vs. targeted slice with `offset`+`count`. `imports` and `refs` trace dependency chains without opening neighbors. `summary` and `role` let the model filter irrelevant files before they consume any context at all.
+
+The result is that reads following a `query` are purposeful rather than exploratory: the model reads fewer files, reads them more selectively, and avoids the pattern of reading a file only to discard it as irrelevant. Combined with `batch_read`'s compact and sliced modes, orientation front-loads into the first few turns and the session transitions to editing without the scattered read-then-check-then-discard loop that unguided exploration requires throughout.
+
+---
+
 ## Two-Layer Data Model
 
-The tool separates knowledge into two layers with different update frequencies.
-
-- **Structural data** is always up to date and requires no AI. It captures file path, character count, line count, extracted imports and exports, and inter-file references (the file map). This layer is written every session start for all new and changed files.
-- **Semantic data** is populated by AI analysis during scan. It captures an extended summary (~450 chars covering content, purpose, and key information), a role, key technologies, and search tags. This layer is only updated when scan is explicitly run.
+The tool separates knowledge into two layers with different update frequencies:
+- Structural data is always up to date and requires no AI. It captures file path, character count, line count, extracted imports and exports, and inter-file references (the file map), and is refreshed on every session start for all new and changed files.
+- Semantic data is populated by AI analysis during scan. It captures an extended summary (~450 chars covering content, purpose, and key information), a role, key technologies, and search tags, and is only updated when scan is explicitly run.
 
 This means the tool is useful from the moment it is installed, because file structure, sizes, and dependency connections are always available even before a scan has been run.
 
@@ -49,7 +58,7 @@ This means the tool is useful from the moment it is installed, because file stru
 
 ## Session Start
 
-The session start hook runs `scanProject` automatically on every session. It detects new, modified, and deleted files via git log or filesystem mtime, writes updated structural data for all changed and new files, marks not existing files as deleted in the knowledge base, and then reports status and injects instructions into the model's context.
+The session start hook runs `scanProject` automatically on every session. It detects new, modified, and deleted files via git log or filesystem mtime, writes updated structural data for all changed and new files, marks missing files as deleted in the knowledge base, and then reports status and injects instructions into the model's context.
 
 **What the model receives at session start:**
 
@@ -128,7 +137,7 @@ Runs AI analysis on all new, modified, and unanalyzed files and populates semant
 | `scanLocation` | Sub-folder to analyze relative to project root | Entire project |
 
 **What it does:**
-1. Calls `scanProject` (same as session start): structural data updated, soft delete missing files
+1. Calls `scanProject` (same as session start): structural data updated, missing files soft-deleted
 2. Collects all files needing AI analysis: new files, modified files, files without semantic data
 3. Parses each file to build a dependency graph (imports → refs between files in the scan set)
 4. Groups files by import cohesion (union-find) and topologically sorts within each group so dependencies are analyzed before dependents
@@ -163,7 +172,7 @@ When MCP sampling is disabled, scan writes batch files to `.knowledge/batches/` 
 }
 ```
 
-Each batch file contains the compact content of the files to analyse, the summaries of the related files as additional context and a prompt telling the subagent to use the `submit_analysis` tool to write results. This mode works in all harnesses which support subagnets. Alternatively the main agent can process the files and submit the analysis directly.
+Each batch file contains the compact content of the files to analyse, the summaries of related files as additional context, and a prompt instructing the subagent to use the `submit_analysis` tool to write results. This mode works in all harnesses that support subagents. Alternatively the main agent can process the files and submit the analysis directly.
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
@@ -211,7 +220,12 @@ gitignore already defines what is relevant for the project. The include and excl
 
 ## When to Use
 
-Query first when answering vague prompts ("improve the API" → query "api" first), before spawning Explore agents, when navigating an unfamiliar codebase or large monorepo, during multi-session work where knowledge persists without re-exploration, and in team projects where committed knowledge is shared across sessions and teammates.
+Use `query` first in these situations:
+- When the prompt is vague ("improve the API"), query the relevant term before reading files.
+- Before spawning Explore agents — `query` covers most orientation needs at a fraction of the cost.
+- When navigating an unfamiliar codebase or large monorepo.
+- In multi-session work where knowledge persists without re-exploration.
+- In team projects where the committed knowledge base is shared across sessions and teammates.
 
 ---
 
@@ -308,7 +322,7 @@ Use `scanLocation` to scan subdirectories incrementally.
 - **Why gitignore as the relevance boundary?** gitignore already encodes what matters for the project. Leaning on it avoids duplicating ignore configuration and ensures the knowledge base tracks the same files as version control.
 - **Why git-based incremental scanning?** Git history gives accurate per-file modification tracking without stat races. Only changed files are re-analyzed. Non-git projects fall back to filesystem mtime.
 - **Why SessionStart hook?** The model starts blind each session. The hook provides immediate knowledge status and explicit instructions to use the query tool first, turning a passive tool into active guidance.
-- **Why automatic cleanup?** Query accuracy degrades if summaries reference files that no longer exist. Deleted files are marked as deleted automatically on every session start scan to exclude them when the models uses the query tool.
+- **Why automatic cleanup?** Query accuracy degrades if summaries reference files that no longer exist. Deleted files are marked as deleted automatically on every session start scan to exclude them when the model uses the query tool.
 - **Why cohesion-based batch clustering?** Files that import each other or share an already-summarized dependency are grouped into the same batch via union-find. Within each group, dependencies are analyzed before dependents (topological order). This means when a file is analyzed, its direct dependencies are either present as file content in the same batch or injected as context summaries from a prior batch — giving the analysis model accurate knowledge of what each import does.
 - **Why two scan modes?** Subagent mode works in any harness with no special capabilities. Sampling mode eliminates context pollution entirely for harnesses that support it. The default is subagent mode for maximum compatibility.
 

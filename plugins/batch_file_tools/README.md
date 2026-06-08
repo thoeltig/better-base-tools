@@ -4,7 +4,7 @@ A Claude Code plugin that provides batch-capable file reading and editing via MC
 
 ## Why
 
-Every native tool call appends its result to the context window which compounds across the session. Batching N file reads or M edits into a single call cuts round-trips and reduces accumulated context overhead.
+Every native tool call appends its result to the context window, and that overhead compounds across the session. Batching N file reads or M edits into a single call cuts round-trips and reduces accumulated context overhead.
 
 The following results come from a controlled test that ran an identical 4-task workload with native tools and then again with MCP tools:
 
@@ -30,6 +30,156 @@ The table below shows per-session averages measured across three real projects.
 
 _¹ Documentation analysis project — content-only workload, pure native. ² Angular frontend project — same codebase, split by whether MCP server was registered. ³ better-base-tools (this repo)._
 
+## Session analysis
+
+This section provides the methodology and detail behind the numbers in [Why](#why). Measurements are from two codebases (68 files and 343 files), 124 main sessions combined. Baseline: `verbatim` mode for reads, `fileinfo` disabled.
+
+The [With vs without batch tools](#with-vs-without-batch-tools) subsection gives the overall session comparison; the other subsections cover the individual savings drivers.
+
+<details>
+
+<summary>Full native vs batch read & edit tool comparison</summary>
+
+### Single-file reads are already cheaper
+
+Native `Read` prefixes every line with `N\t` — the same verbatim-numbered format regardless of whether slicing is used. `batch_read` places the line range once in the output header, with no per-line markers in any mode.
+
+| | Native `Read` | `batch_read` `verbatim` | `batch_read` `compact` |
+|---|---|---|---|
+| Format | `N\t` on every line | range in header once | range in header + whitespace stripped |
+| chars / equiv-read | 14k–23k | 5k–9k | lower |
+| reduction vs native | — | **2.5–2.8×** | **>2.8×** |
+
+This applies to every `batch_read` call including single-file reads with no bundling. 61% of all observed `batch_read` calls were single-file; they still produced 2.5–2.8× fewer chars per read than the native equivalent.
+
+### Bundling scales with codebase size
+
+Both tools accept arrays. When the model bundles multiple files or operations into one call the savings compound on top of the format reduction. Bundling *rate* scales with codebase size; bundling *depth* (avg items per bundled call) is consistent across projects.
+
+| | smaller codebase | larger codebase |
+|---|---|---|
+| `batch_read` bundling rate | 39% | 62% |
+| avg files per bundled `batch_read` call | 2.9× | 2.9× |
+| `batch_edit` bundling rate (multi-file) | 26% | 43% |
+| avg ops per `batch_edit` call (all calls) | 2.7× | 3.7× |
+
+### Read modes and targeting
+
+| Mode / strategy | Observed share | Use case |
+|---|---|---|
+| `verbatim` + `offset`+`count` | 42–56% | Line-targeted slice; header carries range for `replace_range` / `insert_at_line` |
+| `compact` full file | 21–24% | Information gathering — cheapest full-file read |
+| `verbatim` full file | 15–29% | Exact-whitespace anchor for `replace` / `replace_all` |
+| `searchTerm` (any mode) | 25–27% | Match-only output; context windows merged into single blocks |
+
+Native `Read` with slicing still emits `N\t` on every returned line. `batch_read` slices with `offset`+`count` emit the range once in the header, achieving the same targeting at lower overhead.
+
+### Edit operations
+
+Content-anchored ops match a string; line-addressed ops target a line number from a preceding sliced read header. Two op types have no native equivalent.
+
+| Op | Observed share | Native equivalent | Anchor |
+|---|---|---|---|
+| `replace` | 70–77% | `Edit` | `compact` or `verbatim` read |
+| `replace_range` | 15–20% | **none** | line range from `verbatim`+`offset`+`count` header |
+| `write` | 5–7% | `Write` | — |
+| `insert_at_line` | 2% | **none** | line range from `verbatim`+`offset`+`count` header |
+| `replace_all` | 1–2% | `Edit` (all occurrences) | `compact` or `verbatim` read |
+
+17–22% of all edit ops (`replace_range` + `insert_at_line`) are only possible via `batch_edit`. A single-file `batch_edit` call with multiple ops still cuts round-trips versus one `Edit` or `Write` call per change.
+
+### Read-before-edit overhead
+
+Native `Edit` requires a preceding `Read` to source the `old_string` anchor — read the file, locate the string, copy it into the call. Correlation analysis across native sessions in the larger codebase shows 46% of native reads to a file were followed by a native edit to the same file. Of those read→edit pairs, 50% occurred within 3 sequential steps, confirming direct setup overhead rather than incidental context gathering.
+
+`batch_edit` eliminates this coupling. The model can just provide the anchor string without reading the file first. In batch-tool sessions, the same-file read-then-edit sequence drops to 2% of `batch_read` calls.
+
+Each edit to a known file costs two round-trips with native tools (one read result + one edit result, both appending to context) but costs one round-trip with batch tools.
+
+### Anchor failures resolve without re-reads
+
+When a native `Edit` anchor fails to match, the only recourse is to re-read the file to locate the correct string and retry — a full round-trip for what may be a typo or a minor whitespace difference.
+
+`batch_edit` applies whitespace-normalized matching before raising an error: tabs, spaces, and collapsed whitespace in the `old` string are matched against the original file content. If normalized matching also fails, the result includes a `nearest_anchor` block containing verbatim context around the closest matching region, ready to paste as the corrected `old` string. The model corrects the anchor and retries in the next turn without re-reading the file.
+
+This matters most in long sessions where files have been modified since the last read: what would be a stale-read error in native tools (requiring a full re-read) is an inline correction in batch tools.
+
+### Single-file edits still benefit
+
+Multi-file bundling compounds the savings, but most `batch_edit` calls target a single file: 74% in the smaller codebase, 57% in the larger. All calls still averaged 2.7× and 3.7× operations per call respectively.
+
+Three changes to one file with native tools means three sequential `Edit` calls — three round-trips, three result blocks added to context. `batch_edit` handles all three in one call with one result block. The turn is the same unit of context cost whether it contains one operation or ten.
+
+### With vs without batch tools
+
+The table below covers sessions from the larger codebase, split by whether batch tools were active. Task complexity varies between sessions, so this is not a controlled test, but the I/O pattern shift is unambiguous.
+
+| | native tools only | with batch tools | Δ |
+|---|---|---|---|
+| Avg turns / session | 19.5 | 32.3 | +66% |
+| Native Read / session | 5.3 | 0.8 | −85% |
+| **Native Edit / session** | **14.0** | **0.8** | **−94%** |
+| Native Write / session | 1.1 | 0.3 | −73% |
+| `batch_read` calls | — | 12.7 (equiv 26.9) | — |
+| `batch_edit` calls | — | 4.6 (equiv 16.8) | — |
+| Total actual I/O calls | 20.4 | 19.2 | −6% |
+| Equiv I/O if all native | 20.4 | **45.6** | **2.4× more work, same calls** |
+| Output tokens / session | 24,454 | 45,771 | +87% |
+| Cache read / session | 1,309k | 2,480k | +90% |
+
+Same call budget, 2.4× more I/O work completed. Native Edit — the costliest pattern (read file → extract `old_string` → call `Edit`) — dropped 94%. Sessions ran 66% longer, taking on more complex tasks without hitting context limits.
+
+### What the output growth reflects
+
+Output tokens per session grew 87% (24,454 → 45,771) with batch tools active. That increase is work completed, not overhead: context budget that native tools spend on delivering file content is instead available for reasoning and code generation. Output is the work the model produces to accomplish a task; input is the overhead required to produce it. Reducing input to only the relevant portions frees space for more output.
+
+### Orientation compression and cross-session task merging
+
+Before edits can begin, the model needs to orient: read files, understand structure, build enough context to reason about what to change. With native tools, orientation at session start can fill half the context window just to establish what is there and what needs to be done. While editing, the model also has to `Read` each file before calling `Edit` because its view of the file may be stale. Orientation and edit-setup reads are interleaved throughout, consuming context budget continuously.
+
+With batch tools, orientation uses fewer tokens before editing can start, and edits no longer require a preceding read. In the larger codebase after switching to batch tools, each session covered 25.8 equivalent file reads per session vs 19.0 before, in 13 actual calls vs 15 — 36% broader coverage at lower per-call cost.
+
+The downstream effect is that tasks which previously required multiple sessions — each needing the context window to fill before execution could begin — can now complete in one. With more context space available and fewer turns needed per action, the model accomplishes more within a single session.
+
+Lightweight discovery reduces this further. `fileinfo` mode returns size, line count, last-changed date, and extracted `refs[]` (imports and file references) without delivering any file content. [project-intel-tool](../project-intel-tool/README.md) returns semantic summaries, roles, and dependency maps across the entire project in one query. Both let the model identify which files are worth reading before any content enters the context window, eliminating blind reads of files that turn out to be irrelevant to the task.
+
+### Total native projection vs actual (both codebases combined)
+
+| | Actual calls | Native-equivalent | Saved |
+|---|---|---|---|
+| `batch_read` | 1,136 | 2,220 | 1,084 (49%) |
+| `batch_edit` | 456 | 1,398 | 942 (67%) |
+| Native tools (Read / Edit / Write / Grep / Glob) | 1,134 | 1,134 | — |
+| **Total** | **2,726** | **4,752** | **2,026 (43%)** |
+
+### Error rates
+
+Native tool errors increase with codebase size and session length. Batch tool error rates are constant.
+
+| Tool | smaller codebase | larger codebase |
+|---|---|---|
+| Native `Write` | 18% | 28% |
+| Native `Edit` stale-read | 0% | 7% |
+| `batch_read` | 1% | 1% |
+| `batch_edit` | 1% | 1% |
+
+Native `Edit` stale-read errors occur when a file changes between the read and the edit call — a window that grows with session length. `batch_edit` completes the read and write atomically within the same call, eliminating the window.
+
+### Context window impact
+
+Tool results accumulate in the context window with every turn. The reductions above compound:
+
+| Driver | Effect |
+|---|---|
+| 2.5–2.8× fewer chars per read | context fills proportionally more slowly; more turns fit before limits |
+| 43% fewer total I/O calls | fewer result blocks per session |
+| 66% more turns in batch sessions | longer sessions completing more work without truncation |
+| `replace_range` / `insert_at_line` | eliminate a full-file re-read before targeted edits, removing one round-trip per targeted change |
+
+A 20-file-read, 15-edit session using native tools adds roughly 600k–800k chars of tool results to context. The equivalent session via batch tools adds roughly 250k–300k — freeing 350k–500k chars that extend session length.
+
+</details>
+
 ## Tools
 
 ### `batch_read`
@@ -48,10 +198,9 @@ Requests also support glob and directory expansion, `offset` and `count` for pag
 
 `batch_read` normalizes indentation in all modes by default. The goal is token efficiency and model accuracy: normalized output mirrors the style distribution most prevalent in code training data, keeping comprehension high at minimum token cost.
 
-Rules applied at read time:
-
-- **Most file types** (TypeScript, JavaScript, CSS, YAML, …): normalized to **2-space indentation**. Two spaces is the dominant style across popular open-source JS/TS repositories and public training datasets; it also halves token cost versus 4-space for deeply nested code.
-- **Tab-required file types** (Makefile, …): normalized to **1 tab per indent level**. Tabs carry semantic meaning in these formats and must be preserved.
+Two rules apply at read time:
+- For most file types (TypeScript, JavaScript, CSS, YAML, and similar), indentation is normalized to 2-space. Two spaces is the dominant style across popular open-source JS/TS repositories and public training datasets, and it halves token cost versus 4-space for deeply nested code.
+- For tab-required file types such as Makefile, indentation is normalized to one tab per indent level, since tabs carry semantic meaning in these formats and must be preserved.
 
 Project-specific styles — 4-space, 6-space, 3-tab, or any other variant — are normalized on read. Reformatting source files is a mechanical task that belongs to automated tools (Prettier, Black, rustfmt, EditorConfig). Delegating it to the model wastes tokens and context with no accuracy benefit.
 
@@ -115,7 +264,7 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
 | `BATCH_TOOLS_NORMALIZE_FORMATTING` | `--normalize-formatting` | `true` | Normalize indentation on read (see [Formatting normalization](#formatting-normalization)). Disable when indentation is itself being edited. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
-| `BATCH_TOOLS_READ_ENABLE_FILEINFO` | `--read-enable-fileinfo` | `false` | Enable the `fileinfo` read mode. When disabled, `fileinfo` is absent from the schema and tool description entirely. Enable for workflows that need pre-read size checks or dependency mapping via `refs[]`. |
+| `BATCH_TOOLS_READ_ENABLE_FILEINFO` | `--read-enable-fileinfo` | `false` | Enable the `fileinfo` read mode. When disabled, `fileinfo` is absent from the schema and tool description entirely. Enable for workflows that need pre-read size checks or dependency mapping via `refs[]`. This mode is intended to complement [project-intel-tool](../project-intel-tool/README.md). To avoid model tool choice confusion, `fileinfo` is disabled by default. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 
 ## Requirements
