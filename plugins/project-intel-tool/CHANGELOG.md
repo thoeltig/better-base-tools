@@ -13,7 +13,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - `tests/helpers/reporter.js` — custom streaming reporter with compact, LLM-optimised output: summary header (`✓ N passed  ✖ N failed`), failing test name with `file:line-col`, inline source line in backticks, and `returned:` value
 - `tests/helpers/expect.ts` — `expect()` wrapper around `node:assert/strict` with a Vitest-compatible API to reduce necessary changes to existing tests
-- `test:watch` script
 
 ### Changed
 
