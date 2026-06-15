@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach } from 'node:test';
+import { expect } from '../tests/helpers/expect.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -83,21 +84,21 @@ describe('acquireSubmitLock', () => {
     expect(result).toBe(true);
   });
 
-  it('returns false when lock is held and timeout expires', async () => {
+  it('returns false when lock is held and timeout expires', { timeout: 2000 }, async () => {
     // Write a live lock so acquireLock always returns false
     const lockPath = path.join(tmpDir, LOCK_FILE);
     fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
     const result = await acquireSubmitLock(tmpDir, 150, 50);
     expect(result).toBe(false);
     fs.unlinkSync(lockPath);
-  }, 2000);
+  });
 
-  it('returns true if lock is released mid-wait', async () => {
+  it('returns true if lock is released mid-wait', { timeout: 2000 }, async () => {
     // Hold the lock for 100ms then release it; acquireSubmitLock should succeed
     const lockPath = path.join(tmpDir, LOCK_FILE);
     fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
     setTimeout(() => fs.unlinkSync(lockPath), 100);
     const result = await acquireSubmitLock(tmpDir, 1000, 60);
     expect(result).toBe(true);
-  }, 2000);
+  });
 });

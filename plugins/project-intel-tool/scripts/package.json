@@ -29,8 +29,8 @@
     ],
     "scripts": {
         "build": "tsc",
-        "test": "vitest run",
-        "test:watch": "vitest",
+        "test": "node --import tsx/esm --test --test-reporter=./tests/helpers/reporter.js lib/*.test.ts",
+        "test:watch": "node --import tsx/esm --test --watch --test-reporter=./tests/helpers/reporter.js lib/*.test.ts",
         "typecheck": "tsc --noEmit",
         "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
     },
@@ -41,7 +41,8 @@
     "devDependencies": {
         "@types/node": "25.0.1",
         "typescript": "5.9.3",
-        "vitest": "4.1.5"
+        "esbuild": "0.28.0",
+        "tsx": "4.22.4"
     },
     "engines": {
         "node": ">=22"

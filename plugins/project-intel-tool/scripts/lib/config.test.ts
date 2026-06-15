@@ -1,11 +1,26 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, afterEach } from 'node:test';
+import { expect } from '../tests/helpers/expect.js';
 import { parseConfigArg, parseConfigArgRecord } from './config.js';
 
 const originalArgv = process.argv.slice();
+const savedEnv: Record<string, string | undefined> = {};
+
+function stubEnv(key: string, value: string) {
+  savedEnv[key] = process.env[key];
+  process.env[key] = value;
+}
+
+function unstubAllEnvs() {
+  for (const [key, val] of Object.entries(savedEnv)) {
+    if (val === undefined) delete process.env[key];
+    else process.env[key] = val;
+  }
+  for (const key of Object.keys(savedEnv)) delete savedEnv[key];
+}
 
 afterEach(() => {
   process.argv = originalArgv.slice();
-  vi.unstubAllEnvs();
+  unstubAllEnvs();
 });
 
 describe('parseConfigArg', () => {
@@ -15,19 +30,19 @@ describe('parseConfigArg', () => {
   });
 
   it('returns env var value when set', () => {
-    vi.stubEnv('TEST_ARG_ENV', 'from-env');
+    stubEnv('TEST_ARG_ENV', 'from-env');
     process.argv = ['node', 'script.js'];
     expect(parseConfigArg('test-arg', 'TEST_ARG_ENV', 'default')).toBe('from-env');
   });
 
   it('ignores empty string env var and falls through to argv', () => {
-    vi.stubEnv('TEST_ARG_EMPTY', '');
+    stubEnv('TEST_ARG_EMPTY', '');
     process.argv = ['node', 'script.js', '--test-arg=from-argv'];
     expect(parseConfigArg('test-arg', 'TEST_ARG_EMPTY', 'default')).toBe('from-argv');
   });
 
   it('env var takes priority over argv', () => {
-    vi.stubEnv('TEST_ARG_PRIO', 'from-env');
+    stubEnv('TEST_ARG_PRIO', 'from-env');
     process.argv = ['node', 'script.js', '--test-arg=from-argv'];
     expect(parseConfigArg('test-arg', 'TEST_ARG_PRIO', 'default')).toBe('from-env');
   });
@@ -65,32 +80,32 @@ describe('parseConfigArgRecord', () => {
   });
 
   it('parses a valid JSON object from env var', () => {
-    vi.stubEnv('RECORD_OBJ', '{"key":"value","num":42}');
+    stubEnv('RECORD_OBJ', '{"key":"value","num":42}');
     expect(parseConfigArgRecord('my-record', 'RECORD_OBJ')).toEqual({ key: 'value', num: 42 });
   });
 
   it('parses a nested object', () => {
-    vi.stubEnv('RECORD_NESTED', '{"a":{"b":1}}');
+    stubEnv('RECORD_NESTED', '{"a":{"b":1}}');
     expect(parseConfigArgRecord('my-record', 'RECORD_NESTED')).toEqual({ a: { b: 1 } });
   });
 
   it('returns empty object for a JSON array (not an object)', () => {
-    vi.stubEnv('RECORD_ARRAY', '[1,2,3]');
+    stubEnv('RECORD_ARRAY', '[1,2,3]');
     expect(parseConfigArgRecord('my-record', 'RECORD_ARRAY')).toEqual({});
   });
 
   it('returns empty object for a JSON string', () => {
-    vi.stubEnv('RECORD_STRING', '"just a string"');
+    stubEnv('RECORD_STRING', '"just a string"');
     expect(parseConfigArgRecord('my-record', 'RECORD_STRING')).toEqual({});
   });
 
   it('returns empty object for a JSON null', () => {
-    vi.stubEnv('RECORD_NULL', 'null');
+    stubEnv('RECORD_NULL', 'null');
     expect(parseConfigArgRecord('my-record', 'RECORD_NULL')).toEqual({});
   });
 
   it('returns empty object for invalid JSON', () => {
-    vi.stubEnv('RECORD_INVALID', '{not valid json');
+    stubEnv('RECORD_INVALID', '{not valid json');
     expect(parseConfigArgRecord('my-record', 'RECORD_INVALID')).toEqual({});
   });
 
