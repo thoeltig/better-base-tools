@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { formatForRead } from "../src/lib/transforms.js";
 
 const SAMPLE = "alpha\nbeta\ngamma\ndelta\n";

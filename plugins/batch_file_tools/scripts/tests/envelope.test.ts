@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { formatEditContent, formatReadContent } from "../src/lib/envelope.js";
 
 describe("formatReadContent", () => {
