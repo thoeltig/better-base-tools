@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-06-15
+
+### Added
+
+- `tests/helpers/reporter.js` — custom streaming reporter with compact, LLM-optimised output: summary header (`✓ N passed  ✖ N failed`), failing test name with `file:line-col`, inline source line in backticks, and `returned:` value
+- `tests/helpers/expect.ts` — `expect()` wrapper around `node:assert/strict` with a Vitest-compatible API to reduce necessary changes to existing tests
+
+### Changed
+
+- Replaced Vitest with Node.js built-in `node:test` runner — remove `vitest` dev dependency and `vitest.config.ts`, add `tsx` and `esbuild` for TypeScript execution; all 11 test files updated
+- Updated `zod` to `4.4.3`
+
 ## [1.2.4] - 2026-06-07
 
 ### Changed
@@ -287,7 +299,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...HEAD
+[1.2.5]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...BatchFileTools_v1.2.5
 [1.2.4]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...BatchFileTools_v1.2.4
 [1.2.3]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...BatchFileTools_v1.2.3
 [1.2.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.1...BatchFileTools_v1.2.2

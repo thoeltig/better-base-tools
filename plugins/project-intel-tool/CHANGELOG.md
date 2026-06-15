@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-06-15
+
+### Added
+
+- `tests/helpers/reporter.js` — custom streaming reporter with compact, LLM-optimised output: summary header (`✓ N passed  ✖ N failed`), failing test name with `file:line-col`, inline source line in backticks, and `returned:` value
+- `tests/helpers/expect.ts` — `expect()` wrapper around `node:assert/strict` with a Vitest-compatible API to reduce necessary changes to existing tests
+- `test:watch` script
+
+### Changed
+
+- Replaced Vitest with Node.js built-in `node:test` runner — removes `vitest` dev dependency and `vitest.config.ts`, add `tsx` and `esbuild` for TypeScript execution; all 6 test files updated
+- Updated `zod` to `4.4.3`
+
 ## [1.4.3] - 2026-06-07
 
 ### Added
@@ -250,7 +263,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...HEAD
+[1.4.4]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...ProjectIntelTools_v1.4.4
 [1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3
 [1.4.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...ProjectIntelTools_v1.4.2
 [1.4.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.0...ProjectIntelTools_v1.4.1
