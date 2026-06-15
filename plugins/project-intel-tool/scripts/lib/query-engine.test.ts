@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import { expect } from '../tests/helpers/expect.js';
 import { calculateConfidence, generateQueryOutput, outputToFluentText } from './query-engine.js';
 import type { ScoredFileSummary } from '../types.js';
 

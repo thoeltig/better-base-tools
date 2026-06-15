@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import { expect } from '../tests/helpers/expect.js';
 import { buildSamplingBatches } from './sampler.js';
 import { toAbsReal } from './summary-merger.js';
 import type { FileRefs } from './file-map.js';

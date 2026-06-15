@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach } from 'node:test';
+import { expect } from '../tests/helpers/expect.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

@@ -1,16 +1,17 @@
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { describe, it, before, after, beforeEach } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { handleBatchEdit } from "../src/tools/edit.js";
 
 let workDir: string;
 let counter = 0;
 
-beforeAll(async () => {
+before(async () => {
   workDir = await realpath(await mkdtemp(join(tmpdir(), "btf-fuzzy-")));
 });
-afterAll(async () => {
+after(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
 beforeEach(() => { counter++; });

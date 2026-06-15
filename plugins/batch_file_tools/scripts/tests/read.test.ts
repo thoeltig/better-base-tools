@@ -1,17 +1,18 @@
 import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, it, before, after } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { handleBatchRead } from "../src/tools/read.js";
 import type { ReadInput } from "../src/types.js";
 
 let workDir: string;
 
-beforeAll(async () => {
+before(async () => {
   workDir = await realpath(await mkdtemp(join(tmpdir(), "btf-read-")));
 });
 
-afterAll(async () => {
+after(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
 
