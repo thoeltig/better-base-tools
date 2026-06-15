@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { describe, it, before, after, beforeEach } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { handleBatchEdit } from "../src/tools/edit.js";
 import type { EditFile } from "../src/types.js";
 
@@ -10,12 +11,12 @@ let outsideDir: string;
 let caseDir: string;
 let counter = 0;
 
-beforeAll(async () => {
+before(async () => {
   allowedDir = await realpath(await mkdtemp(join(tmpdir(), "btf-glob-in-")));
   outsideDir = await realpath(await mkdtemp(join(tmpdir(), "btf-glob-out-")));
 });
 
-afterAll(async () => {
+after(async () => {
   await rm(allowedDir, { recursive: true, force: true });
   await rm(outsideDir, { recursive: true, force: true });
 });

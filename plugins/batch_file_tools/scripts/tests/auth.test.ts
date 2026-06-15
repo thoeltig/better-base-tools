@@ -1,19 +1,20 @@
 import { access, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, it, before, after } from "node:test";
+import { expect } from "./helpers/expect.js";
 import { handleBatchEdit } from "../src/tools/edit.js";
 import { handleBatchRead } from "../src/tools/read.js";
 
 let allowedDir: string;
 let outsideDir: string;
 
-beforeAll(async () => {
+before(async () => {
   allowedDir = await realpath(await mkdtemp(join(tmpdir(), "btf-auth-in-")));
   outsideDir = await realpath(await mkdtemp(join(tmpdir(), "btf-auth-out-")));
 });
 
-afterAll(async () => {
+after(async () => {
   await rm(allowedDir, { recursive: true, force: true });
   await rm(outsideDir, { recursive: true, force: true });
 });
