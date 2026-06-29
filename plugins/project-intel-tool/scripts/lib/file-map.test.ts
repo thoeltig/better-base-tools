@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import { expect } from '../tests/helpers/expect.js';
-import { parseFileRefs } from './file-map.js';
+import { parseFileRefs, resolveCSImports } from './file-map.js';
 
 const ROOT = '/project';
 
@@ -294,15 +294,58 @@ public static class Extensions {}`,
     expect(result.exports).toContain('Extensions');
   });
 
-  it('does not produce file-path refs for C# usings', () => {
-    const result = parseFileRefs(
-      'Services/UserService.cs',
-      `using System;`,
-      makeSet('Services/UserService.cs'),
-      ROOT
-    );
-    expect(result.refs).toHaveLength(0);
-  });
+    it('extracts methods and consts declared inline within a class body', () => {
+        const result = parseFileRefs(
+            'Services/Foo.cs',
+            `public class Foo { public int GetCount() { return 0; } public const int Max = 5; }`,
+            makeSet('Services/Foo.cs'),
+            ROOT
+        );
+        expect(result.exports).toContain('GetCount');
+        expect(result.exports).toContain('Max');
+    });
+
+    it('does not produce file-path refs for C# usings', () => {
+        const result = parseFileRefs(
+            'Services/UserService.cs',
+            `using System;`,
+            makeSet('Services/UserService.cs'),
+            ROOT
+        );
+        expect(result.refs).toHaveLength(0);
+    });
+
+    it('extracts public and internal method exports', () => {
+        const result = parseFileRefs(
+            'Services/UserService.cs',
+            `public class UserService {
+    public User GetUser(int id) { return null; }
+    internal void DeleteUser(int id) {}
+    private void Helper() {}
+}`,
+            makeSet('Services/UserService.cs'),
+            ROOT
+        );
+        expect(result.exports).toContain('GetUser');
+        expect(result.exports).toContain('DeleteUser');
+        expect(result.exports).not.toContain('Helper');
+    });
+
+    it('extracts public and internal const exports', () => {
+        const result = parseFileRefs(
+            'Config/Constants.cs',
+            `public static class Constants {
+    public const int MaxRetries = 3;
+    internal const string Prefix = "app";
+    private const bool Debug = false;
+}`,
+            makeSet('Config/Constants.cs'),
+            ROOT
+        );
+        expect(result.exports).toContain('MaxRetries');
+        expect(result.exports).toContain('Prefix');
+        expect(result.exports).not.toContain('Debug');
+    });
 });
 
 describe('parseFileRefs — text/markdown/JSON', () => {
@@ -336,14 +379,69 @@ describe('parseFileRefs — text/markdown/JSON', () => {
     expect(result.refs).toHaveLength(0);
   });
 
-  it('returns no imports or exports for text files', () => {
-    const result = parseFileRefs(
-      'notes.txt',
-      `Some plain text content here.`,
-      makeSet('notes.txt'),
-      ROOT
-    );
-    expect(Object.keys(result.imports)).toHaveLength(0);
-    expect(result.exports).toHaveLength(0);
-  });
+    it('returns no imports or exports for text files', () => {
+        const result = parseFileRefs(
+            'notes.txt',
+            `Some plain text content here.`,
+            makeSet('notes.txt'),
+            ROOT
+        );
+        expect(Object.keys(result.imports)).toHaveLength(0);
+        expect(result.exports).toHaveLength(0);
+    });
+});
+
+describe('resolveCSImports', () => {
+    function buildCSMap(files: Record<string, string>) {
+        const fileSet = new Set(Object.keys(files));
+        const map = new Map<string, ReturnType<typeof parseFileRefs>>();
+        const csContents = new Map<string, string>();
+        for (const [fp, content] of Object.entries(files)) {
+            map.set(fp, parseFileRefs(fp, content, fileSet, ROOT));
+            if (fp.endsWith('.cs')) csContents.set(fp, content);
+        }
+        resolveCSImports(map, csContents);
+        return map;
+    }
+
+    it('resolves method call to source file', () => {
+        const map = buildCSMap({
+            'App/Caller.cs': `namespace App;\nusing App.Data;\npublic class Caller { void Run() { _repo.GetOrder(1); } }`,
+            'App/Repo.cs': `namespace App.Data;\npublic class Repo {\n    public Order GetOrder(int id) {}\n}`,
+        });
+        expect(map.get('App/Caller.cs')!.imports['App/Repo.cs']).toContain('GetOrder');
+    });
+
+    it('resolves constructor call to source file', () => {
+        const map = buildCSMap({
+            'App/Factory.cs': `namespace App;\nusing App.Models;\npublic class Factory { void Create() { var u = new User(); } }`,
+            'App/User.cs': `namespace App.Models;\npublic class User {}`,
+        });
+        expect(map.get('App/Factory.cs')!.imports['App/User.cs']).toContain('User');
+    });
+
+    it('resolves interface implementation to source file', () => {
+        const map = buildCSMap({
+            'App/Service.cs': `namespace App;\nusing App.Contracts;\npublic class Service : IHandler {}`,
+            'App/IHandler.cs': `namespace App.Contracts;\npublic interface IHandler {}`,
+        });
+        expect(map.get('App/Service.cs')!.imports['App/IHandler.cs']).toContain('IHandler');
+    });
+
+    it('resolves const access to source file', () => {
+        const map = buildCSMap({
+            'App/Processor.cs': `namespace App;\nusing App.Config;\npublic class Processor { int n = Cfg.MaxRetries; }`,
+            'App/Cfg.cs': `namespace App.Config;\npublic static class Cfg {\n    public const int MaxRetries = 3;\n}`,
+        });
+        expect(map.get('App/Processor.cs')!.imports['App/Cfg.cs']).toContain('MaxRetries');
+    });
+
+    it('does not link files from unimported namespaces', () => {
+        const map = buildCSMap({
+            'App/Service.cs': `namespace App;\npublic class Service { void Run() { var u = new User(); } }`,
+            'Other/User.cs': `namespace Other.Models;\npublic class User {}`,
+        });
+        const fileRefs = Object.keys(map.get('App/Service.cs')!.imports).filter(k => k.includes('/'));
+        expect(fileRefs).toHaveLength(0);
+    });
 });
