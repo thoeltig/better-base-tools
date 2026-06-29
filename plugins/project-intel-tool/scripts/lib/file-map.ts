@@ -28,8 +28,14 @@ const TS_EXPORT_BRACE_RE = /\bexport\s*\{([^}]+)\}/g;
 
 // C# using directives (namespace strings, not file paths)
 const CS_USING_RE = /^\s*using\s+([\w.]+)\s*;/gm;
+// C# namespace declaration
+const CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/m;
 // C# public type declarations
 const CS_TYPE_RE = /(?:public|internal)\s+(?:static\s+)?(?:partial\s+)?(?:sealed\s+)?(?:abstract\s+)?(?:class|interface|struct|enum|record)\s+(\w+)/g;
+// C# public/internal method declarations
+const CS_MEMBER_RE = /(?:^|(?<=[{};]))\s*(?:\[[^\]]*\]\s*)*(?:public|internal)\s+(?:(?:static|virtual|override|abstract|async|sealed|partial|new|extern|unsafe)\s+)*(?!(?:class|interface|struct|enum|record)\b)(?:\w[\w<>?,[\].]*\s+)*?(\w+)\s*(?:<[^(>]*>)?\s*\(/gm;
+// C# public/internal const declarations
+const CS_CONST_RE = /(?:^|(?<=[{};]))\s*(?:public|internal)\s+(?:static\s+)?const\s+\S+\s+(\w+)/gm;
 
 // Relative path mentions: ./foo/bar.ts or ../baz.json
 const REL_PATH_RE = /(?:^|[\s"'`(])(\.\.?\/[a-zA-Z0-9_.\-/]+\.[a-zA-Z]{1,6})(?:[\s"'`)]|$)/gm;
@@ -223,6 +229,20 @@ function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'r
 
   CS_TYPE_RE.lastIndex = 0;
   while ((m = CS_TYPE_RE.exec(content)) !== null) {
+    const cap = m[1];
+    if (!cap) continue;
+    if (!exports.includes(cap)) exports.push(cap);
+  }
+
+  CS_MEMBER_RE.lastIndex = 0;
+  while ((m = CS_MEMBER_RE.exec(content)) !== null) {
+    const cap = m[1];
+    if (!cap) continue;
+    if (!exports.includes(cap)) exports.push(cap);
+  }
+
+  CS_CONST_RE.lastIndex = 0;
+  while ((m = CS_CONST_RE.exec(content)) !== null) {
     const cap = m[1];
     if (!cap) continue;
     if (!exports.includes(cap)) exports.push(cap);
