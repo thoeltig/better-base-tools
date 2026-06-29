@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-06-30
+
+### Changed
+
+- **C# export capture** — `parseCSharp` now extracts public/internal methods (`CS_MEMBER_RE`, `\(` terminator) and public/internal consts (`CS_CONST_RE`) in addition to type declarations (class, struct, record, enum, interface); fields and properties are excluded to reduce cross-reference noise; negative lookahead in `CS_MEMBER_RE` prevents re-capturing type declaration names already handled by `CS_TYPE_RE`
+- **C# import cross-referencing** — `buildFileMap` caches C# file content and runs a post-pass via `resolveCSImports`; for each file, candidate source files are scoped to those whose `namespace` declaration matches an existing `using` directive; the file content is then scanned for exported names (min 5 chars) from that candidate set; names exported by more than one candidate are skipped as too generic; matching names are added as resolved file-path imports alongside the existing namespace-only `using` entries; adds `CS_NAMESPACE_RE` constant for namespace extraction
+
 ## [1.4.4] - 2026-06-15
 
 ### Added
@@ -262,7 +269,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...HEAD
+[1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...ProjectIntelTools_v1.4.5
 [1.4.4]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...ProjectIntelTools_v1.4.4
 [1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3
 [1.4.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.1...ProjectIntelTools_v1.4.2

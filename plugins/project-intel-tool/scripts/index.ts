@@ -38,7 +38,8 @@ import { parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.4.4' },
+    version: '1.4.5' 
+  },
   { 
     capabilities: { 
       tools: {}, 
