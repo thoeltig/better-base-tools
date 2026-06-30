@@ -252,7 +252,7 @@ All settings are configurable as environment variables or CLI arguments (`--name
 |---|---|---|---|
 | `PROJECT_INTEL_TOOL_MCP_SAMPLING` | `--mcp-sampling` | Enable MCP sampling mode | `false` |
 | `PROJECT_INTEL_TOOL_MCP_LOGGING` | `--mcp-logging` | Enable MCP logging protocol (stderr fallback otherwise) | `false` |
-| `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `50000` |
+| `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `75000` |
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
 | `PROJECT_INTEL_TOOL_INCLUDE_PATHS` | `--include` | Comma-separated extra paths to include in scan | |
 | `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` | `--exclude` | Comma-separated paths to exclude from scan | |
@@ -261,6 +261,8 @@ All settings are configurable as environment variables or CLI arguments (`--name
 | `PROJECT_INTEL_TOOL_SCAN_META` | `--scan-meta` | JSON object merged into the `_meta` field of the `scan` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000}`. | `{}` |
 | `PROJECT_INTEL_TOOL_QUERY_META` | `--query-meta` | JSON object merged into the `_meta` field of the `query` tool registration. Replaces the previously hardcoded `anthropic/maxResultSizeChars` and `anthropic/alwaysLoad` defaults. | `{}` |
 | `PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META` | `--submit-analysis-meta` | JSON object merged into the `_meta` field of the `submit_analysis` tool registration. Same format as `PROJECT_INTEL_TOOL_QUERY_META`. | `{}` |
+
+> **Note:** `PROJECT_INTEL_TOOL_INCLUDE_PATHS` / `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` control which files are **scanned** into the knowledge base (scan-time filtering). This is distinct from `batch_file_tools`' `BATCH_TOOLS_INCLUDE_PATHS` / `BATCH_TOOLS_EXCLUDE_PATHS`, which gate file reads and writes via an access-control elicitation flow — see [batch_file_tools Path Access Control](../batch_file_tools/README.md#path-access-control).
 
 ---
 

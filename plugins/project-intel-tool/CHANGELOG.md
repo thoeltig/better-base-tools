@@ -5,7 +5,12 @@ All notable changes to the project-intel-tool documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
-## [Unreleased]
+## [1.4.6] - 2026-06-30
+
+### Changed
+
+- **`PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` default increased `50000` → `75000`** — reduces the number of sampling calls for medium-to-large projects; update `DEFAULT_SCAN_CONFIG.maxTokensPerBatch` accordingly.
+- **`PROJECT_INTEL_TOOL_MCP_PROGRESS` removed** — MCP progress notifications now always fire during sampling (safe no-op when the harness does not support the capability, matching `batch_file_tools` behaviour). The `PROJECT_INTEL_TOOL_MCP_PROGRESS` env var and `--mcp-progress` arg are no longer recognised.
 
 ## [1.4.5] - 2026-06-30
 
@@ -269,7 +274,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...HEAD
+[1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
 [1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...ProjectIntelTools_v1.4.5
 [1.4.4]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...ProjectIntelTools_v1.4.4
 [1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3
