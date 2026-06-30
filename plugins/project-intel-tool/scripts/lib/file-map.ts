@@ -28,8 +28,14 @@ const TS_EXPORT_BRACE_RE = /\bexport\s*\{([^}]+)\}/g;
 
 // C# using directives (namespace strings, not file paths)
 const CS_USING_RE = /^\s*using\s+([\w.]+)\s*;/gm;
+// C# namespace declaration
+const CS_NAMESPACE_RE = /^\s*namespace\s+([\w.]+)/m;
 // C# public type declarations
 const CS_TYPE_RE = /(?:public|internal)\s+(?:static\s+)?(?:partial\s+)?(?:sealed\s+)?(?:abstract\s+)?(?:class|interface|struct|enum|record)\s+(\w+)/g;
+// C# public/internal method declarations
+const CS_MEMBER_RE = /(?:^|(?<=[{};]))\s*(?:\[[^\]]*\]\s*)*(?:public|internal)\s+(?:(?:static|virtual|override|abstract|async|sealed|partial|new|extern|unsafe)\s+)*(?!(?:class|interface|struct|enum|record)\b)(?:\w[\w<>?,[\].]*\s+)*?(\w+)\s*(?:<[^(>]*>)?\s*\(/gm;
+// C# public/internal const declarations
+const CS_CONST_RE = /(?:^|(?<=[{};]))\s*(?:public|internal)\s+(?:static\s+)?const\s+\S+\s+(\w+)/gm;
 
 // Relative path mentions: ./foo/bar.ts or ../baz.json
 const REL_PATH_RE = /(?:^|[\s"'`(])(\.\.?\/[a-zA-Z0-9_.\-/]+\.[a-zA-Z]{1,6})(?:[\s"'`)]|$)/gm;
@@ -228,6 +234,20 @@ function parseCSharp(content: string): Pick<FileRefs, 'imports' | 'exports' | 'r
     if (!exports.includes(cap)) exports.push(cap);
   }
 
+  CS_MEMBER_RE.lastIndex = 0;
+  while ((m = CS_MEMBER_RE.exec(content)) !== null) {
+    const cap = m[1];
+    if (!cap) continue;
+    if (!exports.includes(cap)) exports.push(cap);
+  }
+
+  CS_CONST_RE.lastIndex = 0;
+  while ((m = CS_CONST_RE.exec(content)) !== null) {
+    const cap = m[1];
+    if (!cap) continue;
+    if (!exports.includes(cap)) exports.push(cap);
+  }
+
   return { imports, exports, refs: [] };
 }
 
@@ -285,19 +305,82 @@ export function parseFileRefs(
   return { ...parsed, sizeChars, lineCount };
 }
 
+export function resolveCSImports(map: Map<string, FileRefs>, csContents: Map<string, string>): void {
+  // Extract namespace for each C# file
+  const fileNamespace = new Map<string, string>();
+  for (const [filePath, content] of csContents) {
+    const m = CS_NAMESPACE_RE.exec(content);
+    if (m?.[1]) fileNamespace.set(filePath, m[1]);
+  }
+
+  // Build namespace → [filePath] lookup
+  const namespaceToFiles = new Map<string, string[]>();
+  for (const [filePath, ns] of fileNamespace) {
+    if (!namespaceToFiles.has(ns)) namespaceToFiles.set(ns, []);
+    namespaceToFiles.get(ns)!.push(filePath);
+  }
+
+  for (const [filePath, content] of csContents) {
+    const refs = map.get(filePath);
+    if (!refs) continue;
+
+    // Candidate files: those whose namespace matches a using directive in this file
+    const usingNamespaces = Object.keys(refs.imports).filter(k => !k.includes('/'));
+    const candidateFiles = new Set<string>();
+    for (const ns of usingNamespaces) {
+      for (const f of namespaceToFiles.get(ns) ?? []) {
+        if (f !== filePath) candidateFiles.add(f);
+      }
+    }
+    if (candidateFiles.size === 0) continue;
+
+    // Build scoped export index: name → [filePath] within candidates only
+    const scopedExportToFiles = new Map<string, string[]>();
+    for (const candidateFile of candidateFiles) {
+      for (const exp of map.get(candidateFile)?.exports ?? []) {
+        if (!scopedExportToFiles.has(exp)) scopedExportToFiles.set(exp, []);
+        scopedExportToFiles.get(exp)!.push(candidateFile);
+      }
+    }
+
+    // Match specific usage patterns; skip names exported by more than one candidate
+    for (const [name, sourceFiles] of scopedExportToFiles) {
+      if (sourceFiles.length !== 1) continue;
+      const sourceFile = sourceFiles[0]!;
+      if (sourceFile === filePath) continue;
+
+      const isReferenced =
+        content.includes(`.${name}(`) ||         // instance/static method call
+        content.includes(`.${name}<`) ||         // generic method call
+        content.includes(`new ${name}(`) ||       // constructor
+        content.includes(`new ${name}<`) ||       // generic constructor
+        new RegExp(`\\.${name}\\b(?!\\s*[(<])|:\\s*${name}\\b|,\\s*${name}\\b`).test(content); // const/property/interface
+
+      if (!isReferenced) continue;
+      if (!refs.imports[sourceFile]) refs.imports[sourceFile] = [];
+      if (!refs.imports[sourceFile]!.includes(name)) {
+        refs.imports[sourceFile]!.push(name);
+      }
+    }
+  }
+}
+
 export function buildFileMap(files: string[], projectRoot: string, allProjectFiles?: string[]): Map<string, FileRefs> {
   const projectFileSet = new Set(allProjectFiles ?? files);
   const map = new Map<string, FileRefs>();
+  const csContents = new Map<string, string>();
 
   for (const filePath of files) {
     const absPath = path.resolve(projectRoot, filePath);
     try {
       const content = fs.readFileSync(absPath, 'utf-8');
+      if (filePath.endsWith('.cs')) csContents.set(filePath, content);
       map.set(filePath, parseFileRefs(filePath, content, projectFileSet, projectRoot));
     } catch {
       map.set(filePath, { imports: {}, exports: [], refs: [], sizeChars: 0, lineCount: 0 });
     }
   }
 
+  resolveCSImports(map, csContents);
   return map;
 }
