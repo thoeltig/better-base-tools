@@ -176,7 +176,7 @@ Each batch file contains the compact content of the files to analyse, the summar
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
-When MCP sampling is enabled, scan runs analysis via the MCP sampling protocol and blocks until complete. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the final result — `"Scan complete. Analysed N file(s) in M batch(es)."` — and its context is not polluted by the analysis work. When `PROJECT_INTEL_TOOL_MCP_PROGRESS=true`, one `notifications/progress` notification is sent per completed batch for harnesses that surface progress to the user.
+When MCP sampling is enabled, scan runs analysis via the MCP sampling protocol and blocks until complete. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the final result — `"Scan complete. Analysed N file(s) in M batch(es)."` — and its context is not polluted by the analysis work. Progress notifications (`notifications/progress`) are sent per completed batch for harnesses that surface them to the user.
 
 This mode requires the harness to support MCP sampling. The `submit_analysis` tool is **not** registered in this mode.
 
@@ -252,7 +252,6 @@ All settings are configurable as environment variables or CLI arguments (`--name
 |---|---|---|---|
 | `PROJECT_INTEL_TOOL_MCP_SAMPLING` | `--mcp-sampling` | Enable MCP sampling mode | `false` |
 | `PROJECT_INTEL_TOOL_MCP_LOGGING` | `--mcp-logging` | Enable MCP logging protocol (stderr fallback otherwise) | `false` |
-| `PROJECT_INTEL_TOOL_MCP_PROGRESS` | `--mcp-progress` | Enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch | `false` |
 | `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `50000` |
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
 | `PROJECT_INTEL_TOOL_INCLUDE_PATHS` | `--include` | Comma-separated extra paths to include in scan | |

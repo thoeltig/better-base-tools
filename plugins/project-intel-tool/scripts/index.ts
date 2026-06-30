@@ -57,7 +57,6 @@ let isScanning = false;
 // Enable only when the harness is known to support the respective MCP capability.
 const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
-const USE_MCP_PROGRESS = parseConfigArg('mcp-progress', 'PROJECT_INTEL_TOOL_MCP_PROGRESS', 'false') === 'true';
 const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const SCAN_META = parseConfigArgRecord('scan-meta', 'PROJECT_INTEL_TOOL_SCAN_META');
@@ -252,7 +251,7 @@ server.registerTool(
         }
         isScanning = true;
         const samplerLog = (level: LoggingLevel, msg: string,) => writeMcpLogLine(level, msg, 'sampler');
-        const onProgress = USE_MCP_PROGRESS ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg) : undefined;
+        const onProgress = (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg);
         try {
           const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
           await runSampling(
