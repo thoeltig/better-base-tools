@@ -5,7 +5,7 @@ import { describe, it, before, after } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { handleBatchEdit } from "../src/tools/edit.js";
 import { handleBatchRead } from "../src/tools/read.js";
-import { isAccessible } from "../src/lib/fs.js";
+import { isAccessible, resolveExcludePaths } from "../src/lib/fs.js";
 
 let allowedDir: string;
 let outsideDir: string;
@@ -267,5 +267,27 @@ describe("auth — exclude overrides", () => {
       [p],
     );
     expect(out.results[0]!.status).toBe("ok");
+  });
+});
+
+describe("resolveExcludePaths", () => {
+  it("resolves an absolute exclude to its canonical path", async () => {
+    const p = join(allowedDir, "abs.env");
+    await writeFile(p, "1\n");
+    const out = await resolveExcludePaths([p], []);
+    expect(out.includes(await realpath(p))).toBe(true);
+  });
+
+  it("anchors a relative exclude to every provided directory", async () => {
+    await writeFile(join(allowedDir, "rel.env"), "1\n");
+    await writeFile(join(outsideDir, "rel.env"), "2\n");
+    const out = await resolveExcludePaths(["rel.env"], [allowedDir, outsideDir]);
+    expect(out.includes(await realpath(join(allowedDir, "rel.env")))).toBe(true);
+    expect(out.includes(await realpath(join(outsideDir, "rel.env")))).toBe(true);
+  });
+
+  it("keeps a not-yet-existing relative exclude as a literal anchored path", async () => {
+    const out = await resolveExcludePaths(["ghost.env"], [allowedDir]);
+    expect(out.some(p => p.endsWith("ghost.env"))).toBe(true);
   });
 });

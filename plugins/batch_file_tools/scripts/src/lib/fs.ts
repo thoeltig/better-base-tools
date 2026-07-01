@@ -67,6 +67,26 @@ export async function resolvePaths(
   return [...new Set(resolved.filter((p): p is string => p !== null))];
 }
 
+export async function resolveExcludePaths(
+  specs: readonly string[],
+  anchorDirs: readonly string[],
+): Promise<string[]> {
+  const candidates: string[] = [];
+  for (const spec of specs) {
+    if (!spec) continue;
+    const home = expandHome(spec);
+    if (isAbsolute(home)) {
+      candidates.push(home);
+    } else {
+      // Relative excludes anchor to every allowed directory (e.g. project roots),
+      // so a repo-shared exclude config applies regardless of where the server
+      // was launched.
+      for (const dir of anchorDirs) candidates.push(resolve(dir, spec));
+    }
+  }
+  return resolvePaths(candidates);
+}
+
 export async function getValidRootDirectories(
   requestedRoots: readonly Root[],
   log: (level: LoggingLevel, data: string, logger?: string) => void,

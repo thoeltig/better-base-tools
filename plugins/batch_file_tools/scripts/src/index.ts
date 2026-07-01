@@ -5,7 +5,7 @@ import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { resolvePaths, getValidRootDirectories, isPathAllowed, isAccessible } from "./lib/fs.js";
+import { resolvePaths, resolveExcludePaths, getValidRootDirectories, isPathAllowed, isAccessible } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
@@ -27,8 +27,7 @@ const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const INCLUDE_PATHS_RAW = parseConfigArg('include', 'BATCH_TOOLS_INCLUDE_PATHS', '').split(',').filter(Boolean);
 const EXCLUDE_PATHS_RAW = parseConfigArg('exclude', 'BATCH_TOOLS_EXCLUDE_PATHS', '').split(',').filter(Boolean);
-const allowedExtraPaths = await resolvePaths([...args.filter(a => !a.startsWith('--')), ...INCLUDE_PATHS_RAW]);
-const resolvedExcludePaths = await resolvePaths(EXCLUDE_PATHS_RAW);
+const allowedExtraPaths = await resolvePaths([...args.filter(a => isAbsolute(a) && !a.startsWith('--')), ...INCLUDE_PATHS_RAW]);
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -145,6 +144,7 @@ server.registerTool(
       const parsed = ReadInput.parse(param);
       writeMcpLogLine("info", `batch_read — ${parsed.requests.length} request(s)`, "batch_read");
       const allowedDirectories = getAllowedDirectoriesToUse("read");
+      const resolvedExcludePaths = await resolveExcludePaths(EXCLUDE_PATHS_RAW, [...validRootDirectories, ...allowedExtraPaths]);
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
         if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
@@ -191,6 +191,7 @@ server.registerTool(
       const totalOps = parsed.files.reduce((s, f) => s + f.ops.length, 0);
       writeMcpLogLine("info", `batch_edit — ${parsed.files.length} file(s), ${totalOps} op(s)`, "batch_edit");
       const allowedDirectories = getAllowedDirectoriesToUse("edit");
+      const resolvedExcludePaths = await resolveExcludePaths(EXCLUDE_PATHS_RAW, [...validRootDirectories, ...allowedExtraPaths]);
       const pathInfos = parsed.files.map(f => ({
         path: isAbsolute(f.path) ? f.path : resolve(f.path),
         detail: `ops: ${[...new Set(f.ops.map(o => o.type))].join(", ")}`,
@@ -231,7 +232,7 @@ server.server.oninitialized = async () => {
   const parts: string[] = [];
   if (validRootDirectories.length > 0) parts.push(`roots=[${validRootDirectories.join(', ')}]`);
   if (allowedExtraPaths.length > 0) parts.push(`allowed=[${allowedExtraPaths.join(', ')}]`);
-  if (resolvedExcludePaths.length > 0) parts.push(`excluded=[${resolvedExcludePaths.join(', ')}]`);
+  if (EXCLUDE_PATHS_RAW.length > 0) parts.push(`excluded=[${EXCLUDE_PATHS_RAW.join(', ')}]`);
   writeMcpLogLine("info", `Allowed directories — ${parts.join(' + ')}`, 'permissions');
 };
 
@@ -291,9 +292,11 @@ async function elicitPaths(
       },
     };
 
-    const msg = detail
-      ? `${toolName} — ${p}  (${detail})`
-      : `${toolName} — ${p}`;
+      const excluded = excludeDirs.length > 0 && isPathAllowed(p, excludeDirs);
+      const base = detail
+        ? `${toolName} — ${p}  (${detail})`
+        : `${toolName} — ${p}`;
+      const msg = excluded ? `${base} — excluded path, approval required` : base;
     try {
       const r = await server.server.elicitInput({
         message: msg,
