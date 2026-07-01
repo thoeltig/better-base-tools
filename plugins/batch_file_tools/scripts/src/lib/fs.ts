@@ -49,23 +49,22 @@ export async function resolveForWrite(
   return { ok: true, resolvedPath: guard.resolvedPath };
 }
 
-export async function getAllowedDirectoriesFromArgs(
-  directories: readonly string[],
+export async function resolvePaths(
+  paths: readonly string[],
 ): Promise<string[]> {
   const resolved = await Promise.all(
-    directories.map(async (dir) => {
-      if (!dir) return null;
+    paths.map(async (p) => {
+      if (!p) return null;
       try {
-        const expanded = expandHome(dir);
-        if (!isAbsolute(expanded)) return null;
-        const real = await realpath(resolve(expanded));
-        return real;
+        // Anchor to the nearest existing parent so relative paths, symlinks and
+        // not-yet-created files/subfolders resolve to a canonical absolute path.
+        return await realpathOfNearestExisting(resolve(expandHome(p)));
       } catch {
         return null;
       }
     }),
   );
-  return resolved.filter((p): p is string => p !== null);
+  return [...new Set(resolved.filter((p): p is string => p !== null))];
 }
 
 export async function getValidRootDirectories(
@@ -150,6 +149,21 @@ export function isPathAllowed(realPath: string, allowedDirectories: readonly str
     const rel = relative(dir, realPath);
     return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
   });
+}
+
+export function isAccessible(
+  realPath: string,
+  allowedDirectories: readonly string[],
+  excludedPaths: readonly string[] = [],
+  approvedPaths: readonly string[] = [],
+): boolean {
+  // Denied paths are reachable only via an explicit elicitation allow (an exact
+  // file or a covering folder); configured allow/include paths never pierce an
+  // exclude. Non-denied paths use the standard allow-list check.
+  if (excludedPaths.length > 0 && isPathAllowed(realPath, excludedPaths)) {
+    return isPathAllowed(realPath, approvedPaths);
+  }
+  return isPathAllowed(realPath, allowedDirectories);
 }
 
 export async function realpathOfNearestExisting(absolute: string): Promise<string> {
