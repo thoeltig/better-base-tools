@@ -27,6 +27,10 @@ const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const INCLUDE_PATHS_RAW = parseConfigArg('include', 'BATCH_TOOLS_INCLUDE_PATHS', '').split(',').filter(Boolean);
 const EXCLUDE_PATHS_RAW = parseConfigArg('exclude', 'BATCH_TOOLS_EXCLUDE_PATHS', '').split(',').filter(Boolean);
+const _maxOutputTokensParsed = parseInt(parseConfigArg('max-output-tokens', 'BATCH_TOOLS_MAX_OUTPUT_TOKENS', '75000'), 10);
+const MAX_OUTPUT_TOKENS = isNaN(_maxOutputTokensParsed) ? 75000 : _maxOutputTokensParsed;
+const CHARS_PER_TOKEN_OUTPUT = parseFloat(parseConfigArg('chars-per-token', 'BATCH_TOOLS_CHARS_PER_TOKEN', '2.5')) || 2.5;
+const MAX_OUTPUT_CHARS = Math.floor(MAX_OUTPUT_TOKENS * CHARS_PER_TOKEN_OUTPUT);
 const allowedExtraPaths = await resolvePaths([...args.filter(a => isAbsolute(a) && !a.startsWith('--')), ...INCLUDE_PATHS_RAW]);
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
@@ -159,7 +163,9 @@ server.registerTool(
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
-      const toolOutput: CallToolResult = { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
+      const toolOutput: CallToolResult = {
+        content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE, MAX_OUTPUT_CHARS),
+      };
       if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
       return toolOutput;
     } catch (err: unknown) {

@@ -340,3 +340,115 @@ describe("formatEditContent", () => {
     );
   });
 });
+
+describe("formatReadContent — output budget (maxChars)", () => {
+  const makeLines = (n: number) =>
+    Array.from({ length: n }, (_, i) => `L${String(i + 1).padStart(3, "0")}X-${"z".repeat(20)}`);
+
+  it("maxChars=0 disables truncation (full content, no marker)", () => {
+    const content = makeLines(50).join("\n") + "\n";
+    const blocks = formatReadContent(
+      { results: [{ path: "/big.txt", mode_applied: "compact", lines: 50, returned_lines: 50, truncated: false, content }] },
+      [],
+      false,
+      0,
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text.includes("L050X")).toBe(true);
+    expect(blocks[0]!.text.includes("Truncated at line")).toBe(false);
+  });
+
+  it("mid-file truncation: header range shrinks and inline marker gives a re-read anchor", () => {
+    const content = makeLines(100).join("\n") + "\n";
+    const blocks = formatReadContent(
+      { results: [{ path: "/big.txt", mode_applied: "compact", lines: 100, returned_lines: 100, truncated: false, content }] },
+      [],
+      false,
+      800,
+    );
+    expect(blocks).toHaveLength(1);
+    const text = blocks[0]!.text;
+    const m = text.match(/Read line 1 to (\d+) of file '\/big\.txt' as 'compact' \((\d+) of 100 lines total\)/);
+    expect(m).not.toBe(null);
+    const endLine = Number(m![1]);
+    expect(Number(m![2])).toBe(endLine);
+    expect(endLine).toBeLessThanOrEqual(99);
+    expect(text.length).toBeLessThanOrEqual(800);
+    expect(text.includes(`L${String(endLine).padStart(3, "0")}X`)).toBe(true);
+    expect(text.includes(`L${String(endLine + 1).padStart(3, "0")}X`)).toBe(false);
+    expect(text.includes(`Truncated at line ${endLine} of 100`)).toBe(true);
+    expect(text.includes(`re-read from line ${endLine + 1}`)).toBe(true);
+  });
+
+  it("truncation stops later files; they are listed in a trailing omitted marker", () => {
+    const contentA = makeLines(100).join("\n") + "\n";
+    const blocks = formatReadContent(
+      {
+        results: [
+          { path: "/a.txt", mode_applied: "compact", lines: 100, returned_lines: 100, truncated: false, content: contentA },
+          { path: "/b.txt", mode_applied: "compact", lines: 3, returned_lines: 3, truncated: false, content: "b1\nb2\nb3\n" },
+          { path: "/c.txt", mode_applied: "compact", lines: 2, returned_lines: 2, truncated: false, content: "c1\nc2\n" },
+        ],
+      },
+      [],
+      false,
+      600,
+    );
+    const joined = blocks.map(b => b.text).join("\n");
+    expect(joined.includes("Truncated at line")).toBe(true);
+    const last = blocks[blocks.length - 1]!.text;
+    expect(last.includes("Max output reached — could not return")).toBe(true);
+    expect(last.includes("/b.txt")).toBe(true);
+    expect(last.includes("/c.txt")).toBe(true);
+    expect(joined.includes("b1")).toBe(false);
+    expect(joined.includes("c1")).toBe(false);
+  });
+
+  it("non-truncatable first result (fileinfo) is emitted whole to guarantee progress", () => {
+    const content = JSON.stringify({ size: 999999, lines: 12345, lastChanged: "1h ago", refs: ["a", "b", "c"] });
+    const blocks = formatReadContent(
+      { results: [{ path: "/x.ts", mode_applied: "fileinfo", lines: 12345, returned_lines: 0, truncated: false, content }] },
+      [],
+      false,
+      10,
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.text.includes("Lines: 12345")).toBe(true);
+    expect(blocks[0]!.text.includes("Truncated")).toBe(false);
+  });
+
+  it("search (count=0) truncates at a match-line boundary, keeping the Found header", () => {
+    const content = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 3}\tmatchline-${String(i + 1).padStart(2, "0")}`).join("\n");
+    const blocks = formatReadContent(
+      { results: [{ path: "/s.ts", mode_applied: "compact", lines: 400, returned_lines: 40, truncated: false, content, match_count: 40 }] },
+      [],
+      false,
+      500,
+    );
+    expect(blocks).toHaveLength(1);
+    const text = blocks[0]!.text;
+    expect(text.includes("Found 40 match(es)")).toBe(true);
+    expect(text.includes("matchline-01")).toBe(true);
+    expect(text.includes("matchline-40")).toBe(false);
+    expect(text.includes("of 40 match block")).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(500);
+  });
+
+  it("search (count>0) truncates at a context-block boundary", () => {
+    const mkBlock = (n: number) =>
+      `<!-- Line ${n} to ${n + 2}, match at line ${n + 1} -->\nctx-${String(n).padStart(3, "0")}-a\nctx-${String(n).padStart(3, "0")}-b\nctx-${String(n).padStart(3, "0")}-c`;
+    const content = [10, 40, 70, 100, 130].map(mkBlock).join("\n");
+    const blocks = formatReadContent(
+      { results: [{ path: "/s.ts", mode_applied: "verbatim", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5 }] },
+      [],
+      false,
+      260,
+    );
+    expect(blocks).toHaveLength(1);
+    const text = blocks[0]!.text;
+    expect(text.includes("Found 5 match(es)")).toBe(true);
+    expect(text.includes("ctx-010-a")).toBe(true);
+    expect(text.includes("ctx-130-a")).toBe(false);
+    expect(text.includes("match block")).toBe(true);
+  });
+});
