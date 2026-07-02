@@ -5,6 +5,18 @@ All notable changes to the project-intel-tool documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [1.4.7] - 2026-07-01
+
+### Fixed
+
+- **`findKnowledgeDir` no longer adopts a nested sub-project's `.knowledge` dir** — it previously searched recursively down through subfolders and used the first `.knowledge/summaries.json` found as if it were the current location's own knowledge base; it now only recognizes a knowledge dir at the exact scanned location, falling back to creating a fresh one there when none exists.
+- **Sub-project directories are now excluded from git-based scans** — `getFilesFromGit` had no notion of nested `.knowledge` dirs, so every file under a sub-project was proposed as "new" and merged into whichever knowledge base `findKnowledgeDir` happened to pick; `scanProject` now runs sub-knowledge discovery up front and excludes discovered sub-project directories from both the git-based and filesystem-based file listings.
+- **`query` aggregates the full nested sub-knowledge tree, even without a top-level summary** — aggregation previously required an existing top-level `.knowledge/summaries.json` that had already recorded sub-project refs, and only reached one level deep, so sitting above several independent (or deeply nested) sub-project knowledge bases returned nothing or missed grandchildren; `query` now walks each base's stored `subKnowledge` refs recursively to any depth (cycle-safe, with accumulated project-relative paths), and discovers the first level directly from the filesystem when no top-level base exists yet.
+
+### Added
+
+- `discoverSubKnowledge(location, projectRoot, excludeAbsPaths)` in `project-scanner.ts` — finds nested `.knowledge/summaries.json` directories without descending into them; used by `scanProject` (to exclude sub-project files from the parent scan) and by the `query` tool (to seed the first level of aggregation before a top-level scan exists; deeper levels are followed from each base's stored `subKnowledge` refs).
+
 ## [1.4.6] - 2026-06-30
 
 ### Changed
@@ -274,8 +286,9 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...HEAD
-[1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...HEAD
+[1.4.7]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...ProjectIntelTools_v1.4.7
+[1.4.6]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
 [1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...ProjectIntelTools_v1.4.5
 [1.4.4]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...ProjectIntelTools_v1.4.4
 [1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3
