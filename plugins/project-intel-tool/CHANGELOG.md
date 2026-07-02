@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-07-02
+
+### Added
+
+- **Session start reports nested sub-knowledge stats** — `aggregateSubKnowledgeStats` in `project-scanner.ts` recursively walks each knowledge base's stored `subKnowledge` refs (mirroring `query`'s aggregation) and counts non-deleted files across the full nested tree. When a local knowledge base exists, its status message folds the nested total in: `648 file summaries available across 3 knowledge directories` (falls back to the plain `N file summaries available` when there is no nested knowledge). When no local knowledge base exists yet but nested sub-projects have one, the message becomes `Project knowledge not yet generated in current folder but 619 file summaries available across 2 sub knowledge directories` instead of the plain "not yet generated" — so the model knows there is data to query instead of assuming none exists.
+
 ## [1.4.8] - 2026-07-02
 
 ### Fixed
@@ -294,7 +300,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...HEAD
+[1.4.9]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...ProjectIntelTools_v1.4.9
 [1.4.8]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...ProjectIntelTools_v1.4.8
 [1.4.7]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...ProjectIntelTools_v1.4.7
 [1.4.6]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
