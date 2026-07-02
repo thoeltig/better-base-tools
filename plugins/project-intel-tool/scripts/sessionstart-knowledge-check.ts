@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as fs from 'fs';
 import * as path from 'path';
-import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
+import { scanProject, findKnowledgeDir, aggregateSubKnowledgeStats } from './lib/project-scanner.js';
 import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig, ENV_INCLUDE_PATHS, ENV_EXCLUDE_PATHS } from './types.js';
 
 function outputHookResponse(systemMessage: string, additionalContext: string): void {
@@ -34,13 +34,22 @@ async function main(): Promise<void> {
     try {
       const scanResult = await scanProject(cwd, potentialKnowledgeDir, config);
       const totalFiles = scanResult.filesToScan.length;
+      const { knowledgeBaseCount, totalEntries } = aggregateSubKnowledgeStats(scanResult.subKnowledge, cwd);
 
-      let systemMessage = 'Project knowledge not yet generated';
-      let additionalContext = 'Suggestion: Inform the user no project knowledge exists';
-      if(totalFiles > 0) {
-        const filesToScanMessagePart = ` but found ${totalFiles} file(s) to scan`;
-        systemMessage += filesToScanMessagePart;
-        additionalContext += filesToScanMessagePart;
+      let systemMessage: string;
+      let additionalContext: string;
+      if (knowledgeBaseCount > 0) {
+        const dirWord = knowledgeBaseCount === 1 ? 'directory' : 'directories';
+        systemMessage = `Project knowledge not yet generated in current folder but ${totalEntries} file summaries available across ${knowledgeBaseCount} sub knowledge ${dirWord}`;
+        additionalContext = `Suggestion: Inform the user no project knowledge exists in the current folder, but ${totalEntries} file summaries are available via query across ${knowledgeBaseCount} sub knowledge ${dirWord}`;
+      } else {
+        systemMessage = 'Project knowledge not yet generated';
+        additionalContext = 'Suggestion: Inform the user no project knowledge exists';
+        if (totalFiles > 0) {
+          const filesToScanMessagePart = ` but found ${totalFiles} file(s) to scan`;
+          systemMessage += filesToScanMessagePart;
+          additionalContext += filesToScanMessagePart;
+        }
       }
       additionalContext += '. ' + suggestionMessage;
       outputHookResponse(systemMessage, additionalContext);
@@ -52,8 +61,12 @@ async function main(): Promise<void> {
 
   const scanResult = await scanProject(cwd, knowledgeDir, config);
   const { totalFilesInKnowledge, changedFilesCount, unanalyzedFilesCount } = scanResult.projectStats;
+  const { knowledgeBaseCount, totalEntries } = aggregateSubKnowledgeStats(scanResult.subKnowledge, cwd);
 
-  let statusMessage = `${totalFilesInKnowledge} file summaries available`;
+  const totalKnowledgeDirs = 1 + knowledgeBaseCount;
+  let statusMessage = totalKnowledgeDirs > 1
+    ? `${totalFilesInKnowledge + totalEntries} file summaries available across ${totalKnowledgeDirs} knowledge directories`
+    : `${totalFilesInKnowledge} file summaries available`;
   if (changedFilesCount > 0) statusMessage += `, ${changedFilesCount} file(s) changed`;
   if (unanalyzedFilesCount > 0) statusMessage += `, ${unanalyzedFilesCount} file(s) without AI analysis`;
 

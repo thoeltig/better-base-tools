@@ -233,6 +233,31 @@ export function findKnowledgeDir(location: string): string | undefined {
   return undefined;
 }
 
+// Recursively walks stored subKnowledge refs (mirrors query-engine's aggregation) to report how
+// much knowledge exists in nested sub-projects, so callers know whether querying is worthwhile
+// even when the current directory has no summaries of its own.
+export function aggregateSubKnowledgeStats(refs: SubKnowledgeRef[], projectRoot: string): { knowledgeBaseCount: number; totalEntries: number } {
+  let knowledgeBaseCount = 0;
+  let totalEntries = 0;
+  const visited = new Set<string>();
+
+  const walk = (currentRefs: SubKnowledgeRef[], parentRoot: string): void => {
+    for (const ref of currentRefs) {
+      const childDir = path.resolve(parentRoot, ref.knowledgeDir);
+      if (visited.has(childDir) || !fs.existsSync(childDir)) continue;
+      visited.add(childDir);
+      const childProjectRoot = path.dirname(childDir);
+      const summaries = getOrCreateSummaries(childDir, childProjectRoot);
+      knowledgeBaseCount++;
+      totalEntries += [...summaries.files.values()].filter(f => !f.deleted).length;
+      walk(summaries.subKnowledge, childProjectRoot);
+    }
+  };
+
+  walk(refs, projectRoot);
+  return { knowledgeBaseCount, totalEntries };
+}
+
 export async function scanProject(location: string, knowledgeDir: string, scanConfig: ScanConfig): Promise<ScanResult> {
   const projectRoot = toAbsReal(path.dirname(knowledgeDir), '.');
   const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
