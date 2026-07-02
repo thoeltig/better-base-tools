@@ -141,27 +141,17 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
 function scanDirRecursive(
   dir: string,
   filePaths: Map<string, Date>,
-  subKnowledge: SubKnowledgeRef[],
   projectRoot: string,
   excludeAbsPaths: string[] = []
 ): void {
   try {
     for (const entry of fs.readdirSync(dir)) {
-      if (shouldIgnore(entry)) continue;
+      if (shouldIgnore(entry) || entry === KNOWLEDGE_DIRECTORY) continue;
       const fullPath = path.join(dir, entry);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) {
-        if (entry === KNOWLEDGE_DIRECTORY) {
-          if (fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
-            subKnowledge.push({
-              location: toRelative(dir, projectRoot),
-              knowledgeDir: toRelative(fullPath, projectRoot),
-            });
-          }
-          continue;
-        }
         if (isPathExcluded(fullPath, excludeAbsPaths)) continue;
-        scanDirRecursive(fullPath, filePaths, subKnowledge, projectRoot, excludeAbsPaths);
+        scanDirRecursive(fullPath, filePaths, projectRoot, excludeAbsPaths);
       } else if (stat.isFile()) {
         filePaths.set(toAbsReal(projectRoot, fullPath), stat.mtime);
       }
@@ -169,17 +159,47 @@ function scanDirRecursive(
   } catch {}
 }
 
+// Finds nested `.knowledge` dirs without descending into them; used to keep sub-projects' files
+// out of the parent scan and to let query aggregate sub-knowledge before any top-level scan exists.
+export function discoverSubKnowledge(
+  location: string,
+  projectRoot: string,
+  excludeAbsPaths: string[] = []
+): SubKnowledgeRef[] {
+  const refs: SubKnowledgeRef[] = [];
+  const walk = (dir: string): void => {
+    let entries: string[];
+    try { entries = fs.readdirSync(dir); } catch { return; }
+    for (const entry of entries) {
+      if (shouldIgnore(entry) || entry === KNOWLEDGE_DIRECTORY) continue;
+      const fullPath = path.join(dir, entry);
+      let stat: fs.Stats;
+      try { stat = fs.statSync(fullPath); } catch { continue; }
+      if (!stat.isDirectory() || isPathExcluded(fullPath, excludeAbsPaths)) continue;
+      if (fs.existsSync(path.join(fullPath, KNOWLEDGE_DIRECTORY, SUMMARIES_FILE))) {
+        refs.push({
+          location: toRelative(fullPath, projectRoot),
+          knowledgeDir: toRelative(path.join(fullPath, KNOWLEDGE_DIRECTORY), projectRoot),
+        });
+        continue;
+      }
+      walk(fullPath);
+    }
+  };
+  walk(location);
+  return refs;
+}
+
 function getFilesFromFileSystem(
   location: string,
   summaries: SummariesData,
   projectRoot: string,
-  subKnowledge: SubKnowledgeRef[],
   excludeAbsPaths: string[] = []
 ): Files {
   const files: Files = { new: [], modified: [], deleted: [] };
   try {
     const fsFiles = new Map<string, Date>();
-    scanDirRecursive(location, fsFiles, subKnowledge, projectRoot, excludeAbsPaths);
+    scanDirRecursive(location, fsFiles, projectRoot, excludeAbsPaths);
 
     const summaryMap = getSummaryFileMap(summaries);
     if (summaryMap.size === 0) {
@@ -205,37 +225,12 @@ function getFilesFromFileSystem(
   }
 }
 
-function searchForKnowledgeDir(dir: string): string | undefined {
-  try {
-    for (const entry of fs.readdirSync(dir)) {
-      const fullPath = path.join(dir, entry);
-      try {
-        if (!fs.statSync(fullPath).isDirectory()) continue;
-      } catch { continue; }
-      if (entry === KNOWLEDGE_DIRECTORY && fs.existsSync(path.join(fullPath, SUMMARIES_FILE))) {
-        return toAbsReal(dir, fullPath);
-      }
-      const result = searchForKnowledgeDir(fullPath);
-      if (result) return result;
-    }
-  } catch {}
-  return undefined;
-}
-
 export function findKnowledgeDir(location: string): string | undefined {
-  if (isGitRepository()) {
-    try {
-      const gitRoot = getGitRoot();
-      const target = (KNOWLEDGE_DIRECTORY + '/' + SUMMARIES_FILE);
-      const found = execSync(`git ls-files --full-name -- "${location}"`, { encoding: 'utf-8' })
-        .trim().split('\n')
-        .find(f => f.replace(/\\/g, '/').endsWith(target));
-      if (found) {
-        return toAbsReal(gitRoot, path.dirname(path.resolve(gitRoot, found)));
-      }
-    } catch {}
+  const candidate = path.join(location, KNOWLEDGE_DIRECTORY);
+  if (fs.existsSync(path.join(candidate, SUMMARIES_FILE))) {
+    return toAbsReal(location, candidate);
   }
-  return searchForKnowledgeDir(location);
+  return undefined;
 }
 
 export async function scanProject(location: string, knowledgeDir: string, scanConfig: ScanConfig): Promise<ScanResult> {
@@ -257,20 +252,29 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
   const { includes: includeAbsPaths, excludes: excludeAbsPaths } = resolveConfigPaths(
     scanConfig.includePaths, scanConfig.excludePaths, resolvedLocation
   );
-  const allExcludePaths = [...excludeAbsPaths, path.resolve(knowledgeDir)];
+  const baseExcludePaths = [...excludeAbsPaths, path.resolve(knowledgeDir)];
+  const boundaryRefs = discoverSubKnowledge(resolvedLocation, projectRoot, baseExcludePaths);
+  const knownKnowledgeDirs = new Set(detectedSubKnowledge.map(r => r.knowledgeDir));
+  for (const ref of boundaryRefs) {
+    if (!knownKnowledgeDirs.has(ref.knowledgeDir)) {
+      detectedSubKnowledge.push(ref);
+      knownKnowledgeDirs.add(ref.knowledgeDir);
+    }
+  }
+  const allExcludePaths = [...baseExcludePaths, ...boundaryRefs.map(r => path.resolve(projectRoot, r.location))];
 
   if (isGitRepository()) {
     files = getFilesFromGit(resolvedLocation, summaries, projectRoot, allExcludePaths);
     for (const inclPath of includeAbsPaths) {
       if (fs.existsSync(inclPath)) {
-        const inclFiles = getFilesFromFileSystem(inclPath, summaries, projectRoot, detectedSubKnowledge, allExcludePaths);
+        const inclFiles = getFilesFromFileSystem(inclPath, summaries, projectRoot, allExcludePaths);
         files.new.push(...inclFiles.new);
         files.modified.push(...inclFiles.modified);
         files.deleted.push(...inclFiles.deleted);
       }
     }
   } else {
-    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, detectedSubKnowledge, allExcludePaths);
+    files = getFilesFromFileSystem(resolvedLocation, summaries, projectRoot, allExcludePaths);
   }
 
   files.deleted = [...new Set(files.deleted)];

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
-import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
+import { scanProject, findKnowledgeDir, discoverSubKnowledge } from './lib/project-scanner.js';
 import { mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { runSampling, writeBatchFiles } from './lib/sampler.js';
 import {
@@ -23,6 +23,7 @@ import {
   DEFAULT_SCAN_CONFIG,
   ROLE_VALUES,
   ScoredFileSummary,
+  SubKnowledgeRef,
   ToolContentResult,
   VERBOSITY_VALUES,
   VerbosityType,
@@ -388,10 +389,15 @@ server.registerTool(
       return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
-      const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
+      const foundKnowledgeDir = findKnowledgeDir(root);
+      const knowledgeDir = foundKnowledgeDir || path.join(root, KNOWLEDGE_DIRECTORY);
+      let subKnowledgeOverride: SubKnowledgeRef[] | undefined;
 
-      if (!fs.existsSync(knowledgeDir)) {
-        return createOutputMessage('No knowledge found. Run scan first.', true);
+      if (!foundKnowledgeDir) {
+        subKnowledgeOverride = discoverSubKnowledge(root, root);
+        if (subKnowledgeOverride.length === 0) {
+          return createOutputMessage('No knowledge found. Run scan first.', true);
+        }
       }
 
       const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
@@ -400,7 +406,7 @@ server.registerTool(
       const format = args.format || FORMAT_GROUPED;
       const verbosity: VerbosityType = args.verbosity ?? 'full';
 
-      const scoredFiles: ScoredFileSummary[] = query(knowledgeDir, keywords, scope, maxResults, args.role);
+      const scoredFiles: ScoredFileSummary[] = query(knowledgeDir, keywords, scope, maxResults, args.role, subKnowledgeOverride);
       const output: FluentOutput = generateQueryOutput(scoredFiles, format, verbosity);
       writeMcpLogLine('info', `query done — ${scoredFiles.length} result(s)`, 'query');
 
