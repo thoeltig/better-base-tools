@@ -5,6 +5,14 @@ All notable changes to the project-intel-tool documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)  
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## [Unreleased]
+
+## [1.4.8] - 2026-07-02
+
+### Fixed
+
+- Improve the subagent instructions to reduce unnecessary tool uses
+
 ## [1.4.7] - 2026-07-01
 
 ### Fixed
@@ -286,7 +294,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...HEAD
+[1.4.8]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...ProjectIntelTools_v1.4.8
 [1.4.7]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...ProjectIntelTools_v1.4.7
 [1.4.6]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
 [1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...ProjectIntelTools_v1.4.5
