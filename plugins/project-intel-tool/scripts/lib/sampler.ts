@@ -352,7 +352,7 @@ export function writeBatchFiles(batches: SamplingBatch[], knowledgeDir: string, 
     fs.mkdirSync(batchDir, { recursive: true });
   }
   const noopLog: SamplerLog = () => {};
-  const subagentAction = `Use ToolSearch with query 'submit_analysis' to load the 'submit_analysis' tool, then call it with your analysis results. Do not invoke any other skills or tools. When you are finished return only 'Done', no additional output or explanation needed.`;
+  const subagentAction = `Analyse the batch file content, then use the 'submit_analysis' tool with your analysis results. After using the tool responde with 'Done', no additional output or explanation needed. Do not invoke any other skills or tools. The batch file contains the full content of all listed files, do not read the listed files again.`;
   return batches.map((batch, i) => {
     const fp = path.join(batchDir, `batch-${i}.txt`);
     const prompt = buildPrompt(batch, projectRoot, subagentAction, noopLog) ?? '';
