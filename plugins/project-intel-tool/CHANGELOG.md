@@ -7,6 +7,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-07-02
+
+### Added
+
+- **Session start reports nested sub-knowledge stats** — `aggregateSubKnowledgeStats` in `project-scanner.ts` recursively walks each knowledge base's stored `subKnowledge` refs (mirroring `query`'s aggregation) and counts non-deleted files across the full nested tree. When a local knowledge base exists, its status message folds the nested total in: `648 file summaries available across 3 knowledge directories` (falls back to the plain `N file summaries available` when there is no nested knowledge). When no local knowledge base exists yet but nested sub-projects have one, the message becomes `Project knowledge not yet generated in current folder but 619 file summaries available across 2 sub knowledge directories` instead of the plain "not yet generated" — so the model knows there is data to query instead of assuming none exists.
+
+## [1.4.8] - 2026-07-02
+
+### Fixed
+
+- Improve the subagent instructions to reduce unnecessary tool uses
+
+## [1.4.7] - 2026-07-01
+
+### Fixed
+
+- **`findKnowledgeDir` no longer adopts a nested sub-project's `.knowledge` dir** — it previously searched recursively down through subfolders and used the first `.knowledge/summaries.json` found as if it were the current location's own knowledge base; it now only recognizes a knowledge dir at the exact scanned location, falling back to creating a fresh one there when none exists.
+- **Sub-project directories are now excluded from git-based scans** — `getFilesFromGit` had no notion of nested `.knowledge` dirs, so every file under a sub-project was proposed as "new" and merged into whichever knowledge base `findKnowledgeDir` happened to pick; `scanProject` now runs sub-knowledge discovery up front and excludes discovered sub-project directories from both the git-based and filesystem-based file listings.
+- **`query` aggregates the full nested sub-knowledge tree, even without a top-level summary** — aggregation previously required an existing top-level `.knowledge/summaries.json` that had already recorded sub-project refs, and only reached one level deep, so sitting above several independent (or deeply nested) sub-project knowledge bases returned nothing or missed grandchildren; `query` now walks each base's stored `subKnowledge` refs recursively to any depth (cycle-safe, with accumulated project-relative paths), and discovers the first level directly from the filesystem when no top-level base exists yet.
+
+### Added
+
+- `discoverSubKnowledge(location, projectRoot, excludeAbsPaths)` in `project-scanner.ts` — finds nested `.knowledge/summaries.json` directories without descending into them; used by `scanProject` (to exclude sub-project files from the parent scan) and by the `query` tool (to seed the first level of aggregation before a top-level scan exists; deeper levels are followed from each base's stored `subKnowledge` refs).
+
+## [1.4.6] - 2026-06-30
+
+### Changed
+
+- **`PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` default increased `50000` → `75000`** — reduces the number of sampling calls for medium-to-large projects; update `DEFAULT_SCAN_CONFIG.maxTokensPerBatch` accordingly.
+- **`PROJECT_INTEL_TOOL_MCP_PROGRESS` removed** — MCP progress notifications now always fire during sampling (safe no-op when the harness does not support the capability, matching `batch_file_tools` behaviour). The `PROJECT_INTEL_TOOL_MCP_PROGRESS` env var and `--mcp-progress` arg are no longer recognised.
+
 ## [1.4.5] - 2026-06-30
 
 ### Changed
@@ -269,7 +300,11 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...HEAD
+[1.4.9]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...ProjectIntelTools_v1.4.9
+[1.4.8]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...ProjectIntelTools_v1.4.8
+[1.4.7]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...ProjectIntelTools_v1.4.7
+[1.4.6]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.5...ProjectIntelTools_v1.4.6
 [1.4.5]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.4...ProjectIntelTools_v1.4.5
 [1.4.4]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.3...ProjectIntelTools_v1.4.4
 [1.4.3]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.2...ProjectIntelTools_v1.4.3

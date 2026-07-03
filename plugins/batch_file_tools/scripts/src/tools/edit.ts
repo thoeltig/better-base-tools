@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, toOpResult } from "../lib/edit-ops.js";
-import { isPathAllowed, safeRealpath } from "../lib/fs.js";
+import { isAccessible, safeRealpath } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
 import type {
@@ -29,13 +29,15 @@ export async function handleBatchEdit(
   input: EditInput,
   allowedDirectories: string[],
   dryRun: boolean,
+  excludedPaths: readonly string[] = [],
+  approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<EditOutput> {
   const results: FileResult[] = [];
   let abortRemaining = false;
   const rootStop = input.stopOnError ?? false;
 
-  const entries = await planEntries(input.files, allowedDirectories);
+  const entries = await planEntries(input.files, allowedDirectories, excludedPaths, approvedPaths);
 
   const total = onProgress
     ? entries.reduce((s, e) => s + (e.kind === "process" ? e.file.ops.length : e.result.ops.length), 0)
@@ -92,6 +94,8 @@ type PlannedEntry =
 async function planEntries(
   files: readonly EditFile[],
   allowedDirectories: readonly string[],
+  excludedPaths: readonly string[],
+  approvedPaths: readonly string[],
 ): Promise<PlannedEntry[]> {
   const entries: PlannedEntry[] = [];
   const byPath = new Map<string, EditFile>();
@@ -111,6 +115,10 @@ async function planEntries(
   for (const file of files) {
     file.path = await safeRealpath(resolve(file.path));
     if (!(await needsExpansion(file.path))) {
+      if (!isAccessible(file.path, allowedDirectories, excludedPaths, approvedPaths)) {
+        entries.push({ kind: "error", result: buildGlobError(file, "not_authorized", `Access denied: ${file.path}`) });
+        continue;
+      }
       merge(file);
       continue;
     }
@@ -151,7 +159,7 @@ async function planEntries(
       continue;
     }
 
-    const allowed = candidates.filter((p) => isPathAllowed(p, allowedDirectories));
+    const allowed = candidates.filter((p) => isAccessible(p, allowedDirectories, excludedPaths, approvedPaths));
     if (allowed.length === 0) {
       entries.push({
         kind: "error",

@@ -11,13 +11,14 @@ import {
   GroupedScoredFileSummary,
   HierarchicalGrouping,
   ScoredFileSummary,
+  SubKnowledgeRef,
   VerbosityType
 } from "../types.js";
 
-export function query(knowledgeDir: string, keywords: string[], scope: string | undefined, maxResults: number, role: FileRole | undefined): ScoredFileSummary[] {
+export function query(knowledgeDir: string, keywords: string[], scope: string | undefined, maxResults: number, role: FileRole | undefined, subKnowledgeOverride?: SubKnowledgeRef[]): ScoredFileSummary[] {
   const projectRoot = dirname(resolve(knowledgeDir));
-  const primarySummaries = getOrCreateSummaries(knowledgeDir, projectRoot);
   const scored: ScoredFileSummary[] = [];
+  const visited = new Set<string>();
   
   const scoreFiles = (summaries: ReturnType<typeof getOrCreateSummaries>, pathPrefix: string, summaryProjectRoot: string) => {
     summaries.files.forEach((summary, absPath) => {
@@ -34,16 +35,28 @@ export function query(knowledgeDir: string, keywords: string[], scope: string | 
     });
   };
 
-  scoreFiles(primarySummaries, '', projectRoot);
+  // Recursively aggregate a knowledge base and every nested sub-knowledge base it references.
+  // Refs come from each base's stored `subKnowledge` (collected at scan time), so no filesystem
+  // walk happens here; `refsOverride` seeds the first level when no top-level base exists yet.
+  const aggregate = (kDir: string, kProjectRoot: string, pathPrefix: string, refsOverride?: SubKnowledgeRef[]): void => {
+    const dirKey = resolve(kDir);
+    if (visited.has(dirKey)) return;
+    visited.add(dirKey);
 
-  for (const ref of primarySummaries.subKnowledge) {
-    const subDir = resolve(projectRoot, ref.knowledgeDir);
-    if (existsSync(subDir)) {
-      const subProjectRoot = dirname(resolve(subDir));
-      const subSummaries = getOrCreateSummaries(subDir, subProjectRoot);
-      scoreFiles(subSummaries, ref.location, subProjectRoot);
+    const summaries = getOrCreateSummaries(kDir, kProjectRoot);
+    scoreFiles(summaries, pathPrefix, kProjectRoot);
+
+    const refs = refsOverride ?? summaries.subKnowledge;
+    for (const ref of refs) {
+      const childDir = resolve(kProjectRoot, ref.knowledgeDir);
+      if (!existsSync(childDir)) continue;
+      const childProjectRoot = dirname(childDir);
+      const childPrefix = pathPrefix ? `${pathPrefix}/${ref.location}`.replace(/\/\//g, '/') : ref.location;
+      aggregate(childDir, childProjectRoot, childPrefix);
     }
-  }
+  };
+
+  aggregate(knowledgeDir, projectRoot, '', subKnowledgeOverride);
 
   scored.sort((a, b) => b.fileScore - a.fileScore);
   return scored.slice(0, maxResults);

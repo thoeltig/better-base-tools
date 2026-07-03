@@ -14,7 +14,12 @@ function shortenPath(p: string): string {
   return rel.startsWith("..") || isAbsolute(rel) ? p : rel;
 }
 
-export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<ReadRequest> = [], addUserAudience = false): ToolContentResult[] {
+export function formatReadContent(
+  result: ReadOutput,
+  requests: ReadonlyArray<ReadRequest> = [],
+  addUserAudience = false,
+  maxChars = 0,
+): ToolContentResult[] {
   const noMatchResults: ReadResult[] = [];
   const otherResults: ReadResult[] = [];
   for (const r of result.results) {
@@ -24,13 +29,133 @@ export function formatReadContent(result: ReadOutput, requests: ReadonlyArray<Re
       otherResults.push(r);
     }
   }
-  const toolResultOutput = otherResults.map(readResultToBlock);
-  if (noMatchResults.length > 0) {
-    const fileList = noMatchResults.map(r => `'${shortenPath(r.path)}'`).join('\n');
-    toolResultOutput.push(createToolOutputForAssistant(`<!-- No match(es) found -->\n${fileList}`));
+
+  const output: ToolContentResult[] = [];
+  const omitted: ReadResult[] = [];
+  let usedChars = 0;
+  let stopped = false;
+
+  for (const r of otherResults) {
+    if (stopped) {
+      omitted.push(r);
+      continue;
+    }
+    const block = readResultToBlock(r);
+    if (maxChars <= 0 || usedChars + block.text.length <= maxChars) {
+      output.push(block);
+      usedChars += block.text.length;
+      continue;
+    }
+    // Block exceeds the remaining budget: truncate line-oriented reads at a line
+    // boundary, emit a non-truncatable first block whole to guarantee progress,
+    // otherwise defer the whole file to the omitted list.
+    const truncated = truncateReadBlock(r, maxChars - usedChars);
+    if (truncated) {
+      output.push(truncated);
+      usedChars += truncated.text.length;
+    } else if (output.length === 0) {
+      output.push(block);
+      usedChars += block.text.length;
+    } else {
+      omitted.push(r);
+    }
+    stopped = true;
   }
-  if (addUserAudience) toolResultOutput.push(createToolOutputForUser(buildReadSummary(requests, result.results)));
-  return toolResultOutput;
+
+  if (noMatchResults.length > 0) {
+    const noMatchBlock = buildNoMatchBlock(noMatchResults);
+    if (!stopped && (maxChars <= 0 || usedChars + noMatchBlock.text.length <= maxChars)) {
+      output.push(noMatchBlock);
+      usedChars += noMatchBlock.text.length;
+    } else {
+      omitted.push(...noMatchResults);
+    }
+  }
+
+  if (omitted.length > 0) output.push(buildOmittedMarker(omitted.map(r => r.path)));
+  if (addUserAudience) output.push(createToolOutputForUser(buildReadSummary(requests, result.results)));
+  return output;
+}
+
+function buildNoMatchBlock(results: ReadonlyArray<ReadResult>): ToolContentResult {
+  const fileList = results.map(r => `'${shortenPath(r.path)}'`).join('\n');
+  return createToolOutputForAssistant(`<!-- No match(es) found -->\n${fileList}`);
+}
+
+function buildOmittedMarker(paths: ReadonlyArray<string>): ToolContentResult {
+  const list = paths.map(shortenPath).join(', ');
+  return {
+    type: 'text',
+    text: `<!-- Max output reached — could not return: ${list}. Re-request them separately. -->`,
+    annotations: { audience: ['assistant', 'user'], priority: 0 },
+  };
+}
+
+function truncationMarkerText(endLine: number, total: number): string {
+  return `<!-- Truncated at line ${endLine} of ${total} — max output reached; re-read from line ${endLine + 1} -->`;
+}
+
+function searchTruncationMarkerText(kept: number, total: number): string {
+  return `<!-- Truncated: showing first ${kept} of ${total} match block(s) — max output reached; refine the search or read the file directly -->`;
+}
+
+// How many leading units (lines or match blocks) fit into `budget` once the header
+// and truncation-marker overhead is reserved. Always keeps at least one unit so a
+// truncated block still carries a usable re-read anchor.
+function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, headerChars: number, markerChars: number): number {
+  const contentBudget = budget - headerChars - markerChars - 2; // 2 = "\n" after header + "\n" before marker
+  let kept = 0;
+  let contentChars = 0;
+  for (const unit of units) {
+    const cost = kept === 0 ? unit.length : unit.length + 1; // +1 for the joining "\n"
+    if (kept > 0 && contentChars + cost > contentBudget) break;
+    contentChars += cost;
+    kept++;
+  }
+  return kept;
+}
+
+function headerCharsOf(r: ReadResult): number {
+  return readResultToBlock(r).text.length - r.content.length - 1; // header + separating "\n"
+}
+
+// Truncate an over-budget read block at a unit boundary, rewriting its meta header
+// via readResultToBlock. Line reads truncate at line boundaries (header shows the
+// reduced range); search reads truncate at match-block boundaries. Returns null for
+// non-truncatable results (fileinfo/error/single-unit) or when nothing needs trimming.
+function truncateReadBlock(r: ReadResult, budget: number): ToolContentResult | null {
+  if (r.error || r.mode_applied === 'fileinfo' || r.content.length === 0) return null;
+  if (r.match_count !== undefined) return truncateSearchBlock(r, budget);
+  if (r.returned_lines > 0) return truncateLineBlock(r, budget);
+  return null;
+}
+
+function truncateLineBlock(r: ReadResult, budget: number): ToolContentResult | null {
+  const startLine = r.start_line ?? 1;
+  const bodyLines = (r.content.endsWith('\n') ? r.content.slice(0, -1) : r.content).split('\n');
+  const markerChars = truncationMarkerText(startLine + bodyLines.length - 1, r.lines).length;
+  const kept = countUnitsWithinBudget(bodyLines, budget, headerCharsOf(r), markerChars);
+  if (kept >= bodyLines.length) return null;
+
+  const endLine = startLine + kept - 1;
+  const block = readResultToBlock({ ...r, returned_lines: kept, content: bodyLines.slice(0, kept).join('\n') });
+  block.text += `\n${truncationMarkerText(endLine, r.lines)}`;
+  return block;
+}
+
+function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult | null {
+  // count>0 emits multi-line "<!-- Line M to N -->" blocks joined by "\n"; count=0
+  // emits one "lineNo\tcontent" match per line.
+  const blocks = r.content.startsWith('<!-- Line ')
+    ? r.content.split(/\n(?=<!-- Line )/)
+    : r.content.split('\n');
+  const markerChars = searchTruncationMarkerText(blocks.length, blocks.length).length;
+  const kept = countUnitsWithinBudget(blocks, budget, headerCharsOf(r), markerChars);
+  if (kept >= blocks.length) return null;
+
+  const block = readResultToBlock({ ...r, content: blocks.slice(0, kept).join('\n') });
+  block.text += `\n${searchTruncationMarkerText(kept, blocks.length)}`;
+  return block;
 }
 
 export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditFile> = [], addUserAudience = false, dryRun?: boolean): ToolContentResult[] {

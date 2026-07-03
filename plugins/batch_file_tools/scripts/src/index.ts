@@ -5,14 +5,13 @@ import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getAllowedDirectoriesFromArgs, getValidRootDirectories, isPathAllowed } from "./lib/fs.js";
+import { resolvePaths, resolveExcludePaths, getValidRootDirectories, isPathAllowed, isAccessible } from "./lib/fs.js";
 import { looksLikeGlob } from "./lib/glob.js";
 import { RootsListChangedNotificationSchema, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { PrimitiveSchemaDefinition, ServerRequest, ServerNotification, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 
 const args = process.argv.slice(2);
-const allowedDirectoriesFromArgs = await getAllowedDirectoriesFromArgs(args);
 let validRootDirectories: string[] = [];
 const sessionAllowedReadPaths: string[] = [];
 const sessionAllowedEditPaths: string[] = [];
@@ -26,6 +25,13 @@ const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 't
 const FILEINFO_ENABLED = parseConfigArg('read-enable-fileinfo', 'BATCH_TOOLS_READ_ENABLE_FILEINFO', 'false') === 'true';
 const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS_NORMALIZE_FORMATTING', 'true') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
+const INCLUDE_PATHS_RAW = parseConfigArg('include', 'BATCH_TOOLS_INCLUDE_PATHS', '').split(',').filter(Boolean);
+const EXCLUDE_PATHS_RAW = parseConfigArg('exclude', 'BATCH_TOOLS_EXCLUDE_PATHS', '').split(',').filter(Boolean);
+const _maxOutputTokensParsed = parseInt(parseConfigArg('max-output-tokens', 'BATCH_TOOLS_MAX_OUTPUT_TOKENS', '75000'), 10);
+const MAX_OUTPUT_TOKENS = isNaN(_maxOutputTokensParsed) ? 75000 : _maxOutputTokensParsed;
+const CHARS_PER_TOKEN_OUTPUT = parseFloat(parseConfigArg('chars-per-token', 'BATCH_TOOLS_CHARS_PER_TOKEN', '2.5')) || 2.5;
+const MAX_OUTPUT_CHARS = Math.floor(MAX_OUTPUT_TOKENS * CHARS_PER_TOKEN_OUTPUT);
+const allowedExtraPaths = await resolvePaths([...args.filter(a => isAbsolute(a) && !a.startsWith('--')), ...INCLUDE_PATHS_RAW]);
 
 function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -57,7 +63,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.2.5",
+    version: "1.2.6",
   },
   {
     capabilities: {
@@ -142,20 +148,24 @@ server.registerTool(
       const parsed = ReadInput.parse(param);
       writeMcpLogLine("info", `batch_read — ${parsed.requests.length} request(s)`, "batch_read");
       const allowedDirectories = getAllowedDirectoriesToUse("read");
+      const resolvedExcludePaths = await resolveExcludePaths(EXCLUDE_PATHS_RAW, [...validRootDirectories, ...allowedExtraPaths]);
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
         if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
         return { path: isAbsolute(r.path) ? r.path : resolve(r.path), detail: parts.join(", ") };
       });
-      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read");
+      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read", resolvedExcludePaths);
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchRead(parsed, effectiveAllowed, NORMALIZE_FORMATTING, (done, total) => reportProgress(extra, done, total));
+      const approvedPaths = [...new Set([...sessionAllowedReadPaths, ...sessionAllowed])];
+      const result = await handleBatchRead(parsed, effectiveAllowed, NORMALIZE_FORMATTING, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
-      const toolOutput: CallToolResult = { content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE) };
+      const toolOutput: CallToolResult = {
+        content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE, MAX_OUTPUT_CHARS),
+      };
       if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
       return toolOutput;
     } catch (err: unknown) {
@@ -187,15 +197,17 @@ server.registerTool(
       const totalOps = parsed.files.reduce((s, f) => s + f.ops.length, 0);
       writeMcpLogLine("info", `batch_edit — ${parsed.files.length} file(s), ${totalOps} op(s)`, "batch_edit");
       const allowedDirectories = getAllowedDirectoriesToUse("edit");
+      const resolvedExcludePaths = await resolveExcludePaths(EXCLUDE_PATHS_RAW, [...validRootDirectories, ...allowedExtraPaths]);
       const pathInfos = parsed.files.map(f => ({
         path: isAbsolute(f.path) ? f.path : resolve(f.path),
         detail: `ops: ${[...new Set(f.ops.map(o => o.type))].join(", ")}`,
       }));
-      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_edit", "edit");
+      const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_edit", "edit", resolvedExcludePaths);
       const effectiveAllowed = sessionAllowed.length > 0
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
-      const result = await handleBatchEdit(parsed, effectiveAllowed, DRY_RUN, (done, total) => reportProgress(extra, done, total));
+      const approvedPaths = [...new Set([...sessionAllowedEditPaths, ...sessionAllowed])];
+      const result = await handleBatchEdit(parsed, effectiveAllowed, DRY_RUN, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
       const okCount = result.results.filter(r => r.status === "ok").length;
       const errCount = result.results.filter(r => r.status === "error" || r.status === "partial").length;
       writeMcpLogLine("info", errCount > 0 ? `batch_edit done — ${okCount} ok, ${errCount} error/partial` : `batch_edit done — ${okCount} file(s)`, "batch_edit");
@@ -225,7 +237,8 @@ server.server.oninitialized = async () => {
 
   const parts: string[] = [];
   if (validRootDirectories.length > 0) parts.push(`roots=[${validRootDirectories.join(', ')}]`);
-  if (allowedDirectoriesFromArgs.length > 0) parts.push(`args=[${allowedDirectoriesFromArgs.join(', ')}]`);
+  if (allowedExtraPaths.length > 0) parts.push(`allowed=[${allowedExtraPaths.join(', ')}]`);
+  if (EXCLUDE_PATHS_RAW.length > 0) parts.push(`excluded=[${EXCLUDE_PATHS_RAW.join(', ')}]`);
   writeMcpLogLine("info", `Allowed directories — ${parts.join(' + ')}`, 'permissions');
 };
 
@@ -243,7 +256,7 @@ async function updateValidRootDirectories() {
 
 function getAllowedDirectoriesToUse(toolType: "read" | "edit"): string[] {
   const sessionPaths = toolType === "read" ? sessionAllowedReadPaths : sessionAllowedEditPaths;
-  return [...new Set([...validRootDirectories, ...allowedDirectoriesFromArgs, ...sessionPaths])];
+  return [...new Set([...validRootDirectories, ...allowedExtraPaths, ...sessionPaths])];
 }
 
 async function elicitPaths(
@@ -251,15 +264,16 @@ async function elicitPaths(
   allowedDirs: string[],
   toolName: string,
   toolType: "read" | "edit",
+  excludeDirs: string[],
 ): Promise<string[]> {
+  const sessionList = toolType === "read" ? sessionAllowedReadPaths : sessionAllowedEditPaths;
   const unauthorized = [...new Set(
     pathInfos
-      .filter(pi => isAbsolute(pi.path) && !looksLikeGlob(pi.path) && !isPathAllowed(pi.path, allowedDirs))
+      .filter(pi => isAbsolute(pi.path) && !looksLikeGlob(pi.path)
+        && !isAccessible(pi.path, allowedDirs, excludeDirs, sessionList))
       .map(pi => pi.path)
   )];
   if (unauthorized.length === 0 || !server.server.getClientCapabilities()?.elicitation) return [];
-
-  const sessionList = toolType === "read" ? sessionAllowedReadPaths : sessionAllowedEditPaths;
   const acceptedPaths: string[] = [];
 
   for (const p of unauthorized) {
@@ -284,9 +298,11 @@ async function elicitPaths(
       },
     };
 
-    const msg = detail
-      ? `${toolName} — ${p}  (${detail})`
-      : `${toolName} — ${p}`;
+      const excluded = excludeDirs.length > 0 && isPathAllowed(p, excludeDirs);
+      const base = detail
+        ? `${toolName} — ${p}  (${detail})`
+        : `${toolName} — ${p}`;
+      const msg = excluded ? `${base} — excluded path, approval required` : base;
     try {
       const r = await server.server.elicitInput({
         message: msg,

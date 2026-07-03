@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
-import { scanProject, findKnowledgeDir } from './lib/project-scanner.js';
+import { scanProject, findKnowledgeDir, discoverSubKnowledge } from './lib/project-scanner.js';
 import { mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { runSampling, writeBatchFiles } from './lib/sampler.js';
 import {
@@ -23,6 +23,7 @@ import {
   DEFAULT_SCAN_CONFIG,
   ROLE_VALUES,
   ScoredFileSummary,
+  SubKnowledgeRef,
   ToolContentResult,
   VERBOSITY_VALUES,
   VerbosityType,
@@ -38,7 +39,7 @@ import { parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.4.5' 
+    version: '1.4.9' 
   },
   { 
     capabilities: { 
@@ -57,7 +58,6 @@ let isScanning = false;
 // Enable only when the harness is known to support the respective MCP capability.
 const USE_MCP_SAMPLING = parseConfigArg('mcp-sampling', 'PROJECT_INTEL_TOOL_MCP_SAMPLING', 'false') === 'true';
 const USE_MCP_LOGGING = parseConfigArg('mcp-logging', 'PROJECT_INTEL_TOOL_MCP_LOGGING', 'false') === 'true';
-const USE_MCP_PROGRESS = parseConfigArg('mcp-progress', 'PROJECT_INTEL_TOOL_MCP_PROGRESS', 'false') === 'true';
 const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'PROJECT_INTEL_TOOL_MCP_ANNOTATIONS_USER_AUDIENCE', 'false') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'PROJECT_INTEL_TOOL_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const SCAN_META = parseConfigArgRecord('scan-meta', 'PROJECT_INTEL_TOOL_SCAN_META');
@@ -252,7 +252,7 @@ server.registerTool(
         }
         isScanning = true;
         const samplerLog = (level: LoggingLevel, msg: string,) => writeMcpLogLine(level, msg, 'sampler');
-        const onProgress = USE_MCP_PROGRESS ? (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg) : undefined;
+        const onProgress = (done: number, total: number, msg: string) => reportProgress(extra, done, total, msg);
         try {
           const batches = prepareAnalysisBatches(filesToScan, knowledgeDir, projectRoot, scanConfig);
           await runSampling(
@@ -389,10 +389,15 @@ server.registerTool(
       return createOutputMessage('No MCP roots available. Cannot determine project location.', true);
     }
     try {
-      const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
+      const foundKnowledgeDir = findKnowledgeDir(root);
+      const knowledgeDir = foundKnowledgeDir || path.join(root, KNOWLEDGE_DIRECTORY);
+      let subKnowledgeOverride: SubKnowledgeRef[] | undefined;
 
-      if (!fs.existsSync(knowledgeDir)) {
-        return createOutputMessage('No knowledge found. Run scan first.', true);
+      if (!foundKnowledgeDir) {
+        subKnowledgeOverride = discoverSubKnowledge(root, root);
+        if (subKnowledgeOverride.length === 0) {
+          return createOutputMessage('No knowledge found. Run scan first.', true);
+        }
       }
 
       const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
@@ -401,7 +406,7 @@ server.registerTool(
       const format = args.format || FORMAT_GROUPED;
       const verbosity: VerbosityType = args.verbosity ?? 'full';
 
-      const scoredFiles: ScoredFileSummary[] = query(knowledgeDir, keywords, scope, maxResults, args.role);
+      const scoredFiles: ScoredFileSummary[] = query(knowledgeDir, keywords, scope, maxResults, args.role, subKnowledgeOverride);
       const output: FluentOutput = generateQueryOutput(scoredFiles, format, verbosity);
       writeMcpLogLine('info', `query done — ${scoredFiles.length} result(s)`, 'query');
 

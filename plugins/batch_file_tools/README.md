@@ -266,6 +266,39 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
 | `BATCH_TOOLS_READ_ENABLE_FILEINFO` | `--read-enable-fileinfo` | `false` | Enable the `fileinfo` read mode. When disabled, `fileinfo` is absent from the schema and tool description entirely. Enable for workflows that need pre-read size checks or dependency mapping via `refs[]`. This mode is intended to complement [project-intel-tool](../project-intel-tool/README.md). To avoid model tool choice confusion, `fileinfo` is disabled by default. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
+| `BATCH_TOOLS_INCLUDE_PATHS` | `--include` | *(empty)* | Comma-separated paths added to the allow list. Accepts absolute, relative (resolved from the server cwd), and `~`-expanded paths; each is canonicalized (symlinks resolved). Grants access outside MCP roots but does **not** override `BATCH_TOOLS_EXCLUDE_PATHS`. |
+| `BATCH_TOOLS_EXCLUDE_PATHS` | `--exclude` | *(empty)* | Comma-separated files/folders placed behind an elicitation gate. Takes precedence over the allow list and `--include`: paths inside are **blocked** (returning `not_authorized`) until the user approves them via elicitation, even when inside an allowed root. Approving a folder lifts the gate for its whole subtree. Relative entries apply inside every allowed directory (MCP roots + `--include`); absolute/`~` entries match a fixed location. See [Path Access Control](#path-access-control). |
+| `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `--max-output-tokens` | `75000` | Maximum total formatted `batch_read` output in tokens. When the emitted content exceeds this limit, the overflowing read is truncated at a unit boundary — normal reads at a line boundary (header shows the reduced range, inline `<!-- Truncated at line N of M … -->` marker gives a re-read anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match block(s) … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable. |
+| `BATCH_TOOLS_CHARS_PER_TOKEN` | `--chars-per-token` | `2.5` | Char-to-token ratio used to convert `BATCH_TOOLS_MAX_OUTPUT_TOKENS` into a character budget. |
+
+## Path Access Control
+
+`batch_read` and `batch_edit` resolve every requested path to a canonical absolute path (symlinks resolved, `~` expanded, relatives resolved against the server's working directory) and then apply a two-layer allow/deny model on top of the standard MCP roots.
+
+**Allow list** — a path is allowed when it falls inside any of (all merged):
+1. MCP roots reported by the harness
+2. Positional startup arguments (absolute paths only)
+3. `BATCH_TOOLS_INCLUDE_PATHS` — extra directories granted without elicitation; useful for paths outside MCP roots
+
+**Deny list** (`BATCH_TOOLS_EXCLUDE_PATHS`) takes precedence over the allow list. A path inside an excluded file/folder is blocked **even when it sits inside an allowed root or an `--include` path** — allow/include entries never override an exclude. The only way to reach an excluded path is an explicit elicitation approval (see below); if the user declines, or the harness has no elicitation capability, the request returns `not_authorized` and the file is never read from disk.
+
+The decision, per path, is:
+
+1. **Excluded?** → allowed only if the user has approved this exact file (or a covering folder) via elicitation; otherwise prompt / deny.
+2. **Not excluded?** → allowed if inside the allow list or a session approval; otherwise prompt / deny.
+
+Excludes are re-resolved on every request against the current allow list. A **relative** exclude (e.g. `.env`, `secrets`) is denied inside *every* MCP root and `--include` path, so a repository-shared config (checked in with the project) protects the same files for every teammate regardless of where the server is launched. **Absolute** and `~` excludes match at their fixed location. Each excluded path is compared by its canonical, symlink-resolved form, and a not-yet-created excluded file is also blocked from being created — an exclude that never exists simply protects nothing until the path appears. (One caveat: an exclude naming a path that does not exist yet is held as a literal path; if that exact path is later turned into a symlink, access could slip through. Point excludes at real files/folders to avoid this.)
+
+Access states:
+
+| State | How acquired | Scope |
+|---|---|---|
+| Configured allow | `BATCH_TOOLS_INCLUDE_PATHS` / positional args | Server lifetime |
+| Configured deny | `BATCH_TOOLS_EXCLUDE_PATHS` | Server lifetime; pierced only by elicitation approval |
+| One-time allow | Elicitation accepted, no session option selected | Current request only |
+| Session allow | Elicitation accepted + "Add file/folder to session" | Rest of session; a folder approval covers all of its descendants |
+
+Read and edit approvals are tracked separately: approving a path for reading does not grant permission to edit it.
 
 ## Requirements
 

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-29T23:40:16.367Z",
+  "generated": "2026-07-02T01:24:47.871Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "sizeChars": 498,
@@ -68,17 +68,19 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/batch_file_tools/.claude-plugin/plugin.json",
-      "summary": "Plugin registration metadata for batch_file_tools MCP server v1.2.4. Declares package info, keywords (tokens, efficiency, file-reading, context-optimization), homepage/repository in better-base-tools. No dependencies.",
+      "summary": "Plugin metadata for batch_file_tools MCP server v1.2.6. Defines plugin name, description (batch file I/O cutting tool calls/context by 50-60%), version, author, repository links, and MIT license. Entry point for plugin registration.",
       "technologies": [
         "MCP",
-        "JSON"
+        "JSON",
+        "plugin"
       ],
       "searchTags": [
-        "plugin registry",
-        "manifest",
-        "metadata"
+        "batch-file-tools",
+        "plugin registration",
+        "metadata",
+        "v1.2.6"
       ],
-      "lastUpdated": "2026-06-07T22:12:35.485Z",
+      "lastUpdated": "2026-07-02T01:24:37.507Z",
       "sizeCharsWhenAnalysed": 549,
       "lineCountWhenAnalysed": 14,
       "role": "configuration"
@@ -106,30 +108,29 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/batch_file_tools/CHANGELOG.md": {
-      "sizeChars": 24446,
-      "lineCount": 327,
+      "sizeChars": 26397,
+      "lineCount": 337,
       "deleted": false,
       "path": "plugins/batch_file_tools/CHANGELOG.md",
-      "summary": "Complete version history from v0.1.0 to v1.2.5 documenting batch_file_tools evolution. Tracks features (streaming reporter, Node test runner, regex search), breaking changes (mode names, tool consolidation), bug fixes (edit op counting, duplicate elicitation), and config additions (logging, annotations, metadata). Records progressive refinement of tool APIs, output formats, and error recovery mechanisms across 30+ releases spanning optimizations for token efficiency and MCP protocol compliance.",
+      "summary": "Complete version history of batch_file_tools from v0.1.0 (2026-04-22) to v1.2.6 (2026-07-02) using semantic versioning and common-changelog format. Documents features (batch_read/batch_edit modes, path access control, output token budgeting, error handling), breaking changes (mode renames, tool removals), and bug fixes. Key additions: fileinfo mode, searchTerm regex support, path exclusion/inclusion lists, normalized output formatting, elicitation gates, and structured error reporting.",
       "technologies": [
-        "Semantic Versioning",
-        "Common Changelog",
-        "TypeScript",
-        "Node.js",
-        "Zod"
+        "changelog",
+        "semantic versioning",
+        "batch_file_tools"
       ],
       "searchTags": [
-        "changelog",
         "version history",
-        "release notes",
-        "batch_file_tools",
-        "MCP",
-        "vitest migration",
-        "test runner"
+        "features",
+        "breaking changes",
+        "bug fixes",
+        "release notes"
       ],
-      "lastUpdated": "2026-06-29T23:40:05.155Z",
-      "sizeCharsWhenAnalysed": 24446,
-      "lineCountWhenAnalysed": 327,
+      "lastUpdated": "2026-07-02T01:24:37.508Z",
+      "sizeCharsWhenAnalysed": 26397,
+      "lineCountWhenAnalysed": 337,
+      "refs": [
+        "README.md"
+      ],
       "role": "documentation"
     },
     "plugins/batch_file_tools/hooks/hooks.json": {
@@ -199,33 +200,30 @@
       "lineCountWhenAnalysed": 21
     },
     "plugins/batch_file_tools/README.md": {
-      "sizeChars": 21726,
-      "lineCount": 300,
+      "sizeChars": 26139,
+      "lineCount": 333,
       "deleted": false,
       "refs": [
         "LICENSE"
       ],
       "path": "plugins/batch_file_tools/README.md",
-      "summary": "Comprehensive documentation for batch_file_tools MCP plugin covering why batching (−58% tool calls, −46% context), three read modes (compact/verbatim/fileinfo), glob/search features, error recovery with nearest_anchor hints, 8 env/cli config options, and performance benchmarks across real projects showing 2.4× more I/O work per call vs native tools. Includes tool schemas, use cases, and session analysis methodology measuring token savings, read patterns, edit strategies, and context window impact.",
+      "summary": "Comprehensive documentation for batch_file_tools plugin covering motivation (43-67% fewer I/O calls, 46% context reduction vs native tools), detailed session metrics across three projects showing read/edit bundling gains, tool reference (batch_read modes: compact/verbatim/fileinfo; batch_edit ops: replace/replace_all/insert_at_line/replace_range/write), configuration options (16 env vars/args for logging, formatting, access control, token budgets), path access control model (allow/deny lists with elicitation), and requirements (Node.js v22+, MCP SDK, zod).",
       "technologies": [
         "MCP",
-        "Claude Code",
-        "TypeScript",
         "Node.js",
-        "Zod"
+        "TypeScript",
+        "documentation"
       ],
       "searchTags": [
-        "batch_read",
-        "batch_edit",
-        "file I/O",
-        "performance",
-        "context optimization",
-        "anchor matching",
-        "indentation normalization"
+        "batch-file-tools",
+        "performance metrics",
+        "configuration",
+        "path access control",
+        "token efficiency"
       ],
-      "lastUpdated": "2026-06-29T23:40:05.155Z",
-      "sizeCharsWhenAnalysed": 21726,
-      "lineCountWhenAnalysed": 300,
+      "lastUpdated": "2026-07-02T01:24:37.508Z",
+      "sizeCharsWhenAnalysed": 26139,
+      "lineCountWhenAnalysed": 333,
       "role": "documentation"
     },
     "plugins/batch_file_tools/scripts/package-lock.json": {
@@ -254,25 +252,29 @@
       "lineCount": 42,
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/package.json",
-      "summary": "Package manifest for batch-tools-mcp-server MCP tool. Defines executable for batch file read/edit operations with fewer round-trips. Dependencies: @modelcontextprotocol/sdk 1.29.0, zod 4.4.3. DevDeps: TypeScript, esbuild, tsx for testing. Includes build, test, typecheck, and inspector scripts. Requires Node 22+.",
+      "summary": "npm package manifest for batch-tools-mcp-server v1.2.6. Defines executable entry point (bin: batch-tools-mcp-server), build/test scripts (tsc, node:test with custom reporter), TypeScript+tsx tooling, production dependencies (MCP SDK 1.29.0, zod 4.4.3), and Node.js >=22 engine requirement. Distributes compiled dist/ directory.",
       "technologies": [
         "npm",
         "TypeScript",
-        "MCP"
+        "Node.js",
+        "esbuild",
+        "tsx"
       ],
       "searchTags": [
-        "batch-file-operations",
-        "mcp-server",
-        "metadata"
+        "package.json",
+        "build",
+        "dependencies",
+        "executable",
+        "MCP server"
       ],
-      "lastUpdated": "2026-06-29T23:39:58.412Z",
+      "lastUpdated": "2026-07-02T01:24:37.508Z",
       "sizeCharsWhenAnalysed": 1196,
       "lineCountWhenAnalysed": 42,
       "role": "configuration"
     },
     "plugins/batch_file_tools/scripts/src/index.ts": {
-      "sizeChars": 19074,
-      "lineCount": 353,
+      "sizeChars": 20692,
+      "lineCount": 369,
       "deleted": false,
       "imports": {
         "@modelcontextprotocol/sdk": [
@@ -308,32 +310,34 @@
           "handleBatchEdit"
         ],
         "plugins/batch_file_tools/scripts/src/lib/fs.ts": [
-          "getAllowedDirectoriesFromArgs",
+          "resolvePaths",
+          "resolveExcludePaths",
           "getValidRootDirectories",
-          "isPathAllowed"
+          "isPathAllowed",
+          "isAccessible"
         ],
         "plugins/batch_file_tools/scripts/src/lib/glob.ts": [
           "looksLikeGlob"
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/index.ts",
-      "summary": "MCP server entry point orchestrating batch read/edit tools. Registers tools with schema, handles authorization via allowed directories, manages progress reporting, elicits permissions for unauthorized paths, and routes requests to core handlers. Supports config via CLI args and env vars.",
+      "summary": "MCP server entry point orchestrating batch_read and batch_edit tools. Manages server initialization, tool registration with descriptions/schemas, request handling with progress reporting, authorization via elicitPaths, configuration parsing from args/env vars, and root directory management.",
       "technologies": [
         "TypeScript",
-        "MCP SDK",
+        "MCP Protocol",
         "Node.js"
       ],
       "searchTags": [
-        "server",
-        "authorization",
-        "permissions",
+        "MCP server",
         "tool registration",
-        "stdio transport"
+        "authorization",
+        "configuration",
+        "elicit"
       ],
-      "lastUpdated": "2026-06-29T23:40:09.543Z",
-      "sizeCharsWhenAnalysed": 19074,
-      "lineCountWhenAnalysed": 353,
-      "role": "implementation"
+      "lastUpdated": "2026-07-02T01:24:40.366Z",
+      "sizeCharsWhenAnalysed": 20692,
+      "lineCountWhenAnalysed": 369,
+      "role": "executable"
     },
     "plugins/batch_file_tools/scripts/src/lib/buffer.ts": {
       "sizeChars": 1907,
@@ -432,8 +436,8 @@
       "lineCountWhenAnalysed": 344
     },
     "plugins/batch_file_tools/scripts/src/lib/envelope.ts": {
-      "sizeChars": 7933,
-      "lineCount": 195,
+      "sizeChars": 13135,
+      "lineCount": 320,
       "deleted": false,
       "exports": [
         "formatReadContent",
@@ -455,22 +459,23 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/lib/envelope.ts",
-      "summary": "Formatting layer that converts ReadOutput and EditOutput into tool-consumable ToolContentResult blocks with annotations. Handles different output modes (assistant/user audience), error display with anchors and match hints, and concise summarization of operation outcomes.",
+      "summary": "Formatting layer converting ReadOutput and EditOutput into tool-consumable ToolContentResult blocks. Handles output modes (assistant/user audience), error display with anchors and match hints, content truncation with budget management, and concise summarization of read/edit operation outcomes.",
       "technologies": [
         "TypeScript",
-        "output formatting",
-        "result annotation"
+        "MCP Protocol",
+        "Text Formatting"
       ],
       "searchTags": [
-        "result formatting",
-        "tool output",
-        "error hints",
-        "summary generation"
+        "output formatting",
+        "ToolContentResult",
+        "truncation",
+        "annotations",
+        "envelope"
       ],
-      "lastUpdated": "2026-06-07T01:06:40.796Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 7933,
-      "lineCountWhenAnalysed": 195
+      "lastUpdated": "2026-07-02T01:24:40.365Z",
+      "sizeCharsWhenAnalysed": 13135,
+      "lineCountWhenAnalysed": 320,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts": {
       "sizeChars": 1168,
@@ -501,13 +506,14 @@
       "lineCountWhenAnalysed": 35
     },
     "plugins/batch_file_tools/scripts/src/lib/fs.ts": {
-      "sizeChars": 5725,
-      "lineCount": 185,
+      "sizeChars": 7004,
+      "lineCount": 219,
       "deleted": false,
       "exports": [
         "ReadFileResult",
         "ReadFileError",
-        "isPathAllowed"
+        "isPathAllowed",
+        "isAccessible"
       ],
       "imports": {
         "node:fs": [
@@ -538,22 +544,23 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/lib/fs.ts",
-      "summary": "File system access layer with authorization guards. Provides safe read/write path resolution with permission checking against allowed directories. Handles symlink resolution, home directory expansion, and detailed error mapping for common fs errors (ENOENT, EISDIR, EACCES).",
+      "summary": "File system access layer providing safe read/write with authorization guards. Implements path resolution (symlink, home directory expansion), permission checking against allowed directories, detailed error mapping (ENOENT, EISDIR, EACCES), and support for excluded/approved paths.",
       "technologies": [
         "TypeScript",
         "Node.js fs/promises",
-        "path authorization"
+        "Path Resolution"
       ],
       "searchTags": [
-        "file permissions",
-        "path validation",
-        "safety guards",
-        "home expansion"
+        "authorization",
+        "file system",
+        "path resolution",
+        "security",
+        "symlinks"
       ],
-      "lastUpdated": "2026-06-07T01:06:40.797Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 5725,
-      "lineCountWhenAnalysed": 185
+      "lastUpdated": "2026-07-02T01:24:40.365Z",
+      "sizeCharsWhenAnalysed": 7004,
+      "lineCountWhenAnalysed": 219,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/glob.ts": {
       "sizeChars": 1395,
@@ -697,8 +704,8 @@
       "lineCountWhenAnalysed": 208
     },
     "plugins/batch_file_tools/scripts/src/tools/edit.ts": {
-      "sizeChars": 12204,
-      "lineCount": 412,
+      "sizeChars": 12658,
+      "lineCount": 420,
       "deleted": false,
       "imports": {
         "node:path": [
@@ -714,7 +721,7 @@
           "toOpResult"
         ],
         "plugins/batch_file_tools/scripts/src/lib/fs.ts": [
-          "isPathAllowed",
+          "isAccessible",
           "safeRealpath"
         ],
         "plugins/batch_file_tools/scripts/src/lib/glob.ts": [
@@ -736,30 +743,27 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/tools/edit.ts",
-      "summary": "Core implementation of handleBatchEdit orchestrating multi-file, multi-op edits. Manages file planning with glob expansion, authorization checks, two-phase execution (line-addressed ops sorted DESC, content ops in order), overlap detection, buffer loading/writing. Handles stopOnError at root/file/op levels with proper cascading. Generates detailed error results with near-match hints and line-addressable anchors.",
+      "summary": "Core orchestrator for multi-file, multi-operation edits. Manages file planning with glob expansion, authorization checks, two-phase execution (line-addressed ops descending, content ops in order), overlap detection, buffer loading/writing, and detailed error reporting with near-match hints.",
       "technologies": [
         "TypeScript",
-        "Node.js fs/promises",
-        "Buffer management"
+        "File Editing",
+        "Batch Processing"
       ],
       "searchTags": [
-        "handleBatchEdit",
-        "phase1_phase2",
-        "overlap_detection",
-        "glob_expansion",
-        "stopOnError",
-        "buffer_management",
-        "error_handling",
-        "authorization"
+        "edit operations",
+        "batch edit",
+        "overlap detection",
+        "glob expansion",
+        "stopOnError"
       ],
-      "lastUpdated": "2026-06-07T01:06:35.791Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 12204,
-      "lineCountWhenAnalysed": 412
+      "lastUpdated": "2026-07-02T01:24:40.365Z",
+      "sizeCharsWhenAnalysed": 12658,
+      "lineCountWhenAnalysed": 420,
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/tools/read.ts": {
-      "sizeChars": 12677,
-      "lineCount": 343,
+      "sizeChars": 13351,
+      "lineCount": 350,
       "deleted": false,
       "imports": {
         "node:fs": [
@@ -776,6 +780,7 @@
         "plugins/batch_file_tools/scripts/src/lib/fs.ts": [
           "readFileUtf8",
           "isPathAllowed",
+          "isAccessible",
           "realpathOfNearestExisting",
           "safeRealpath",
           "ReadFileResult",
@@ -801,23 +806,23 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/tools/read.ts",
-      "summary": "Core batch read handler. Implements request deduplication (fileinfo/search/range merging), glob expansion, file caching, search with regex+context-block merging (SEARCH_MERGE_GAP=3), fileinfo metadata (size/lines/lastChanged/refs extraction), multiple read modes with formatting normalization, offset/count pagination.",
+      "summary": "Core batch read handler implementing request deduplication, glob expansion, file caching, regex-based search with context-block merging, fileinfo metadata extraction (size/lines/refs), and multiple read modes with formatting normalization and offset/count pagination.",
       "technologies": [
         "TypeScript",
-        "Node.js",
-        "file system API",
-        "glob"
+        "Batch Processing",
+        "Regex Search"
       ],
       "searchTags": [
         "batch read",
-        "deduplication",
         "search",
+        "deduplication",
         "fileinfo",
-        "glob"
+        "glob",
+        "caching"
       ],
-      "lastUpdated": "2026-06-07T22:12:35.486Z",
-      "sizeCharsWhenAnalysed": 12677,
-      "lineCountWhenAnalysed": 343,
+      "lastUpdated": "2026-07-02T01:24:40.366Z",
+      "sizeCharsWhenAnalysed": 13351,
+      "lineCountWhenAnalysed": 350,
       "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/types.ts": {
@@ -872,12 +877,13 @@
       "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/tests/auth.test.ts": {
-      "sizeChars": 4214,
-      "lineCount": 114,
+      "sizeChars": 10665,
+      "lineCount": 293,
       "deleted": false,
       "imports": {
         "node:fs": [
           "access",
+          "mkdir",
           "mkdtemp",
           "realpath",
           "rm",
@@ -903,24 +909,29 @@
         ],
         "plugins/batch_file_tools/scripts/src/tools/read.ts": [
           "handleBatchRead"
+        ],
+        "plugins/batch_file_tools/scripts/src/lib/fs.ts": [
+          "isAccessible",
+          "resolveExcludePaths"
         ]
       },
       "path": "plugins/batch_file_tools/scripts/tests/auth.test.ts",
-      "summary": "Authorization tests for read and edit handlers. Validates rejection of reads/writes outside allowed directories, proper handling of non-existent files, and enforcement of empty allowlist. Uses temp directories to isolate test state.",
+      "summary": "Security-focused test suite covering file access authorization. Tests read/edit rejection for unauthorized paths, empty allowedDirectories handling, nested directory access, excluded path blocking, approval overrides, and isAccessible predicate validation.",
       "technologies": [
         "TypeScript",
         "Node.js test",
-        "fs/promises"
+        "Security Testing"
       ],
       "searchTags": [
+        "authorization tests",
         "security",
-        "authorization",
-        "permissions",
+        "excluded paths",
+        "approved paths",
         "access control"
       ],
-      "lastUpdated": "2026-06-29T23:40:09.544Z",
-      "sizeCharsWhenAnalysed": 4214,
-      "lineCountWhenAnalysed": 114,
+      "lastUpdated": "2026-07-02T01:24:40.366Z",
+      "sizeCharsWhenAnalysed": 10665,
+      "lineCountWhenAnalysed": 293,
       "role": "test"
     },
     "plugins/batch_file_tools/scripts/tests/edit-control.test.ts": {
@@ -1078,8 +1089,8 @@
       "role": "test"
     },
     "plugins/batch_file_tools/scripts/tests/envelope.test.ts": {
-      "sizeChars": 11776,
-      "lineCount": 342,
+      "sizeChars": 16992,
+      "lineCount": 454,
       "deleted": false,
       "exports": [
         "EditFile",
@@ -1099,20 +1110,22 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/tests/envelope.test.ts",
-      "summary": "Tests output formatting for read and edit results. Validates ToolContentResult structure with meta-headers, search match annotation, match_count/match_lines, error hints with nearest_anchor, and consolidated no-match blocks.",
+      "summary": "Comprehensive test suite for formatReadContent and formatEditContent functions. Covers output formatting, truncation with budget constraints, error handling, search result formatting (inline vs context blocks), and mixed result consolidation.",
       "technologies": [
         "TypeScript",
-        "Node.js test"
+        "Node.js test",
+        "Unit Testing"
       ],
       "searchTags": [
-        "output formatting",
-        "annotations",
-        "error messages",
-        "user interface"
+        "envelope tests",
+        "formatReadContent",
+        "formatEditContent",
+        "truncation",
+        "output formatting"
       ],
-      "lastUpdated": "2026-06-29T23:40:09.545Z",
-      "sizeCharsWhenAnalysed": 11776,
-      "lineCountWhenAnalysed": 342,
+      "lastUpdated": "2026-07-02T01:24:40.366Z",
+      "sizeCharsWhenAnalysed": 16992,
+      "lineCountWhenAnalysed": 454,
       "role": "test"
     },
     "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts": {
@@ -1472,17 +1485,17 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/project-intel-tool/.claude-plugin/plugin.json",
-      "summary": "MCP plugin metadata descriptor for project-intel-tool v1.4.5. Defines plugin name, version, author (Thore Höltig), homepage, repository, MIT license, and keywords covering tokens, efficiency, file-reading, context-optimization, reconnaissance, and semantic search. No external dependencies.",
+      "summary": "Plugin manifest for project-intel-tool. Defines metadata (name, description, version 1.4.8), author info, repository reference, keywords (tokens, efficiency, context optimization), and declares no external dependencies.",
       "technologies": [
         "JSON",
-        "plugin-metadata"
+        "Plugin Configuration"
       ],
       "searchTags": [
-        "plugin descriptor",
-        "manifest",
-        "mcp-plugin"
+        "plugin manifest",
+        "project-intel-tool",
+        "metadata"
       ],
-      "lastUpdated": "2026-06-29T23:40:16.365Z",
+      "lastUpdated": "2026-07-02T01:24:40.366Z",
       "sizeCharsWhenAnalysed": 741,
       "lineCountWhenAnalysed": 14,
       "role": "configuration"
@@ -1508,23 +1521,27 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/project-intel-tool/CHANGELOG.md": {
-      "sizeChars": 19866,
-      "lineCount": 290,
+      "sizeChars": 22791,
+      "lineCount": 318,
       "deleted": false,
       "path": "plugins/project-intel-tool/CHANGELOG.md",
-      "summary": "Comprehensive changelog tracking project-intel-tool evolution from v0.1.0 (May 2026) through v1.4.5 (June 2026). Documents C# export/method parsing, import cross-referencing, batching strategy changes, query output refinements, node:test migration, Zod schema overhaul, semantic weighting, and MCP server architecture. Semantic versioning format.",
+      "summary": "Semantic versioning changelog documenting 23 releases from v0.1.0 to v1.4.8 with detailed categorization of fixes, additions, and changes. Tracks major features like subagent batching, MCP sampling mode, semantic scoring improvements, C# import resolution, role-based filtering, and nested sub-project knowledge discovery. Version 1.4.8 (2026-07-02) focuses on reducing subagent instruction overhead; earlier versions cover structural data freshness, batch clustering optimizations, and knowledge base aggregation.",
       "technologies": [
-        "Markdown",
-        "semantic-versioning"
+        "Semantic Versioning",
+        "MCP",
+        "TypeScript"
       ],
       "searchTags": [
-        "release notes",
+        "releases",
         "version history",
-        "breaking changes"
+        "fixes",
+        "features",
+        "improvements",
+        "API changes"
       ],
-      "lastUpdated": "2026-06-29T23:40:16.365Z",
-      "sizeCharsWhenAnalysed": 19866,
-      "lineCountWhenAnalysed": 290,
+      "lastUpdated": "2026-07-02T01:24:36.030Z",
+      "sizeCharsWhenAnalysed": 22791,
+      "lineCountWhenAnalysed": 318,
       "role": "documentation"
     },
     "plugins/project-intel-tool/hooks/hooks.json": {
@@ -1596,40 +1613,37 @@
       "lineCountWhenAnalysed": 21
     },
     "plugins/project-intel-tool/README.md": {
-      "sizeChars": 25706,
-      "lineCount": 346,
+      "sizeChars": 26387,
+      "lineCount": 347,
       "deleted": false,
       "refs": [
         "LICENSE"
       ],
       "path": "plugins/project-intel-tool/README.md",
-      "summary": "Extensive documentation for project-intel-tool, an MCP server maintaining persistent structural and semantic project maps. Explains dual-layer data model (always-current structural data vs AI-analyzed semantic data), session start automation, two scan modes (subagent default, MCP sampling optional), query scoring algorithm, dependency tracking, staleness detection, and best practices. Compares token costs vs exploration agents (−577k subagent tokens), covers configuration options, monorepo support, and design decisions for why persistence, incremental scanning, and cohesion-based batch clustering were chosen.",
+      "summary": "Comprehensive guide for project-intel-tool, an MCP server that maintains persistent structural and semantic file maps to provide models with overview context without reading files. Details token savings vs exploration agents, two-layer data model (structural always-current, semantic AI-analyzed), session start behavior, three MCP tools (query with semantic scoring, scan with cohesion-based batching, submit_analysis), two scan modes (subagent default, sampling optional), configuration via environment variables, and design rationale. Covers staleness signals, comparison to alternatives, best practices, and troubleshooting.",
       "technologies": [
-        "MCP",
-        "Claude Code",
-        "TypeScript",
         "Node.js",
-        "Zod",
-        "Git"
+        "MCP",
+        "TypeScript",
+        "Zod"
       ],
       "searchTags": [
-        "project knowledge",
-        "query",
-        "scan",
-        "semantic analysis",
-        "file mapping",
-        "imports/exports",
-        "monorepo support",
-        "knowledge persistence"
+        "knowledge base",
+        "query tool",
+        "semantic scoring",
+        "batching",
+        "session start",
+        "configuration",
+        "best practices"
       ],
-      "lastUpdated": "2026-06-29T23:40:05.155Z",
-      "sizeCharsWhenAnalysed": 25706,
-      "lineCountWhenAnalysed": 346,
+      "lastUpdated": "2026-07-02T01:24:36.031Z",
+      "sizeCharsWhenAnalysed": 26387,
+      "lineCountWhenAnalysed": 347,
       "role": "documentation"
     },
     "plugins/project-intel-tool/scripts/index.ts": {
-      "sizeChars": 19050,
-      "lineCount": 448,
+      "sizeChars": 19205,
+      "lineCount": 453,
       "deleted": false,
       "imports": {
         "@modelcontextprotocol/sdk": [
@@ -1656,7 +1670,8 @@
         ],
         "plugins/project-intel-tool/scripts/lib/project-scanner.ts": [
           "scanProject",
-          "findKnowledgeDir"
+          "findKnowledgeDir",
+          "discoverSubKnowledge"
         ],
         "plugins/project-intel-tool/scripts/lib/summary-merger.ts": [
           "mergeSamplingResults",
@@ -1678,6 +1693,7 @@
           "DEFAULT_SCAN_CONFIG",
           "ROLE_VALUES",
           "ScoredFileSummary",
+          "SubKnowledgeRef",
           "ToolContentResult",
           "VERBOSITY_VALUES",
           "VerbosityType",
@@ -1704,20 +1720,27 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/index.ts",
-      "summary": "MCP server entry point orchestrating scan, query, and submit_analysis tools. Manages project roots, file locking, sampling workflows, and dual-mode operation (MCP sampling vs. subagent batch fallback). Handles shutdown signals, logging, and tool registration with metadata support. Central hub integrating all scanner, query-engine, sampler, and lock modules.",
+      "summary": "MCP server entry point orchestrating scan, query, and submit_analysis tools. Manages project roots via MCP capabilities, coordinates scanning with optional MCP sampling or subagent batch output, implements query aggregation across knowledge bases, and serializes concurrent analysis submissions. Handles logging, progress reporting, and graceful shutdown.",
       "technologies": [
         "TypeScript",
         "MCP",
-        "Node.js"
+        "Node.js",
+        "CLI"
       ],
       "searchTags": [
-        "server entry",
-        "tool orchestration",
-        "mcp-server"
+        "server",
+        "MCP tool",
+        "orchestration",
+        "scan",
+        "query",
+        "submit",
+        "roots",
+        "shutdown",
+        "logging"
       ],
-      "lastUpdated": "2026-06-29T23:40:16.365Z",
-      "sizeCharsWhenAnalysed": 19050,
-      "lineCountWhenAnalysed": 448,
+      "lastUpdated": "2026-07-02T01:24:47.869Z",
+      "sizeCharsWhenAnalysed": 19205,
+      "lineCountWhenAnalysed": 453,
       "role": "executable"
     },
     "plugins/project-intel-tool/scripts/lib/analysis-batch.ts": {
@@ -1990,12 +2013,64 @@
       "sizeCharsWhenAnalysed": 1657,
       "lineCountWhenAnalysed": 49
     },
+    "plugins/project-intel-tool/scripts/lib/project-scanner.test.ts": {
+      "sizeChars": 2405,
+      "lineCount": 65,
+      "deleted": false,
+      "imports": {
+        "node:test": [
+          "describe",
+          "it",
+          "beforeEach",
+          "afterEach"
+        ],
+        "plugins/project-intel-tool/scripts/tests/helpers/expect.ts": [
+          "expect"
+        ],
+        "fs": [
+          "fs"
+        ],
+        "os": [
+          "os"
+        ],
+        "path": [
+          "path"
+        ],
+        "plugins/project-intel-tool/scripts/lib/project-scanner.ts": [
+          "discoverSubKnowledge"
+        ],
+        "plugins/project-intel-tool/scripts/types.ts": [
+          "KNOWLEDGE_DIRECTORY",
+          "SUMMARIES_FILE"
+        ]
+      },
+      "path": "plugins/project-intel-tool/scripts/lib/project-scanner.test.ts",
+      "summary": "Unit tests for discoverSubKnowledge using temporary directories. Verifies sub-knowledge boundary detection without descending into discovered dirs, relative path normalization, ignored directory handling, exclude path filtering, and empty discovery scenarios.",
+      "technologies": [
+        "TypeScript",
+        "Node.js test",
+        "Vitest compatibility"
+      ],
+      "searchTags": [
+        "test",
+        "discovery",
+        "sub-knowledge",
+        "boundaries",
+        "filtering",
+        "temporary directories"
+      ],
+      "lastUpdated": "2026-07-02T01:24:47.870Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 2405,
+      "lineCountWhenAnalysed": 65
+    },
     "plugins/project-intel-tool/scripts/lib/project-scanner.ts": {
-      "sizeChars": 13633,
-      "lineCount": 360,
+      "sizeChars": 14033,
+      "lineCount": 364,
       "deleted": false,
       "exports": [
         "ScanResult",
+        "discoverSubKnowledge",
         "findKnowledgeDir"
       ],
       "imports": {
@@ -2028,22 +2103,80 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
-      "summary": "Orchestrates project scanning by detecting file changes via git or filesystem mtime. Integrates file-map, summary-merger, and lock modules. Manages deleted files, sub-knowledge refs, and incremental analysis updates with delta metrics.",
+      "summary": "Orchestrates project file scanning with git-aware change detection. Detects new/modified/deleted files via git or filesystem mtime, discovers nested .knowledge directories, builds dependency metadata via file-map, and manages incremental summary updates with delta metrics. Handles include/exclude paths and sub-project boundaries.",
       "technologies": [
         "TypeScript",
-        "git integration",
-        "file system"
+        "Node.js",
+        "Git",
+        "File I/O"
       ],
       "searchTags": [
-        "git status",
-        "file change detection",
-        "incremental scanning",
-        "sub-knowledge"
+        "scanner",
+        "git",
+        "mtime",
+        "change detection",
+        "sub-knowledge",
+        "file discovery",
+        "incremental",
+        "dependency tracking"
       ],
-      "lastUpdated": "2026-06-07T01:06:37.699Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 13633,
-      "lineCountWhenAnalysed": 360
+      "lastUpdated": "2026-07-02T01:24:47.866Z",
+      "sizeCharsWhenAnalysed": 14033,
+      "lineCountWhenAnalysed": 364,
+      "role": "implementation"
+    },
+    "plugins/project-intel-tool/scripts/lib/query-aggregation.test.ts": {
+      "sizeChars": 3999,
+      "lineCount": 93,
+      "deleted": false,
+      "imports": {
+        "node:test": [
+          "describe",
+          "it",
+          "beforeEach",
+          "afterEach"
+        ],
+        "plugins/project-intel-tool/scripts/tests/helpers/expect.ts": [
+          "expect"
+        ],
+        "fs": [
+          "fs"
+        ],
+        "os": [
+          "os"
+        ],
+        "path": [
+          "path"
+        ],
+        "plugins/project-intel-tool/scripts/lib/query-engine.ts": [
+          "query"
+        ],
+        "plugins/project-intel-tool/scripts/types.ts": [
+          "KNOWLEDGE_DIRECTORY",
+          "SUMMARIES_FILE",
+          "SubKnowledgeRef"
+        ]
+      },
+      "path": "plugins/project-intel-tool/scripts/lib/query-aggregation.test.ts",
+      "summary": "Integration tests for query() recursive sub-knowledge aggregation. Tests nested aggregation via stored refs, aggregation from overrides when no top-level exists, cycle prevention, scope filtering across knowledge levels, and correct path prefixing in results.",
+      "technologies": [
+        "TypeScript",
+        "Node.js test",
+        "Vitest compatibility"
+      ],
+      "searchTags": [
+        "test",
+        "integration",
+        "aggregation",
+        "recursion",
+        "sub-knowledge",
+        "scope",
+        "cycle detection"
+      ],
+      "lastUpdated": "2026-07-02T01:24:47.871Z",
+      "role": "test",
+      "sizeCharsWhenAnalysed": 3999,
+      "lineCountWhenAnalysed": 93
     },
     "plugins/project-intel-tool/scripts/lib/query-engine.test.ts": {
       "sizeChars": 11943,
@@ -2083,8 +2216,8 @@
       "role": "test"
     },
     "plugins/project-intel-tool/scripts/lib/query-engine.ts": {
-      "sizeChars": 8104,
-      "lineCount": 179,
+      "sizeChars": 8861,
+      "lineCount": 192,
       "deleted": false,
       "exports": [
         "query",
@@ -2115,27 +2248,32 @@
           "GroupedScoredFileSummary",
           "HierarchicalGrouping",
           "ScoredFileSummary",
+          "SubKnowledgeRef",
           "VerbosityType"
         ]
       },
       "path": "plugins/project-intel-tool/scripts/lib/query-engine.ts",
-      "summary": "Implements full-text search scoring across file summaries with semantic weighting. Supports grouped/flat output formats with multiple verbosity levels. Calculates confidence scores based on summary, keywords, exports, imports, and technologies.",
+      "summary": "Implements full-text search and ranking across file summaries with recursive sub-knowledge aggregation. Calculates confidence scores based on path, summary, exports, imports, technologies, and role. Supports grouped/flat output formats with multiple verbosity levels and semantic weighting based on file change delta.",
       "technologies": [
         "TypeScript",
-        "search algorithms",
-        "ranking"
+        "Search",
+        "Aggregation",
+        "Scoring"
       ],
       "searchTags": [
         "query",
         "search",
+        "ranking",
+        "aggregation",
         "scoring",
         "output formatting",
-        "verbosity"
+        "knowledge base",
+        "recursive"
       ],
-      "lastUpdated": "2026-06-07T01:06:37.699Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 8104,
-      "lineCountWhenAnalysed": 179
+      "lastUpdated": "2026-07-02T01:24:47.867Z",
+      "sizeCharsWhenAnalysed": 8861,
+      "lineCountWhenAnalysed": 192,
+      "role": "implementation"
     },
     "plugins/project-intel-tool/scripts/lib/sampler.test.ts": {
       "sizeChars": 6839,
@@ -2179,7 +2317,7 @@
       "role": "test"
     },
     "plugins/project-intel-tool/scripts/lib/sampler.ts": {
-      "sizeChars": 13507,
+      "sizeChars": 13649,
       "lineCount": 362,
       "deleted": false,
       "exports": [
@@ -2218,24 +2356,28 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/lib/sampler.ts",
-      "summary": "Batches files for AI analysis using token-budget-aware batching with topological sorting of dependencies. Builds context from already-analyzed files and manages sampling prompts. Integrates with MCP sampling/createMessage endpoint.",
+      "summary": "Batches files for AI analysis using token-budget-aware batching with topological and dependency sorting. Builds intra-scan dependency graphs, packs components into batches respecting token limits, and manages sampling via MCP protocol or subagent workflow. Integrates with file-map and generates prompts with context from previously analyzed files.",
       "technologies": [
         "TypeScript",
+        "Topological Sort",
+        "Token Management",
         "MCP",
-        "token budgeting",
-        "dependency resolution"
+        "Batch Processing"
       ],
       "searchTags": [
         "batching",
         "sampling",
-        "AI analysis",
-        "token budget",
+        "tokens",
+        "dependency graph",
+        "topological sort",
+        "MCP",
+        "subagent",
         "context building"
       ],
-      "lastUpdated": "2026-06-07T01:06:37.700Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 13507,
-      "lineCountWhenAnalysed": 362
+      "lastUpdated": "2026-07-02T01:24:47.868Z",
+      "sizeCharsWhenAnalysed": 13649,
+      "lineCountWhenAnalysed": 362,
+      "role": "implementation"
     },
     "plugins/project-intel-tool/scripts/lib/summary-merger.test.ts": {
       "sizeChars": 11945,
@@ -2364,20 +2506,21 @@
       "lineCount": 50,
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/package.json",
-      "summary": "Package metadata for project-intel-mcp-server v1.4.5 - an MCP server for lightweight code reconnaissance. Main purpose: query files before exploration to avoid blind context pollution. Entry point is dist/index.js. Includes build/test scripts, dependencies on MCP SDK and Zod, dev toolchain (TypeScript, esbuild, tsx). Node >=22 required.",
+      "summary": "Package manifest for project-intel-mcp-server v1.4.8. Defines build, test, and inspect scripts; requires Node.js >= v22. Production dependencies: @modelcontextprotocol/sdk 1.29.0, zod 4.4.3. Dev dependencies include TypeScript, esbuild, and tsx for ES modules. Binary entry point is dist/index.js. Licensed MIT. Authored by Thore Höltig.",
       "technologies": [
+        "Node.js",
         "npm",
-        "MCP",
         "TypeScript",
-        "Node.js"
+        "MCP"
       ],
       "searchTags": [
-        "mcp-server",
-        "build-config",
-        "reconnaissance",
-        "knowledge-system"
+        "dependencies",
+        "build config",
+        "scripts",
+        "version",
+        "node version"
       ],
-      "lastUpdated": "2026-06-29T23:40:04.057Z",
+      "lastUpdated": "2026-07-02T01:24:36.031Z",
       "sizeCharsWhenAnalysed": 1552,
       "lineCountWhenAnalysed": 50,
       "role": "configuration"
@@ -2555,23 +2698,24 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/types.ts",
-      "summary": "Zod-validated type definitions and constants for the entire project-intel system. Defines FileSummary, SummariesData, SamplingBatch, output formats, and configuration schema. Central contract for all modules.",
+      "summary": "Zod-validated type definitions and constants for the project-intel system. Defines FileSummary, SummariesData, SamplingBatch, output formats, configuration schema, and MCP tool contracts. Central type contract for all modules with constants for directories, file names, format/role/verbosity enums, and token budgets.",
       "technologies": [
         "TypeScript",
         "Zod",
-        "JSON Schema"
+        "MCP"
       ],
       "searchTags": [
-        "types",
         "schema",
         "constants",
-        "interfaces",
-        "validation"
+        "enums",
+        "types",
+        "contracts",
+        "configuration"
       ],
-      "lastUpdated": "2026-06-07T01:06:37.695Z",
-      "role": "configuration",
+      "lastUpdated": "2026-07-02T01:24:47.865Z",
       "sizeCharsWhenAnalysed": 5308,
-      "lineCountWhenAnalysed": 181
+      "lineCountWhenAnalysed": 181,
+      "role": "configuration"
     },
     "README.md": {
       "sizeChars": 6040,

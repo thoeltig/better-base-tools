@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-07-02
+
+### Added
+
+- **`BATCH_TOOLS_INCLUDE_PATHS` / `--include`** — comma-separated paths merged into the allow list (canonicalized: symlinks resolved, relatives resolved from the server cwd, `~` expanded). Files within are accessible without elicitation, extending access beyond MCP roots. Does not override `--exclude`.
+- **`BATCH_TOOLS_EXCLUDE_PATHS` / `--exclude`** — comma-separated files/folders placed behind an elicitation gate that takes precedence over the allow list and `--include`. Blocked (returns `not_authorized`, never read from disk) until the user approves via elicitation — one-time (current request) or per session; a folder approval covers its whole subtree. Relative entries apply inside every allowed directory (MCP roots + `--include`) so repo-shared configs work for the whole team; absolute/`~` entries match a fixed location. Anchored to the nearest existing parent, so not-yet-created files are still blocked from creation. See [Path Access Control](./README.md#path-access-control) in the README.
+- **`BATCH_TOOLS_MAX_OUTPUT_TOKENS` / `--max-output-tokens`** — default `75000`; caps total formatted `batch_read` output in tokens (measured on the emitted text, not raw file size). When output exceeds the budget the overflowing read is truncated at a unit boundary — line reads at a line boundary (header shows the reduced range plus a `<!-- Truncated at line N of M … re-read from line N+1 -->` anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match block(s) … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable.
+- **`BATCH_TOOLS_CHARS_PER_TOKEN` / `--chars-per-token`** — default `2.5`; char-to-token ratio used to convert the token budget into a character limit.
+
 ## [1.2.5] - 2026-06-15
 
 ### Added
@@ -299,7 +308,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...HEAD
+[1.2.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...BatchFileTools_v1.2.6
 [1.2.5]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...BatchFileTools_v1.2.5
 [1.2.4]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...BatchFileTools_v1.2.4
 [1.2.3]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.2...BatchFileTools_v1.2.3
