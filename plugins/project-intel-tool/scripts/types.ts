@@ -14,7 +14,7 @@ export const ROLE_VALUES = ['implementation', 'executable', 'helperScript', 'tes
 export type FileRole = typeof ROLE_VALUES[number];
 export const QUERY_RESULT_MAX: number = 25;
 export const SAMPLING_DELAY_MS: number = 1500;
-export const SAMPLING_TOKEN_BUDGET: number = 50_000;
+export const SAMPLING_TOKEN_BUDGET: number = 75_000;
 export const ENV_INCLUDE_PATHS = 'PROJECT_INTEL_TOOL_INCLUDE_PATHS';
 export const ENV_EXCLUDE_PATHS = 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS';
 

@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { readFileUtf8, isPathAllowed, realpathOfNearestExisting, safeRealpath } from "../lib/fs.js";
+import { readFileUtf8, isPathAllowed, isAccessible, realpathOfNearestExisting, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
@@ -32,16 +32,18 @@ export async function handleBatchRead(
   input: ReadInput,
   allowedDirectories: string[],
   normalizeFormatting: boolean,
+  excludedPaths: readonly string[] = [],
+  approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
-  const expanded = await expandReadRequests(input.requests, allowedDirectories);
+  const expanded = await expandReadRequests(input.requests, allowedDirectories, excludedPaths, approvedPaths);
   const plan = deduplicateEntries(expanded);
-  const fileCache = await buildFileCache(plan, allowedDirectories);
+  const fileCache = await buildFileCache(plan, allowedDirectories, excludedPaths, approvedPaths);
   const total = plan.length;
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, normalizeFormatting);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, normalizeFormatting, excludedPaths, approvedPaths);
       await onProgress?.(++done, total);
       return result;
     })
@@ -51,10 +53,10 @@ export async function handleBatchRead(
 
 type FileCache = Map<string, ReadFileResult | ReadFileError>;
 
-async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[]): Promise<FileCache> {
+async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[], excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<FileCache> {
   const paths = new Set<string>();
   for (const entry of plan) {
-    if (entry.kind === "ok") paths.add(entry.req.path);
+    if (entry.kind === "ok" && isAccessible(entry.req.path, allowedDirectories, excludedPaths, approvedPaths)) paths.add(entry.req.path);
   }
   const cache: FileCache = new Map();
   await Promise.all(
@@ -156,6 +158,8 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
 async function expandReadRequests(
   requests: readonly ReadRequest[],
   allowedDirs: readonly string[],
+  excludedPaths: readonly string[],
+  approvedPaths: readonly string[],
 ): Promise<PlanEntry[]> {
   const entries: PlanEntry[] = [];
 
@@ -181,7 +185,7 @@ async function expandReadRequests(
       continue;
     }
 
-    const allowed = candidates.filter(p => isPathAllowed(p, allowedDirs));
+    const allowed = candidates.filter(p => isAccessible(p, allowedDirs, excludedPaths, approvedPaths));
     if (allowed.length === 0) {
       entries.push({ kind: "err", result: errResult(req, "not_authorized", "no matched files are within allowed directories") });
       continue;
@@ -207,7 +211,10 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, normalizeFormatting: boolean): Promise<ReadResult> {
+async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, normalizeFormatting: boolean, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+  if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
+    return errResult(req, 'not_authorized', `Access denied: ${req.path}`);
+  }
   // fileinfo / fileinfo_refs: stat without full content processing
   if (req.mode === "fileinfo") {
     if (!isAbsolute(req.path)) req.path = resolve(req.path);

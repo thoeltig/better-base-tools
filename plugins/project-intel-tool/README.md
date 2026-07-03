@@ -72,7 +72,7 @@ You should always use the 'query' MCP tool to explore the project because it wil
 File map and structural information are always up to date, descriptions might need a reevaluation after file changes to check if the content still matches the summaries: 65 file summaries available, 10 file(s) changed, 1 file(s) without AI analysis
 ```
 
-**Status fields:** `N file summaries available` counts files with structural data in the knowledge base. `N file(s) changed` counts files where git or mtime shows changes since last scan. Structural data is already updated for these files, but semantic fields (summary, role, technologies) may be stale. `N file(s) without AI analysis` counts files that have structural data only, with semantic fields not yet populated.
+**Status fields:** `N file summaries available` counts files with structural data in the knowledge base. `N file(s) changed` counts files where git or mtime shows changes since last scan. Structural data is already updated for these files, but semantic fields (summary, role, technologies) may be stale. `N file(s) without AI analysis` counts files that have structural data only, with semantic fields not yet populated. When nested sub-project `.knowledge/` bases exist anywhere below the current directory (counted recursively), the file count folds them in and reports the directory count, e.g. `648 file summaries available across 3 knowledge directories`. If the current directory has no knowledge base of its own yet but nested sub-projects do, the "not yet generated" message reports the nested total instead, e.g. `Project knowledge not yet generated in current folder but 619 file summaries available across 2 sub knowledge directories` — so the model knows there is data to `query` even though the local status looks empty.
 
 If the session start hook fails, for example because the MCP server is not correctly registered or the build is missing, the hook outputs: `Knowledge check failed — Could not check project knowledge status. Most likely an issue with the MCP server.`
 
@@ -176,7 +176,7 @@ Each batch file contains the compact content of the files to analyse, the summar
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
-When MCP sampling is enabled, scan runs analysis via the MCP sampling protocol and blocks until complete. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the final result — `"Scan complete. Analysed N file(s) in M batch(es)."` — and its context is not polluted by the analysis work. When `PROJECT_INTEL_TOOL_MCP_PROGRESS=true`, one `notifications/progress` notification is sent per completed batch for harnesses that surface progress to the user.
+When MCP sampling is enabled, scan runs analysis via the MCP sampling protocol and blocks until complete. A smaller, faster model (e.g. Haiku) is invoked per batch without any interaction from the main model. The main model sees only the final result — `"Scan complete. Analysed N file(s) in M batch(es)."` — and its context is not polluted by the analysis work. Progress notifications (`notifications/progress`) are sent per completed batch for harnesses that surface them to the user.
 
 This mode requires the harness to support MCP sampling. The `submit_analysis` tool is **not** registered in this mode.
 
@@ -201,8 +201,8 @@ This mode requires the harness to support MCP sampling. The `submit_analysis` to
 }
 ```
 
-The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `imports` is a map of source path or package name to a list of imported names (e.g. `{"zod": ["z"], "src/lib/types.ts": ["SamplingBatch"]}`) for TypeScript/JavaScript; C# namespace keys map to empty arrays. `refs` captures intra-project file path mentions without named bindings: side-effect imports, dynamic `import()`, `require()` calls, and path mentions in markdown or text files. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
-Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across all sub-project knowledge bases.
+The top four fields (`sizeChars`, `lineCount`, `exports`, `imports`) are always populated by session start. `imports` is a map of source path or package name to a list of imported names (e.g. `{"zod": ["z"], "src/lib/types.ts": ["SamplingBatch"]}`) for TypeScript/JavaScript; C# `using` directives resolve to file-path imports with named bindings where a match is found; unresolved namespace entries remain as namespace keys with empty arrays. `refs` captures intra-project file path mentions without named bindings: side-effect imports, dynamic `import()`, `require()` calls, and path mentions in markdown or text files. The semantic fields (`summary`, `role`, `technologies`) require scan. `analysisDelta` appears only when the file has been modified since its last semantic analysis. Internal fields (`sizeCharsWhenAnalysed`, `lineCountWhenAnalysed`, `searchTags`) are stored in the knowledge base but excluded from query output.
+Knowledge is stored at `.knowledge/summaries.json`. For monorepos or projects with sub-projects that have their own `.knowledge/` directories, query automatically aggregates across the entire nested tree of sub-project knowledge bases — recursing to any depth by following each base's recorded sub-knowledge refs. This works even before a top-level knowledge base has been scanned, since the first level of nested `.knowledge/` directories is discovered directly. Scanning from a location above such sub-projects creates its own top-level knowledge base and excludes the sub-projects' files entirely; scan inside a sub-project directory to update its knowledge base.
 
 ---
 
@@ -252,8 +252,7 @@ All settings are configurable as environment variables or CLI arguments (`--name
 |---|---|---|---|
 | `PROJECT_INTEL_TOOL_MCP_SAMPLING` | `--mcp-sampling` | Enable MCP sampling mode | `false` |
 | `PROJECT_INTEL_TOOL_MCP_LOGGING` | `--mcp-logging` | Enable MCP logging protocol (stderr fallback otherwise) | `false` |
-| `PROJECT_INTEL_TOOL_MCP_PROGRESS` | `--mcp-progress` | Enable MCP progress notifications during scan; sends one `notifications/progress` per completed batch | `false` |
-| `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `50000` |
+| `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` | `--max-batch-tokens` | Max tokens per analysis batch | `75000` |
 | `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` | `--chars-per-token` | Char-to-token ratio for budget estimation | `2.5` |
 | `PROJECT_INTEL_TOOL_INCLUDE_PATHS` | `--include` | Comma-separated extra paths to include in scan | |
 | `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` | `--exclude` | Comma-separated paths to exclude from scan | |
@@ -262,6 +261,8 @@ All settings are configurable as environment variables or CLI arguments (`--name
 | `PROJECT_INTEL_TOOL_SCAN_META` | `--scan-meta` | JSON object merged into the `_meta` field of the `scan` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000}`. | `{}` |
 | `PROJECT_INTEL_TOOL_QUERY_META` | `--query-meta` | JSON object merged into the `_meta` field of the `query` tool registration. Replaces the previously hardcoded `anthropic/maxResultSizeChars` and `anthropic/alwaysLoad` defaults. | `{}` |
 | `PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META` | `--submit-analysis-meta` | JSON object merged into the `_meta` field of the `submit_analysis` tool registration. Same format as `PROJECT_INTEL_TOOL_QUERY_META`. | `{}` |
+
+> **Note:** `PROJECT_INTEL_TOOL_INCLUDE_PATHS` / `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` control which files are **scanned** into the knowledge base (scan-time filtering). This is distinct from `batch_file_tools`' `BATCH_TOOLS_INCLUDE_PATHS` / `BATCH_TOOLS_EXCLUDE_PATHS`, which gate file reads and writes via an access-control elicitation flow — see [batch_file_tools Path Access Control](../batch_file_tools/README.md#path-access-control).
 
 ---
 
