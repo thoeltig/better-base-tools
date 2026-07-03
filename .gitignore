@@ -1,6 +1,8 @@
 .claude/
 Claude_Temp_Files/
 
+.knowledge/
+
 node_modules/
 dist/
 *.log
