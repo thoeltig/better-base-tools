@@ -23,7 +23,7 @@ async function fixture(name: string, content: string): Promise<string> {
 }
 
 async function read(input: ReadInput) {
-  return handleBatchRead(input, [workDir], true);
+  return handleBatchRead(input, [workDir]);
 }
 
 describe("handleBatchRead", () => {
@@ -265,7 +265,7 @@ describe("handleBatchRead", () => {
     expect(paths).toContain(b);
   });
 
-  it("search: verbatim_numbered uses absolute file line numbers in match blocks", async () => {
+  it("search: match blocks use absolute file line numbers", async () => {
     const p = await fixture("search-numbered.ts", "line1\nline2\nline3\nTARGET\nline5\nline6\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });
     const r = out.results[0]!;

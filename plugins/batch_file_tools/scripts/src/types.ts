@@ -31,7 +31,7 @@ export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute or relative file path (relative resolves from the working directory), a directory (expands to its immediate children), or a glob pattern (`*` matches within one path segment, `**` recurses across segments — e.g. `proj/**/*.ts`)"),
     mode: ReadMode
-      .describe("'compact' (DEFAULT) — cheapest read; collapses lines and strips indent/whitespace runs, yet still a valid replace/replace_all anchor because batch_edit falls back to whitespace-normalized matching. 'verbatim' — every line preserved with indentation normalized; use when compact's stripping would break the anchor."),
+      .describe("'compact' (DEFAULT) — cheapest read; collapses lines and strips indent/whitespace runs, yet still a valid replace/replace_all anchor because batch_edit falls back to whitespace-normalized matching. 'verbatim' — the file's exact bytes, indentation and line endings included."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (ignored for search)"),
     count: z.number().int().min(1).optional()

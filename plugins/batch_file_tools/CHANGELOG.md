@@ -16,6 +16,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - **`fileinfo` read mode** — removed entirely along with `BATCH_TOOLS_READ_ENABLE_FILEINFO` / `--read-enable-fileinfo`. The mode was opt-in and unused in practice; pre-read sizing and dependency mapping are better served by a `searchTerm` read across a glob or by [project-intel-tool](../project-intel-tool/README.md). `ReadMode` is now `compact | verbatim`.
 - **`lib/extract-refs.ts`** — the `refs[]` extractor existed only to populate `fileinfo` output.
+- **Indentation normalization on read** — removed along with `BATCH_TOOLS_NORMALIZE_FORMATTING` / `--normalize-formatting`. `verbatim` now returns a file's exact bytes, which makes it a dependable anchor and removes the reason to shell out to `cat` for the true file state. Imposing one indent style belongs to the project's formatter (Prettier, Black, rustfmt, EditorConfig), not to a read tool silently rewriting what it returns. `compact` is unchanged — collapsing whitespace is the whole point of that mode, and it never went through the normalizer.
 
 ### Changed
 
@@ -27,7 +28,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - **`batch_edit` description referenced a `verbatim_numbered` read mode** — that mode existed in an earlier version of this schema (`ReadMode` is `compact | verbatim`); both occurrences pointed the model at an unusable read/op pairing.
 - **`replace` vs `replace_all` semantics were undocumented** — neither the tool description nor the op schemas stated that `replace` requires a unique anchor (multiple matches return `ambiguous`) while `replace_all` takes every occurrence in every matched file; the model could only learn it from a failed op. Both `old` field descriptions now say so.
-- **`mode` field described `verbatim` as "exact content"** — `verbatim` normalizes indentation by default (`BATCH_TOOLS_NORMALIZE_FORMATTING=true`), so it is line-preserving, not byte-exact.
 
 ## [1.2.6] - 2026-07-02
 

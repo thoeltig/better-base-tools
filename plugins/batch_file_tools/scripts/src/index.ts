@@ -22,7 +22,6 @@ const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOT
 const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
 const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
 const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
-const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS_NORMALIZE_FORMATTING', 'true') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const INCLUDE_PATHS_RAW = parseConfigArg('include', 'BATCH_TOOLS_INCLUDE_PATHS', '').split(',').filter(Boolean);
 const EXCLUDE_PATHS_RAW = parseConfigArg('exclude', 'BATCH_TOOLS_EXCLUDE_PATHS', '').split(',').filter(Boolean);
@@ -155,7 +154,7 @@ server.registerTool(
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
       const approvedPaths = [...new Set([...sessionAllowedReadPaths, ...sessionAllowed])];
-      const result = await handleBatchRead(parsed, effectiveAllowed, NORMALIZE_FORMATTING, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
+      const result = await handleBatchRead(parsed, effectiveAllowed, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");

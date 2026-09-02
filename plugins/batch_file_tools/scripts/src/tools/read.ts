@@ -12,7 +12,6 @@ type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadR
 export async function handleBatchRead(
   input: ReadInput,
   allowedDirectories: string[],
-  normalizeFormatting: boolean,
   excludedPaths: readonly string[] = [],
   approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
@@ -24,7 +23,7 @@ export async function handleBatchRead(
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, normalizeFormatting, excludedPaths, approvedPaths);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, excludedPaths, approvedPaths);
       await onProgress?.(++done, total);
       return result;
     })
@@ -187,7 +186,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, normalizeFormatting: boolean, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
   if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
     return errResult(req, 'not_authorized', `Access denied: ${req.path}`);
   }
@@ -231,7 +230,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     const blocks: string[] = [];
     if (ctx === 0) {
       for (const idx of matchIdxs) {
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1, normalizeFormatting });
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1 });
         blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
         returnedLines += 1;
       }
@@ -251,7 +250,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       }
       for (const { s, e, matchLines } of intervals) {
         returnedLines += e - s + 1;
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
         const matchSuffix = matchLines.length === 1 ? `, match at line ${matchLines[0]! + 1}` : "";
         blocks.push(`<!-- Line ${s + 1} to ${e + 1}${matchSuffix} -->\n${formatted.content}`);
       }
@@ -275,7 +274,6 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     path: req.path,
     ...(req.offset !== undefined ? { offset: req.offset } : {}),
     ...(req.count !== undefined ? { limit: req.count } : {}),
-    normalizeFormatting,
   });
 
   return {

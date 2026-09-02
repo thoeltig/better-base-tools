@@ -33,7 +33,7 @@ describe("auth — read", () => {
   it("rejects reads of files outside allowed directories", async () => {
     const p = join(outsideDir, "secret.txt");
     await writeFile(p, "secret\n");
-  const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim_numbered" }] }, [allowedDir], true);
+  const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim" }] }, [allowedDir]);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
     expect(out.results[0]!.content).toBe("");
   });
@@ -41,19 +41,19 @@ describe("auth — read", () => {
   it("rejects everything when allowedDirectories is empty", async () => {
     const p = join(allowedDir, "anything.txt");
     await writeFile(p, "x\n");
-  const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim_numbered" }] }, [], true);
+  const out = await handleBatchRead({ requests: [{ path: p, mode: "verbatim" }] }, []);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
 
   it("rejects read of non-existent file outside allowed directories", async () => {
     const p = join(outsideDir, "ghost.txt");
-  const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir], true);
+  const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir]);
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
 
   it("returns not_found for non-existent file inside allowed directories", async () => {
     const p = join(allowedDir, "ghost.txt");
-  const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir], true);
+  const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir]);
     expect(out.results[0]!.error?.reason).toBe("not_found");
   });
 });
@@ -121,7 +121,6 @@ describe("auth — excluded paths", () => {
     const out = await handleBatchRead(
       { requests: [{ path: p, mode: "compact" }] },
       [allowedDir],
-      true,
       [p],
     );
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
@@ -136,7 +135,6 @@ describe("auth — excluded paths", () => {
     const out = await handleBatchRead(
       { requests: [{ path: p, mode: "compact" }] },
       [allowedDir],
-      true,
       [dir],
     );
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
@@ -148,7 +146,6 @@ describe("auth — excluded paths", () => {
     const out = await handleBatchRead(
       { requests: [{ path: p, mode: "compact" }] },
       [allowedDir],
-      true,
       [join(allowedDir, "other-dir")],
     );
     expect(out.results[0]!.error).toBeUndefined();
@@ -219,7 +216,6 @@ describe("auth — exclude overrides", () => {
     const out = await handleBatchRead(
       { requests: [{ path: p, mode: "compact" }] },
       [allowedDir],
-      true,
       [p],
       [p],
     );
@@ -234,7 +230,6 @@ describe("auth — exclude overrides", () => {
     const out = await handleBatchRead(
       { requests: [{ path: p, mode: "compact" }] },
       [allowedDir],
-      true,
       [dir],
       [dir],
     );
@@ -249,7 +244,6 @@ describe("auth — exclude overrides", () => {
     const out = await handleBatchRead(
       { requests: [{ path: blocked, mode: "compact" }] },
       [allowedDir],
-      true,
       [approved, blocked],
       [approved],
     );

@@ -189,23 +189,9 @@ A 20-file-read, 15-edit session using native tools adds roughly 600k–800k char
 | Mode | Output | Use for |
 |---|---|---|
 | `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
-| `verbatim` | Normalized indentation | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
+| `verbatim` | Byte-exact file content | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
 
 Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search (literal string or regex pattern). Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns context blocks — nearby windows are merged into one block, single-match blocks are annotated `<!-- Line M to N, match at line K -->`, merged multi-match blocks use `<!-- Line M to N -->` only. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
-
-#### Formatting normalization
-
-`batch_read` normalizes indentation in all modes by default. The goal is token efficiency and model accuracy: normalized output mirrors the style distribution most prevalent in code training data, keeping comprehension high at minimum token cost.
-
-Two rules apply at read time:
-- For most file types (TypeScript, JavaScript, CSS, YAML, and similar), indentation is normalized to 2-space. Two spaces is the dominant style across popular open-source JS/TS repositories and public training datasets, and it halves token cost versus 4-space for deeply nested code.
-- For tab-required file types such as Makefile, indentation is normalized to one tab per indent level, since tabs carry semantic meaning in these formats and must be preserved.
-
-Project-specific styles — 4-space, 6-space, 3-tab, or any other variant — are normalized on read. Reformatting source files is a mechanical task that belongs to automated tools (Prettier, Black, rustfmt, EditorConfig). Delegating it to the model wastes tokens and context with no accuracy benefit.
-
-**Known tradeoff**: Python (PEP 8: 4 spaces) and Rust (rustfmt: 4 spaces) are canonical exceptions — their training data is majority 4-space, so normalizing to 2-space marginally deviates from their established style. Token savings outweigh the accuracy delta for most tasks.
-
-Disable globally via `BATCH_TOOLS_NORMALIZE_FORMATTING=false` (see [Configuration](#configuration)) when indentation is itself the subject of an edit.
 
 The following example reads three files in a single call — a full compact read, a search, and a line-range slice.
 
@@ -261,7 +247,6 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | `false` | Append a compact human-readable summary to each tool result (e.g. `"Read 5 — compact: 3, verbatim: 2"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. |
 | `BATCH_TOOLS_READ_META` | `--read-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_read` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}`. |
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
-| `BATCH_TOOLS_NORMALIZE_FORMATTING` | `--normalize-formatting` | `true` | Normalize indentation on read (see [Formatting normalization](#formatting-normalization)). Disable when indentation is itself being edited. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 | `BATCH_TOOLS_INCLUDE_PATHS` | `--include` | *(empty)* | Comma-separated paths added to the allow list. Accepts absolute, relative (resolved from the server cwd), and `~`-expanded paths; each is canonicalized (symlinks resolved). Grants access outside MCP roots but does **not** override `BATCH_TOOLS_EXCLUDE_PATHS`. |
