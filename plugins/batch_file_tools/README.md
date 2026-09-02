@@ -269,6 +269,28 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `--max-output-tokens` | `75000` | Maximum total formatted `batch_read` output in tokens. When the emitted content exceeds this limit, the overflowing read is truncated at a unit boundary — normal reads at a line boundary (header shows the reduced range, inline `<!-- Truncated at line N of M … -->` marker gives a re-read anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match block(s) … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable. |
 | `BATCH_TOOLS_CHARS_PER_TOKEN` | `--chars-per-token` | `2.5` | Char-to-token ratio used to convert `BATCH_TOOLS_MAX_OUTPUT_TOKENS` into a character budget. |
 
+### Recommended Claude Code setup
+
+Claude Code keeps its built-in `Read`, `Edit` and `Write` tools registered alongside these, which leaves two overlapping ways to touch a file. Over a long session the model can drift back to the single-file tools and lose the batching benefit. Denying the built-ins removes the choice:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_batch_file_tools_batch_file_tools__batch_read",
+      "mcp__plugin_batch_file_tools_batch_file_tools__batch_edit"
+    ],
+    "deny": [
+      "Read",
+      "Edit",
+      "Write"
+    ]
+  }
+}
+```
+
+Use `.claude/settings.json` for a single project or `~/.claude/settings.json` for all of them. Until the built-ins are denied, a `PreToolUse` hook injects a short reminder whenever one of them is called; once they are denied the matcher stops firing and the reminder disappears.
+
 ## Path Access Control
 
 `batch_read` and `batch_edit` resolve every requested path to a canonical absolute path (symlinks resolved, `~` expanded, relatives resolved against the server's working directory) and then apply a two-layer allow/deny model on top of the standard MCP roots.

@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- **`PreToolUse` hook nudging the model toward the batch tools** — matches `Read|Edit|Write` and injects a short `additionalContext` note preferring `batch_read`/`batch_edit`, plus a pointer that the user can turn the built-ins off via `permissions.deny`. It sends no `permissionDecision`, leaving the normal permission flow untouched — a plugin must never grant file access the user did not approve. Harnesses that deny the built-ins never fire the matcher, so a correctly configured setup never sees the reminder.
+- **[Recommended Claude Code setup](./README.md#recommended-claude-code-setup) section in the README** — a `permissions` block that denies the built-in `Read`/`Edit`/`Write` so only the batch tools remain, removing the overlapping-tool choice that lets long sessions drift back to single-file reads.
+
 ### Removed
 
 - **`fileinfo` read mode** — removed entirely along with `BATCH_TOOLS_READ_ENABLE_FILEINFO` / `--read-enable-fileinfo`. The mode was opt-in and unused in practice; pre-read sizing and dependency mapping are better served by a `searchTerm` read across a glob or by [project-intel-tool](../project-intel-tool/README.md). `ReadMode` is now `compact | verbatim`.
