@@ -64,7 +64,6 @@ describe("stopOnError — file level", () => {
     const p = await fixture("file.txt", "A\n");
     const out = await edit({
       dryRun: false,
-      verbose: true,
       files: [
         {
           path: p,

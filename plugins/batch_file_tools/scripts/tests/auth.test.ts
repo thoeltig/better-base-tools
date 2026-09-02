@@ -62,11 +62,9 @@ describe("auth — edit", () => {
   it("rejects write at a path outside allowed directories and does not write to disk", async () => {
     const p = join(outsideDir, "pwn.txt");
     const out = await handleBatchEdit(
-      {
-        dryRun: false,
-        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
-      },
+      { files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }] },
       [allowedDir],
+      false,
     );
     const fr = out.results[0]!;
     expect(fr.status).toBe("error");
@@ -77,11 +75,9 @@ describe("auth — edit", () => {
   it("rejects write in a non-existent nested path outside allowed directories", async () => {
     const p = join(outsideDir, "missing", "nested", "pwn.txt");
     const out = await handleBatchEdit(
-      {
-        dryRun: false,
-        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }],
-      },
+      { files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }] },
       [allowedDir],
+      false,
     );
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
     expect(await exists(p)).toBe(false);
@@ -90,11 +86,9 @@ describe("auth — edit", () => {
   it("allows write in a non-existent nested path inside allowed directories", async () => {
     const p = join(allowedDir, "deep", "nested", "ok.txt");
     const out = await handleBatchEdit(
-      {
-        dryRun: false,
-        files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "fine\n" }] }],
-      },
+      { files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "fine\n" }] }] },
       [allowedDir],
+      false,
     );
     expect(out.results[0]!.status).toBe("ok");
     expect(await exists(p)).toBe(true);
@@ -104,11 +98,9 @@ describe("auth — edit", () => {
     const p = join(allowedDir, "any.txt");
     await writeFile(p, "x\n");
     const out = await handleBatchEdit(
-      {
-        dryRun: false,
-        files: [{ path: p, ops: [{ type: "write", mode: "append", content: "y\n" }] }],
-      },
+      { files: [{ path: p, ops: [{ type: "write", mode: "append", content: "y\n" }] }] },
       [],
+      false,
     );
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });

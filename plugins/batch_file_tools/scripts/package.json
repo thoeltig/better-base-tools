@@ -23,7 +23,7 @@
     "build": "tsc",
     "test": "node --import tsx/esm --test --test-reporter=./tests/helpers/reporter.js tests/*.test.ts",
     "test:watch": "node --import tsx/esm --test --watch --test-reporter=./tests/helpers/reporter.js tests/*.test.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "dependencies": {

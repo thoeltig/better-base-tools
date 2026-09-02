@@ -31,10 +31,7 @@ async function fixture(name: string, content: string): Promise<string> {
 }
 
 async function runEdit(file: EditFile) {
-  return handleBatchEdit({
-    dryRun: false,
-    files: [file],
-  }, [workDir]);
+  return handleBatchEdit({ files: [file] }, [workDir], false);
 }
 
 async function readText(path: string): Promise<string> {
@@ -443,12 +440,11 @@ describe("batch across multiple files", () => {
     const a = await fixture("ba.txt", "A\n");
     const b = await fixture("bb.txt", "B\n");
     const out = await handleBatchEdit({
-      dryRun: false,
       files: [
         { path: a, ops: [{ type: "write", mode: "append", content: "A2\n" }] },
         { path: b, ops: [{ type: "write", mode: "append", content: "B2\n" }] },
       ],
-    }, [workDir]);
+    }, [workDir], false);
     expect(out.results).toHaveLength(2);
     expect(await readText(a)).toBe("A\nA2\n");
     expect(await readText(b)).toBe("B\nB2\n");
