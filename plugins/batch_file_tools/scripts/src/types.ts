@@ -86,7 +86,7 @@ export type OpType = z.infer<typeof OpType>;
 const OpReplace = z.object({
     type: z.literal("replace"),
     old: z.string().min(1)
-      .describe("Text to find and replace at ONE site; must match exactly one location, and several matches return an 'ambiguous' error naming their lines. Use for a targeted change at a site you located in a read. The uniqueness rule is a safety net, so answer 'ambiguous' by extending the anchor with neighbouring lines — not by switching to replace_all, which would also rewrite the sites you did not mean"),
+      .describe("Text to find and replace at ONE site; must match exactly one location, and several matches return an 'ambiguous' error naming their lines. Use for a targeted change at a site you located in a read. The uniqueness rule is a safety net, so answer 'ambiguous' by extending the anchor with neighbouring lines — not by switching to replace_all, which would also rewrite the sites you did not mean. Anchors should begin and end with real characters; leading and trailing whitespace or blank lines are ignored"),
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
     stopOnError: z.boolean().optional(),
