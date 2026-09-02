@@ -122,9 +122,9 @@ function headerCharsOf(r: ReadResult): number {
 // Truncate an over-budget read block at a unit boundary, rewriting its meta header
 // via readResultToBlock. Line reads truncate at line boundaries (header shows the
 // reduced range); search reads truncate at match-block boundaries. Returns null for
-// non-truncatable results (fileinfo/error/single-unit) or when nothing needs trimming.
+// non-truncatable results (error/single-unit) or when nothing needs trimming.
 function truncateReadBlock(r: ReadResult, budget: number): ToolContentResult | null {
-  if (r.error || r.mode_applied === 'fileinfo' || r.content.length === 0) return null;
+  if (r.error || r.content.length === 0) return null;
   if (r.match_count !== undefined) return truncateSearchBlock(r, budget);
   if (r.returned_lines > 0) return truncateLineBlock(r, budget);
   return null;
@@ -237,12 +237,6 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
   let hint = "";
   if (r.error) {
     hint = `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
-  } else if (r.mode_applied === "fileinfo") {
-    const info = JSON.parse(r.content ?? "{}");
-    const meta = `Lines: ${r.lines}, Size: ${info.size}`;
-    const header = `<!-- ${shortenPath(r.path)} (${meta}) lastChanged: ${info.lastChanged} -->`;
-    const refsLine = info.refs?.length ? `\nreferenced: ${(info.refs as string[]).join(', ')}` : '';
-    return createToolOutputForAssistant(`${header}${refsLine}`);
   } else if (r.match_count !== undefined) {
     hint = `<!-- Found ${r.match_count} match(es) in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
   } else if (r.returned_lines === 0) {

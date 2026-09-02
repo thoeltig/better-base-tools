@@ -404,16 +404,16 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(joined.includes("c1")).toBe(false);
   });
 
-  it("non-truncatable first result (fileinfo) is emitted whole to guarantee progress", () => {
-    const content = JSON.stringify({ size: 999999, lines: 12345, lastChanged: "1h ago", refs: ["a", "b", "c"] });
+  it("non-truncatable first result (single long line) is emitted whole to guarantee progress", () => {
+    const content = "x".repeat(500);
     const blocks = formatReadContent(
-      { results: [{ path: "/x.ts", mode_applied: "fileinfo", lines: 12345, returned_lines: 0, truncated: false, content }] },
+      { results: [{ path: "/x.ts", mode_applied: "verbatim", lines: 1, returned_lines: 1, truncated: false, content }] },
       [],
       false,
       10,
     );
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text.includes("Lines: 12345")).toBe(true);
+    expect(blocks[0]!.text.includes(content)).toBe(true);
     expect(blocks[0]!.text.includes("Truncated")).toBe(false);
   });
 

@@ -1,6 +1,6 @@
 import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { handleBatchRead } from "../src/tools/read.js";
@@ -116,37 +116,6 @@ describe("handleBatchRead", () => {
       requests: [{ path: "relative/path.txt", mode: "verbatim" }],
     });
     expect(out.results[0]!.error?.reason).toBe("not_authorized");
-  });
-
-  it("fileinfo returns size, line count, ISO mtime and no ctimeMs", async () => {
-    const p = await fixture("info.ts", "const x = 1;\nconst y = 2;\n");
-    const out = await read({ requests: [{ path: p, mode: "fileinfo" }] });
-    const r = out.results[0]!;
-    expect(r.mode_applied).toBe("fileinfo");
-    const info = JSON.parse(r.content);
-    expect(typeof info.size).toBe("number");
-    expect(info.lines).toBe(2);
-    expect(r.lines).toBe(2);
-    expect(typeof info.lastChanged).toBe("string");
-    expect(info.lastChanged.length).toBeGreaterThan(0);
-    expect(info.mtime).toBeUndefined();
-    expect(info.isFile).toBeUndefined();
-    expect(info.refs).toBeUndefined();
-  });
-
-  it("fileinfo includes refs when file has imports", async () => {
-    const p = await fixture("refs.ts", "import { foo } from './foo.js';\nimport bar from '../bar.js';\nimport 'react';\nconst x = 1;\n");
-    const out = await read({ requests: [{ path: p, mode: "fileinfo" }] });
-    const r = out.results[0]!;
-    expect(r.mode_applied).toBe("fileinfo");
-    const info = JSON.parse(r.content);
-    expect(info.lines).toBe(4);
-    expect(typeof info.lastChanged).toBe("string");
-    expect(info.isFile).toBeUndefined();
-    expect(Array.isArray(info.refs)).toBe(true);
-    expect(info.refs).toContain(join(workDir, "foo.js"));
-    expect(info.refs).toContain(resolve(workDir, "../bar.js"));
-    expect(info.refs).not.toContain("react");
   });
 
   it("search: single match, no context", async () => {
@@ -324,28 +293,9 @@ describe("handleBatchRead", () => {
     expect(byPath[a]!.match_count).toBe(1);
     expect(byPath[b]!.match_count).toBe(0);
   });
-
-  it("glob + fileinfo: returns metadata for each matched file", async () => {
-    await fixture("fi_a.ts", "x\n");
-    await fixture("fi_b.ts", "y\n");
-    const out = await read({ requests: [{ path: `${workDir}/fi_*.ts`, mode: "fileinfo" }] });
-    expect(out.results.length).toBe(2);
-    for (const r of out.results) {
-      expect(r.mode_applied).toBe("fileinfo");
-      expect(JSON.parse(r.content).isFile).toBeUndefined();
-      expect(typeof JSON.parse(r.content).lastChanged).toBe("string");
-    }
-  });
 });
 
 describe("deduplication", () => {
-  it("fileinfo: duplicate requests collapse to one result", async () => {
-    const p = await fixture("dedup_fi.ts", "x\n");
-    const out = await read({ requests: [{ path: p, mode: "fileinfo" }, { path: p, mode: "fileinfo" }] });
-    expect(out.results).toHaveLength(1);
-    expect(out.results[0]!.mode_applied).toBe("fileinfo");
-  });
-
   it("search: identical requests collapse to one result", async () => {
     const p = await fixture("dedup_search_dup.ts", "foo\nbar\n");
     const out = await read({

@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Removed
+
+- **`fileinfo` read mode** — removed entirely along with `BATCH_TOOLS_READ_ENABLE_FILEINFO` / `--read-enable-fileinfo`. The mode was opt-in and unused in practice; pre-read sizing and dependency mapping are better served by a `searchTerm` read across a glob or by [project-intel-tool](../project-intel-tool/README.md). `ReadMode` is now `compact | verbatim`.
+- **`lib/extract-refs.ts`** — the `refs[]` extractor existed only to populate `fileinfo` output.
+
+### Changed
+
+- **`batch_read` input schema is now a single definition** — `buildReadInput()` existed only to emit a `fileinfo`-free schema variant; `ReadInput` is now used for both the advertised `inputSchema` and runtime validation, so the advertised mode enum and the validated mode enum can no longer drift.
+
 ## [1.2.6] - 2026-07-02
 
 ### Added
