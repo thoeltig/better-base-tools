@@ -15,6 +15,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - **`batch_read` input schema is now a single definition** — `buildReadInput()` existed only to emit a `fileinfo`-free schema variant; `ReadInput` is now used for both the advertised `inputSchema` and runtime validation, so the advertised mode enum and the validated mode enum can no longer drift.
+- **`batch_read` / `batch_edit` tool descriptions trimmed** — mode, op, path, pagination and search semantics now live only in the `inputSchema` field descriptions instead of being restated two or three times in the top-level description. The descriptions keep what no single field can express: the read→edit anchoring contract, `batch_edit`'s two-phase execution order, the `nearest_anchor` recovery hint, and the non-obvious strategies. Now the description and the schema can no longer drift apart the way they had.
+- **Tool titles rewritten as user-facing labels** — `title` and `annotations.title` are display strings that never reach the model (verified against a live session's tool definitions), so they no longer carry model-steering text: "Improved read tool which supports batching and different read modes" → "Batch read files", and likewise for `batch_edit`, whose title also claimed "different output modes" — the tool has op types, not output modes.
+
+### Fixed
+
+- **`batch_edit` description referenced a `verbatim_numbered` read mode** — that mode existed in an earlier version of this schema (`ReadMode` is `compact | verbatim`); both occurrences pointed the model at an unusable read/op pairing.
+- **`replace` vs `replace_all` semantics were undocumented** — neither the tool description nor the op schemas stated that `replace` requires a unique anchor (multiple matches return `ambiguous`) while `replace_all` takes every occurrence in every matched file; the model could only learn it from a failed op. Both `old` field descriptions now say so.
+- **`mode` field described `verbatim` as "exact content"** — `verbatim` normalizes indentation by default (`BATCH_TOOLS_NORMALIZE_FORMATTING=true`), so it is line-preserving, not byte-exact.
 
 ## [1.2.6] - 2026-07-02
 
