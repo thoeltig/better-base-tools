@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-02
+
 ### Added
 
 - **`PreToolUse` hook nudging the model toward the batch tools** — matches `Read|Edit|Write` and injects a short `additionalContext` note preferring `batch_read`/`batch_edit`, plus a pointer that the user can turn the built-ins off via `permissions.deny`. It sends no `permissionDecision`, leaving the normal permission flow untouched — a plugin must never grant file access the user did not approve. Harnesses that deny the built-ins never fire the matcher, so a correctly configured setup never sees the reminder.
@@ -334,7 +336,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...HEAD
+[1.3.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...BatchFileTools_v1.3.0
 [1.2.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...BatchFileTools_v1.2.6
 [1.2.5]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...BatchFileTools_v1.2.5
 [1.2.4]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.3...BatchFileTools_v1.2.4
