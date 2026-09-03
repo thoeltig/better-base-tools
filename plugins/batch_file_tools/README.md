@@ -217,7 +217,7 @@ The following example reads three files in a single call — a full compact read
 
 Anchor matching for `replace` and `replace_all` uses a two-step fallback: exact string match first; if not found, a whitespace-normalized match (tabs, spaces, and newlines collapsed) against the original file content — the matched original text becomes the replacement target. This is what makes `compact` mode output a reliable anchor despite its whitespace stripping. Only if both steps fail is a `nearest_anchor` error returned, containing verbatim context around the closest match pasteable directly as the corrected `old` string.
 
-`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
+`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Ops that already ran before the failing one are kept and written to disk; the failing op is reported as `error` and everything after it as `skipped`, so the `N/M ops successful` count always matches what landed. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
 
 When a path falls outside the allowed directories the tool prompts for authorization with per-file options to allow access once or for the remainder of the session.
 

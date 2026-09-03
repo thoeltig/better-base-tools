@@ -194,6 +194,8 @@ export const OpResult = z.object({
     index: z.number().int().min(0).optional(),
     status: OpStatus,
     type: OpType.optional(),
+    target: z.string().optional()
+      .describe("Short identifier for what the op addressed (anchor excerpt, line range, or write mode), so a failure names the op without relying on its index"),
     reason: Reason.optional(),
     hint: ErrorHint.optional(),
   })

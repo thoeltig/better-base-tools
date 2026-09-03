@@ -192,22 +192,25 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
     } else if (r.error) {
       fileLines.push(`<!-- file error: ${r.error.reason}: ${r.error.message} -->`);
     } else {
-      const skippedIdxs: number[] = [];
+      // Skipped ops are named individually and emitted after the errors: execution order differs
+      // from request order, so a count alone would not say which ops landed and which did not.
+      const skippedLines: string[] = [];
       for (const op of r.ops) {
         if (op.status === "skipped") {
-          skippedIdxs.push(op.index ?? 0);
+          const skippedTarget = op.target ? ` ${op.target}` : "";
+          skippedLines.push(`<!-- op (${op.type ?? "unknown"})${skippedTarget}; skipped -->`);
           continue;
         }
         if (op.status !== "error") continue;
 
-        const idx = op.index ?? 0;
         const type = op.type ?? "unknown";
+        const target = op.target ? ` ${op.target}` : "";
         let errorMsg = op.hint?.next_action ?? op.reason ?? "error";
         if (op.hint?.nearest_anchor) {
           errorMsg = errorMsg.replace(/ — nearest similar line is \d+.*$/, "");
         }
 
-        let line = `<!-- op ${idx} (${type}); error: ${errorMsg}`;
+        let line = `<!-- op (${type})${target}; error: ${errorMsg}`;
         const anchor = op.hint?.nearest_anchor;
         if (anchor) line += `; possible verbatim anchor: lines ${anchor.start_line}-${anchor.end_line}`;
         if (op.hint?.match_lines?.length) line += `; matches at lines ${op.hint.match_lines.join(", ")}`;
@@ -217,12 +220,7 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
         if (anchor) fileLines.push(anchor.content.replace(/\n$/, ""));
       }
 
-      if (skippedIdxs.length > 0) {
-        const first = Math.min(...skippedIdxs);
-        const last = Math.max(...skippedIdxs);
-        const range = first === last ? `op ${first}` : `ops ${first} to ${last}`;
-        fileLines.push(`<!-- ${range}; skipped -->`);
-      }
+      fileLines.push(...skippedLines);
     }
 
     allLines.push(fileLines.join("\n"));
