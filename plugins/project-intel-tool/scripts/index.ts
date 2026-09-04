@@ -286,8 +286,8 @@ server.registerTool(
         batchFiles,
         instruction:
           `You need to spawn ${batches.length} subagent(s) in total, to not exhaust the current environment only run 5-10 subagents in parallel at the same time. Ask the user first if this setup is good before proceeding. ` +
-          'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn a subagent with a smaller, faster model (e.g. Haiku). ' +
-          'Prompt for the subagent: Follow the instructions in the provided file.',
+          'You should run them in parallel in the foreground, so the user can handle possible permission issues. For each path in "batchFiles", spawn one subagent with subagent_type "project-intel-analyst", which already carries the fast model, necessary tool access and analysis instructions. ' +
+          'Prompt for the subagent: Analyse the batch file at <path>.',
       };
       const scanToolResult: CallToolResult = {
         content: [{
