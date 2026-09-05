@@ -86,7 +86,7 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
   try {
     const gitRoot = getGitRoot();
     const gitLocation = location.replace(/\\/g, '/');
-    const tracked = execSync(`git ls-files --full-name -- "${gitLocation}"`, { encoding: 'utf-8' })
+    const tracked = execSync(`git -c core.quotepath=false ls-files --full-name -- "${gitLocation}"`, { encoding: 'utf-8' })
       .trim().split('\n').filter(Boolean)
       .filter(f => !f.split('/').some(shouldIgnore))
       .map(f => toAbsReal(projectRoot, path.resolve(gitRoot, f)))
@@ -102,7 +102,7 @@ function getFilesFromGit(location: string, summaries: SummariesData, projectRoot
     summaryMap.forEach(d => { if (d < since) since = d; });
 
     const output = execSync(
-      `git log --format=%ai --name-only --since="${since.toISOString()}" -- "${gitLocation}"`,
+      `git -c core.quotepath=false log --format=%ai --name-only --since="${since.toISOString()}" -- "${gitLocation}"`,
       { encoding: 'utf-8' }
     );
 

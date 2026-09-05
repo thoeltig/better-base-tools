@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-06
+
+### Fixed
+
+- **Files with non-ASCII names were never indexed** — `getFilesFromGit` ran `git ls-files` and `git log --name-only` without `core.quotepath=false`, so git octal-escaped every byte ≥ 0x80 and wrapped the path in quotes (`"wiki/Aufbau-Beratungsf\303\274hrer.md"`). `path.resolve` then read the escapes as path separators and `toRelative`'s backslash normalisation folded them into directories, yielding keys like `wiki/Aufbau-Beratungsf/303/274hrer.md"` that point at nothing — the file was recorded with 0 lines, 0 chars and no summary, and its content stayed invisible to `query`. Both commands now run with `-c core.quotepath=false`. ASCII paths are unaffected: quoting only engages for non-ASCII bytes and for `"`, `\` and control characters, which stay quoted either way.
+  - Stale mangled keys need no manual cleanup. They sit within the scanned location, are absent from the corrected tracked set and do not exist on disk, so the existing deletion check in `getFilesFromGit` sweeps them on the next scan while the real paths come back as new.
+
 ## [1.5.0] - 2026-09-05
 
 ### Added
@@ -316,7 +323,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.1...HEAD
+[1.5.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...ProjectIntelTools_v1.5.1
 [1.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...ProjectIntelTools_v1.5.0
 [1.4.9]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...ProjectIntelTools_v1.4.9
 [1.4.8]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...ProjectIntelTools_v1.4.8
