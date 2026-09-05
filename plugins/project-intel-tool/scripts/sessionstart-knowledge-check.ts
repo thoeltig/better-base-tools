@@ -2,8 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir, aggregateSubKnowledgeStats } from './lib/project-scanner.js';
-import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig, ENV_INCLUDE_PATHS, ENV_EXCLUDE_PATHS } from './types.js';
-import { parseConfigArg } from './lib/config.js';
+import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig } from './types.js';
+import { getExcludePaths, getIncludePaths } from './lib/config.js';
+import { checkReadCapacity } from './lib/config-check.js';
+
+const CONFIG_WARNING = checkReadCapacity(process.env);
 
 function outputHookResponse(systemMessage: string, additionalContext: string): void {
   const response: HookResponse = {
@@ -12,7 +15,7 @@ function outputHookResponse(systemMessage: string, additionalContext: string): v
     systemMessage: systemMessage,
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: additionalContext,
+      additionalContext: CONFIG_WARNING ? `${additionalContext}\n${CONFIG_WARNING}` : additionalContext,
     },
   };
   process.stdout.write(JSON.stringify(response) + '\n');
@@ -23,8 +26,8 @@ async function main(): Promise<void> {
 
   const config: ScanConfig = {
     ...DEFAULT_SCAN_CONFIG,
-    includePaths: parseConfigArg('include', ENV_INCLUDE_PATHS, '').split(',').filter(Boolean),
-    excludePaths: parseConfigArg('exclude', ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean),
+    includePaths: getIncludePaths(),
+    excludePaths: getExcludePaths(),
   };
 
   const knowledgeDir = findKnowledgeDir(cwd);

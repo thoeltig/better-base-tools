@@ -12,8 +12,8 @@ import { scanProject, findKnowledgeDir, discoverSubKnowledge } from './lib/proje
 import { mergeSamplingResults, toAbsReal } from './lib/summary-merger.js';
 import { runSampling, writeBatchFiles } from './lib/sampler.js';
 import {
-  ENV_INCLUDE_PATHS,
-  ENV_EXCLUDE_PATHS,
+  ENV_MAX_BATCH_TOKENS,
+  ENV_CHARS_PER_TOKEN,
   FORMAT_GROUPED,
   KNOWLEDGE_DIRECTORY,
   QUERY_RESULT_MAX,
@@ -34,7 +34,7 @@ import {
 import { generateQueryOutput, outputToFluentText, query } from './lib/query-engine.js';
 import { prepareAnalysisBatches } from './lib/analysis-batch.js';
 import { acquireLock, acquireSubmitLock, releaseLock } from './lib/lock.js';
-import { parseConfigArg, parseConfigArgRecord } from './lib/config.js';
+import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 
 const server = new McpServer(
   { 
@@ -65,10 +65,10 @@ const QUERY_META = parseConfigArgRecord('query-meta', 'PROJECT_INTEL_TOOL_QUERY_
 const SUBMIT_ANALYSIS_META = parseConfigArgRecord('submit-analysis-meta', 'PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META');
 
 const scanConfig: ScanConfig = {
-  maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS', String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
-  charsPerToken: parseFloat(parseConfigArg('chars-per-token', 'PROJECT_INTEL_TOOL_CHARS_PER_TOKEN', String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
-  includePaths: parseConfigArg('include', ENV_INCLUDE_PATHS, '').split(',').filter(Boolean),
-  excludePaths: parseConfigArg('exclude', ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean),
+  maxTokensPerBatch: parseInt(parseConfigArg('max-batch-tokens', ENV_MAX_BATCH_TOKENS, String(SAMPLING_TOKEN_BUDGET)), 10) || SAMPLING_TOKEN_BUDGET,
+  charsPerToken: parseFloat(parseConfigArg('chars-per-token', ENV_CHARS_PER_TOKEN, String(DEFAULT_SCAN_CONFIG.charsPerToken))) || DEFAULT_SCAN_CONFIG.charsPerToken,
+  includePaths: getIncludePaths(),
+  excludePaths: getExcludePaths(),
 };
 
 const shutdownController = new AbortController();
