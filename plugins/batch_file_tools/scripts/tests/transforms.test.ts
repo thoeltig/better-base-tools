@@ -209,59 +209,39 @@ describe("formatForRead — verbatim mode", () => {
   });
 });
 
-describe("formatForRead — verbatim indent normalization (Phase 4)", () => {
-  it("tab-indented: each leading tab → 2 spaces", () => {
-    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim" });
-    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+describe("formatForRead — verbatim is byte-exact", () => {
+  it("tab indentation is returned unchanged", () => {
+    const content = "function foo() {\n\treturn 1;\n}\n";
+    expect(formatForRead({ content, mode: "verbatim" }).content).toBe(content);
   });
 
-  it("double-tab nesting: each tab level → 2 spaces", () => {
-    const r = formatForRead({ content: "class A {\n\tb() {\n\t\treturn 1;\n\t}\n}\n", mode: "verbatim" });
-    expect(r.content).toBe("class A {\n  b() {\n    return 1;\n  }\n}\n");
+  it("4-space indentation is returned unchanged", () => {
+    const content = "function foo() {\n    return 1;\n}\n";
+    expect(formatForRead({ content, mode: "verbatim", path: "/x/a.ts" }).content).toBe(content);
   });
 
-  it("4-space-indented: 4 spaces → 2 spaces per level", () => {
-    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts" });
-    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+  it("mixed indent widths are returned unchanged", () => {
+    const content = "a:\n    b:\n        c: 1\n";
+    expect(formatForRead({ content, mode: "verbatim", path: "/x/a.ts" }).content).toBe(content);
   });
 
-  it("2-space-indented: unchanged", () => {
-    const r = formatForRead({ content: "function foo() {\n  return 1;\n}\n", mode: "verbatim", path: "/x/a.ts" });
-    expect(r.content).toBe("function foo() {\n  return 1;\n}\n");
+  it("python 4-space indentation is returned unchanged", () => {
+    const content = "def foo():\n    return 1\n";
+    expect(formatForRead({ content, mode: "verbatim", path: "/x/a.py" }).content).toBe(content);
   });
 
-  it("mixed 4/8 space: GCD=4, normalizes to 2 and 4 spaces", () => {
-    const r = formatForRead({ content: "a:\n    b:\n        c: 1\n", mode: "verbatim", path: "/x/a.ts" });
-    expect(r.content).toBe("a:\n  b:\n    c: 1\n");
+  it("Makefile tabs are returned unchanged", () => {
+    const content = "build:\n\techo hi\n";
+    expect(formatForRead({ content, mode: "verbatim", path: "/x/Makefile" }).content).toBe(content);
   });
 
-  it(".py path: 4-space → 2-space (indent-sensitive but not tab-required)", () => {
-    const r = formatForRead({ content: "def foo():\n    return 1\n", mode: "verbatim", path: "/x/a.py" });
-    expect(r.content).toBe("def foo():\n  return 1\n");
+  it("CRLF endings and tab indentation are both preserved", () => {
+    const content = "function foo() {\r\n\treturn 1;\r\n}\r\n";
+    expect(formatForRead({ content, mode: "verbatim" }).content).toBe(content);
   });
 
-  it("Makefile path: tabs preserved (tab-required)", () => {
-    const r = formatForRead({ content: "build:\n\techo hi\n", mode: "verbatim", path: "/x/Makefile" });
-    expect(r.content).toBe("build:\n\techo hi\n");
-  });
-
-  it("CRLF file: endings preserved after normalization", () => {
-    const r = formatForRead({ content: "function foo() {\r\n\treturn 1;\r\n}\r\n", mode: "verbatim" });
-    expect(r.content).toBe("function foo() {\r\n  return 1;\r\n}\r\n");
-  });
-
-  it("normalizeFormatting: false returns tabs as-is", () => {
-    const r = formatForRead({ content: "function foo() {\n\treturn 1;\n}\n", mode: "verbatim", normalizeFormatting: false });
-    expect(r.content).toBe("function foo() {\n\treturn 1;\n}\n");
-  });
-
-  it("normalizeFormatting: false returns 4-space as-is", () => {
-    const r = formatForRead({ content: "function foo() {\n    return 1;\n}\n", mode: "verbatim", path: "/x/a.ts", normalizeFormatting: false });
-    expect(r.content).toBe("function foo() {\n    return 1;\n}\n");
-  });
-
-  it("no indentation: normalization is a no-op", () => {
-    const r = formatForRead({ content: SAMPLE, mode: "verbatim" });
-    expect(r.content).toBe(SAMPLE);
+  it("a sliced read returns the slice byte-for-byte", () => {
+    const content = "a\n\tb\n\t\tc\nd\n";
+    expect(formatForRead({ content, mode: "verbatim", offset: 2, limit: 2 }).content).toBe("\tb\n\t\tc\n");
   });
 });

@@ -39,14 +39,7 @@ async function makeFiles(
 }
 
 async function runEdit(file: EditFile, allowed: string[] = [allowedDir]) {
-  return handleBatchEdit(
-    {
-      dryRun: false,
-      verbose: true,
-      files: [file],
-    },
-    allowed,
-  );
+  return handleBatchEdit({ files: [file] }, allowed, false);
 }
 
 describe("glob expansion — replace_all", () => {
@@ -212,13 +205,13 @@ describe("glob expansion — merge with concrete entries", () => {
     const altSep = target.replace(/\\/g, "/");
     const out = await handleBatchEdit(
       {
-        dryRun: false,
         files: [
           { path: target, ops: [{ type: "write", mode: "append", content: "A\n" }] },
           { path: altSep, ops: [{ type: "write", mode: "append", content: "B\n" }] },
         ],
       },
       [allowedDir],
+      false,
     );
     expect(out.results).toHaveLength(1);
     expect(out.results[0]!.ops).toHaveLength(0);
@@ -232,13 +225,13 @@ describe("glob expansion — merge with concrete entries", () => {
     const target = join(caseDir, "only.txt");
     const out = await handleBatchEdit(
       {
-        dryRun: false,
         files: [
           { path: target, ops: [{ type: "replace", old: "alpha", new: "ALPHA" }] },
           { path: join(caseDir, "*.txt"), ops: [{ type: "replace_all", old: "beta", new: "BETA" }] },
         ],
       },
       [allowedDir],
+      false,
     );
     expect(out.results).toHaveLength(1);
     const r = out.results[0]!;

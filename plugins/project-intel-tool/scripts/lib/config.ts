@@ -1,3 +1,5 @@
+import { ARG_INCLUDE_PATHS, ENV_INCLUDE_PATHS, ARG_EXCLUDE_PATHS, ENV_EXCLUDE_PATHS } from "../types.js";
+
 export function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
   if (envVal !== undefined && envVal !== '') return envVal;
@@ -23,4 +25,12 @@ export function parseConfigArgRecord(argName: string, envName: string): Record<s
     console.error(`[config] ${envName}: invalid JSON, ignoring`);
   }
   return {};
+}
+
+export function getIncludePaths(): string[] { 
+  return parseConfigArg(ARG_INCLUDE_PATHS, ENV_INCLUDE_PATHS, '').split(',').filter(Boolean);
+}
+
+export function getExcludePaths(): string[] { 
+  return parseConfigArg(ARG_EXCLUDE_PATHS, ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean);
 }

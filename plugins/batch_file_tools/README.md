@@ -32,7 +32,7 @@ _¹ Documentation analysis project — content-only workload, pure native. ² An
 
 ## Session analysis
 
-This section provides the methodology and detail behind the numbers in [Why](#why). Measurements are from two codebases (68 files and 343 files), 124 main sessions combined. Baseline: `verbatim` mode for reads, `fileinfo` disabled.
+This section provides the methodology and detail behind the numbers in [Why](#why). Measurements are from two codebases (68 files and 343 files), 124 main sessions combined. Baseline: `verbatim` mode for reads.
 
 The [With vs without batch tools](#with-vs-without-batch-tools) subsection gives the overall session comparison; the other subsections cover the individual savings drivers.
 
@@ -141,7 +141,7 @@ With batch tools, orientation uses fewer tokens before editing can start, and ed
 
 The downstream effect is that tasks which previously required multiple sessions — each needing the context window to fill before execution could begin — can now complete in one. With more context space available and fewer turns needed per action, the model accomplishes more within a single session.
 
-Lightweight discovery reduces this further. `fileinfo` mode returns size, line count, last-changed date, and extracted `refs[]` (imports and file references) without delivering any file content. [project-intel-tool](../project-intel-tool/README.md) returns semantic summaries, roles, and dependency maps across the entire project in one query. Both let the model identify which files are worth reading before any content enters the context window, eliminating blind reads of files that turn out to be irrelevant to the task.
+Lightweight discovery reduces this further. A `searchTerm` read across a glob locates the relevant code without delivering whole files, and [project-intel-tool](../project-intel-tool/README.md) returns semantic summaries, roles, and dependency maps across the entire project in one query. Both let the model identify which files are worth reading before any content enters the context window, eliminating blind reads of files that turn out to be irrelevant to the task.
 
 ### Total native projection vs actual (both codebases combined)
 
@@ -189,32 +189,17 @@ A 20-file-read, 15-edit session using native tools adds roughly 600k–800k char
 | Mode | Output | Use for |
 |---|---|---|
 | `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
-| `verbatim` | Normalized indentation | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
-| `fileinfo` | Fluent-text header `<!-- path (Lines: N, Size: N) lastChanged: Xd Yh -->` plus optional `referenced:` line | Dependency mapping and pre-read sizing — disabled by default, enable via `BATCH_TOOLS_READ_ENABLE_FILEINFO=true` |
+| `verbatim` | Byte-exact file content | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
 
 Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search (literal string or regex pattern). Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns context blocks — nearby windows are merged into one block, single-match blocks are annotated `<!-- Line M to N, match at line K -->`, merged multi-match blocks use `<!-- Line M to N -->` only. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
 
-#### Formatting normalization
-
-`batch_read` normalizes indentation in all modes by default. The goal is token efficiency and model accuracy: normalized output mirrors the style distribution most prevalent in code training data, keeping comprehension high at minimum token cost.
-
-Two rules apply at read time:
-- For most file types (TypeScript, JavaScript, CSS, YAML, and similar), indentation is normalized to 2-space. Two spaces is the dominant style across popular open-source JS/TS repositories and public training datasets, and it halves token cost versus 4-space for deeply nested code.
-- For tab-required file types such as Makefile, indentation is normalized to one tab per indent level, since tabs carry semantic meaning in these formats and must be preserved.
-
-Project-specific styles — 4-space, 6-space, 3-tab, or any other variant — are normalized on read. Reformatting source files is a mechanical task that belongs to automated tools (Prettier, Black, rustfmt, EditorConfig). Delegating it to the model wastes tokens and context with no accuracy benefit.
-
-**Known tradeoff**: Python (PEP 8: 4 spaces) and Rust (rustfmt: 4 spaces) are canonical exceptions — their training data is majority 4-space, so normalizing to 2-space marginally deviates from their established style. Token savings outweigh the accuracy delta for most tasks.
-
-Disable globally via `BATCH_TOOLS_NORMALIZE_FORMATTING=false` (see [Configuration](#configuration)) when indentation is itself the subject of an edit.
-
-The following example reads three files in a single call, each with a different mode.
+The following example reads three files in a single call — a full compact read, a search, and a line-range slice.
 
 ```json
 { "requests": [
   { "path": "/src/auth.ts", "mode": "compact" },
   { "path": "/src/user.ts", "mode": "verbatim", "searchTerm": "validateToken" },
-  { "path": "/package.json", "mode": "fileinfo" }
+  { "path": "/src/config.ts", "mode": "verbatim", "offset": 40, "count": 20 }
 ]}
 ```
 
@@ -232,7 +217,7 @@ The following example reads three files in a single call, each with a different 
 
 Anchor matching for `replace` and `replace_all` uses a two-step fallback: exact string match first; if not found, a whitespace-normalized match (tabs, spaces, and newlines collapsed) against the original file content — the matched original text becomes the replacement target. This is what makes `compact` mode output a reliable anchor despite its whitespace stripping. Only if both steps fail is a `nearest_anchor` error returned, containing verbatim context around the closest match pasteable directly as the corrected `old` string.
 
-`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
+`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Ops that already ran before the failing one are kept and written to disk; the failing op is reported as `error` and everything after it as `skipped`, so the `N/M ops successful` count always matches what landed. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
 
 When a path falls outside the allowed directories the tool prompts for authorization with per-file options to allow access once or for the remainder of the session.
 
@@ -259,17 +244,37 @@ All options can be set via environment variable or command-line argument. Args a
 | Env var | Arg | Default | Description |
 |---|---|---|---|
 | `BATCH_TOOLS_MCP_LOGGING` | `--mcp-logging` | `false` | Route log output through the MCP logging protocol instead of `console.error`. Some harnesses do not support MCP logging; leave disabled unless yours does. |
-| `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | `false` | Append a compact human-readable summary to each tool result (e.g. `"Read 5 — compact: 3, fileinfo: 2"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. |
+| `BATCH_TOOLS_MCP_ANNOTATIONS_USER_AUDIENCE` | `--user-audience` | `false` | Append a compact human-readable summary to each tool result (e.g. `"Read 5 — compact: 3, verbatim: 2"`). Requires the harness to honour `annotations.audience`; when unsupported the summary is also visible to the model as redundant context. |
 | `BATCH_TOOLS_READ_META` | `--read-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_read` tool registration. Use for harness-specific flags, e.g. `{"anthropic/maxResultSizeChars":500000,"anthropic/alwaysLoad":true}`. |
 | `BATCH_TOOLS_EDIT_META` | `--edit-meta` | `{}` | JSON object merged into the `_meta` field of the `batch_edit` tool registration. Same format as `BATCH_TOOLS_READ_META`. |
-| `BATCH_TOOLS_NORMALIZE_FORMATTING` | `--normalize-formatting` | `true` | Normalize indentation on read (see [Formatting normalization](#formatting-normalization)). Disable when indentation is itself being edited. |
 | `BATCH_TOOLS_DRY_RUN` | `--dry-run` | `false` | Run `batch_edit` without writing any files. All ops are validated and results are reported as if changes were applied. |
-| `BATCH_TOOLS_READ_ENABLE_FILEINFO` | `--read-enable-fileinfo` | `false` | Enable the `fileinfo` read mode. When disabled, `fileinfo` is absent from the schema and tool description entirely. Enable for workflows that need pre-read size checks or dependency mapping via `refs[]`. This mode is intended to complement [project-intel-tool](../project-intel-tool/README.md). To avoid model tool choice confusion, `fileinfo` is disabled by default. |
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 | `BATCH_TOOLS_INCLUDE_PATHS` | `--include` | *(empty)* | Comma-separated paths added to the allow list. Accepts absolute, relative (resolved from the server cwd), and `~`-expanded paths; each is canonicalized (symlinks resolved). Grants access outside MCP roots but does **not** override `BATCH_TOOLS_EXCLUDE_PATHS`. |
 | `BATCH_TOOLS_EXCLUDE_PATHS` | `--exclude` | *(empty)* | Comma-separated files/folders placed behind an elicitation gate. Takes precedence over the allow list and `--include`: paths inside are **blocked** (returning `not_authorized`) until the user approves them via elicitation, even when inside an allowed root. Approving a folder lifts the gate for its whole subtree. Relative entries apply inside every allowed directory (MCP roots + `--include`); absolute/`~` entries match a fixed location. See [Path Access Control](#path-access-control). |
 | `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `--max-output-tokens` | `75000` | Maximum total formatted `batch_read` output in tokens. When the emitted content exceeds this limit, the overflowing read is truncated at a unit boundary — normal reads at a line boundary (header shows the reduced range, inline `<!-- Truncated at line N of M … -->` marker gives a re-read anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match block(s) … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable. |
 | `BATCH_TOOLS_CHARS_PER_TOKEN` | `--chars-per-token` | `2.5` | Char-to-token ratio used to convert `BATCH_TOOLS_MAX_OUTPUT_TOKENS` into a character budget. |
+
+### Recommended Claude Code setup
+
+Claude Code keeps its built-in `Read`, `Edit` and `Write` tools registered alongside these, which leaves two overlapping ways to touch a file. Over a long session the model can drift back to the single-file tools and lose the batching benefit. Denying the built-ins removes the choice:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_batch_file_tools_batch_file_tools__batch_read",
+      "mcp__plugin_batch_file_tools_batch_file_tools__batch_edit"
+    ],
+    "deny": [
+      "Read",
+      "Edit",
+      "Write"
+    ]
+  }
+}
+```
+
+Use `.claude/settings.json` for a single project or `~/.claude/settings.json` for all of them. Until the built-ins are denied, a `PreToolUse` hook injects a short reminder whenever one of them is called; once they are denied the matcher stops firing and the reminder disappears.
 
 ## Path Access Control
 

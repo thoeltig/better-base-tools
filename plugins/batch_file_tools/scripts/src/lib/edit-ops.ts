@@ -169,7 +169,7 @@ function lineOfOffset(content: string, offset: number): number {
   return line;
 }
 
-function preview(s: string): string {
+export function preview(s: string): string {
   const oneLine = s.replace(/\r?\n/g, "\\n");
   if (oneLine.length <= 40) return oneLine;
   return `${oneLine.slice(0, 37)}...`;

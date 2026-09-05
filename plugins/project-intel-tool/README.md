@@ -168,11 +168,17 @@ When MCP sampling is disabled, scan writes batch files to `.knowledge/batches/` 
   "status": "analysis_required",
   "batchCount": 4,
   "batchFiles": [".knowledge/batches/batch-0.txt", ...],
-  "instruction": "Spawn subagents in parallel (5-10 at a time). For each batch file, spawn a subagent with a smaller model (e.g. Haiku) and instruct it: Follow the instructions in the provided file."
+  "instruction": "Spawn subagents in parallel (5-10 at a time). For each batch file, spawn one subagent with subagent_type 'project-intel-analyst' and instruct it: Analyse the batch file at <path>."
 }
 ```
 
-Each batch file contains the compact content of the files to analyse, the summaries of related files as additional context, and a prompt instructing the subagent to use the `submit_analysis` tool to write results. This mode works in all harnesses that support subagents. Alternatively the main agent can process the files and submit the analysis directly.
+Each batch file contains the output schema, the compact content of the files to analyse, and the summaries of related files as additional context. It carries no behavioural instructions — those live in the bundled `project-intel-analyst` agent. This mode works in all harnesses that support subagents. Alternatively the main agent can process the files and submit the analysis directly.
+
+#### The `project-intel-analyst` agent
+
+The plugin ships `agents/project-intel-analyst.md`, a purpose-built analysis subagent. A general-purpose subagent tends to re-read the source files that the batch already contains and to pad its reply with a recap, both of which cost tokens and dilute the summaries. The agent pins `model: haiku`, restricts `tools` to `Read`, `batch_read` and `submit_analysis`, and holds the analysis rules in one place instead of repeating them in every batch file.
+
+`batch_read` comes from the sibling [batch_file_tools](../batch_file_tools/README.md) plugin. It is preferred when present because it reports truncation, but `Read` is listed as a fallback so this plugin has no hard dependency on it.
 
 ### Sampling mode (`PROJECT_INTEL_TOOL_MCP_SAMPLING=true`)
 
@@ -262,6 +268,23 @@ All settings are configurable as environment variables or CLI arguments (`--name
 | `PROJECT_INTEL_TOOL_QUERY_META` | `--query-meta` | JSON object merged into the `_meta` field of the `query` tool registration. Replaces the previously hardcoded `anthropic/maxResultSizeChars` and `anthropic/alwaysLoad` defaults. | `{}` |
 | `PROJECT_INTEL_TOOL_SUBMIT_ANALYSIS_META` | `--submit-analysis-meta` | JSON object merged into the `_meta` field of the `submit_analysis` tool registration. Same format as `PROJECT_INTEL_TOOL_QUERY_META`. | `{}` |
 
+### Read capacity check
+
+A batch file is sized by `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS`, but the analysis subagent has to read it back through a tool that has its own output cap. When the batch is larger than that cap the read is truncated **without an error**, and the subagent summarises files whose content it never received.
+
+The session start hook compares the two and appends a warning naming the keys to change. It reads the configured value where one is set and falls back to the documented default otherwise:
+
+| Key | Default | Caps |
+|---|---|---|
+| `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS` | `25000` | the native `Read` tool |
+| `MAX_MCP_OUTPUT_TOKENS` | `25000` | `batch_read`, **unless** its registration carries `anthropic/maxResultSizeChars` |
+| `BATCH_TOOLS_READ_META` | *(unset)* | `batch_read` via `anthropic/maxResultSizeChars`, which **replaces** the `MAX_MCP_OUTPUT_TOKENS` limit for that tool rather than combining with it |
+| `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `75000` | `batch_read`'s own output budget, applied on top of the harness limit (`0` disables) |
+
+Everything is compared in **characters**, because the caps do not share a unit: `anthropic/maxResultSizeChars` is already in characters, `BATCH_TOOLS_MAX_OUTPUT_TOKENS` is converted by `batch_file_tools` with `BATCH_TOOLS_CHARS_PER_TOKEN`, and the batch budget is a token estimate this server converts with `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN`. Comparing the raw token numbers would mix ratios that need not match.
+
+On stock defaults a 75000-token batch is roughly 187500 characters against a 62500-character cap on both paths, so raising these is effectively required for subagent mode to produce accurate summaries.
+
 > **Note:** `PROJECT_INTEL_TOOL_INCLUDE_PATHS` / `PROJECT_INTEL_TOOL_EXCLUDE_PATHS` control which files are **scanned** into the knowledge base (scan-time filtering). This is distinct from `batch_file_tools`' `BATCH_TOOLS_INCLUDE_PATHS` / `BATCH_TOOLS_EXCLUDE_PATHS`, which gate file reads and writes via an access-control elicitation flow — see [batch_file_tools Path Access Control](../batch_file_tools/README.md#path-access-control).
 
 ---
@@ -280,12 +303,14 @@ This project requires **Node.js >= v22** and the following dependencies:
 
 ### Production Dependencies
 * `@modelcontextprotocol/sdk` (`1.29.0`) — Model Context Protocol SDK
-* `zod` (`3.25.76`) — Schema validation
+* `zod` (`4.4.3`) — Schema validation
 
 ### Development Dependencies
 * `typescript` (`5.9.3`) — Static typing
-* `vitest` (`4.1.5`) — Testing framework
 * `@types/node` (`25.0.1`) — Type definitions for Node
+* `tsx` (`4.22.4`) / `esbuild` (`0.28.0`) — TypeScript execution for the test runner
+
+Tests run on the Node.js built-in `node:test` runner (`npm test`); no external test framework is required.
 
 ---
 

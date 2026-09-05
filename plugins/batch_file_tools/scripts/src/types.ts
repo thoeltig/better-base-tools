@@ -3,31 +3,9 @@ import { z } from "zod";
 export const ReadMode = z.enum([
   "compact",
   "verbatim",
-  "fileinfo",
 ])
   .default("compact");
 export type ReadMode = z.infer<typeof ReadMode>;
-
-export function buildReadInput(includeFileinfo: boolean) {
-  const mode = includeFileinfo
-    ? z.enum(["compact", "verbatim", "fileinfo"]).default("compact")
-    : z.enum(["compact", "verbatim"]).default("compact");
-  const modeDesc = includeFileinfo
-    ? "'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. 'fileinfo'= metadata (size, lines, lastChanged, refs[]) — use before reading content."
-    : "'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring.";
-  const request = z.object({
-    path: z.string().min(1).max(260)
-      .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
-    mode: mode.describe(modeDesc),
-    offset: z.number().int().min(1).optional()
-      .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
-    count: z.number().int().min(1).optional()
-      .describe("read: max lines to return; search: context lines around each match (default 0)"),
-    searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
-  }).strict();
-  return z.object({ requests: z.array(request).min(1) }).strict();
-}
 
 export const Reason = z.enum([
     "not_absolute",
@@ -51,11 +29,11 @@ export type FileError = z.infer<typeof FileError>;
 
 export const ReadRequest = z.object({
     path: z.string().min(1).max(260)
-      .describe("Absolute or relative file path, directory, or glob pattern (relative paths resolve from the working directory; glob/folder supported for all modes)"),
+      .describe("Absolute or relative file path (relative resolves from the working directory), a directory (expands to its immediate children), or a glob pattern (`*` matches within one path segment, `**` recurses across segments — e.g. `proj/**/*.ts`)"),
     mode: ReadMode
-      .describe("'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. 'fileinfo'= metadata (size, lines, mtime, isFile) plus refs[] — use before reading content."),
+      .describe("'compact' (DEFAULT) — cheapest read; collapses lines and strips indent/whitespace runs, yet still a valid replace/replace_all anchor because batch_edit falls back to whitespace-normalized matching. 'verbatim' — the file's exact bytes, indentation and line endings included."),
     offset: z.number().int().min(1).optional()
-      .describe("1-indexed start line (read modes only, ignored for fileinfo/search)"),
+      .describe("1-indexed start line (ignored for search)"),
     count: z.number().int().min(1).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
@@ -75,7 +53,7 @@ export const ReadResult = z.object({
       .describe("Absolute path"),
     mode_applied: ReadMode,
     lines: z.number().int().min(0)
-      .describe("Total line count (0 for fileinfo or error)"),
+      .describe("Total line count (0 on error)"),
     returned_lines: z.number().int().min(0)
       .describe("Returned line count; less than total for partial reads or search results"),
     truncated: z.boolean()
@@ -108,7 +86,7 @@ export type OpType = z.infer<typeof OpType>;
 const OpReplace = z.object({
     type: z.literal("replace"),
     old: z.string().min(1)
-      .describe("Text to find and replace"),
+      .describe("Text to find and replace at ONE site; must match exactly one location, and several matches return an 'ambiguous' error naming their lines. Use for a targeted change at a site you located in a read. The uniqueness rule is a safety net, so answer 'ambiguous' by extending the anchor with neighbouring lines — not by switching to replace_all, which would also rewrite the sites you did not mean. Anchors should begin and end with real characters; leading and trailing whitespace or blank lines are ignored"),
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
     stopOnError: z.boolean().optional(),
@@ -118,7 +96,7 @@ const OpReplace = z.object({
 const OpReplaceAll = z.object({
     type: z.literal("replace_all"),
     old: z.string().min(1)
-      .describe("Text to find and replace"),
+      .describe("Text to find and replace at EVERY occurrence, in every file the path matches; no uniqueness requirement and no error if the count is not what you expected. Use for mechanical sweeps where all sites must change identically — renaming an identifier, retargeting an import, updating a repeated literal — typically with a glob or directory path. Confirm the count with a batch_read searchTerm first, since a too-broad anchor silently rewrites sites you never inspected"),
     new: z.string()
       .describe("Replacement text; use empty to delete text"),
     stopOnError: z.boolean().optional(),
@@ -216,6 +194,8 @@ export const OpResult = z.object({
     index: z.number().int().min(0).optional(),
     status: OpStatus,
     type: OpType.optional(),
+    target: z.string().optional()
+      .describe("Short identifier for what the op addressed (anchor excerpt, line range, or write mode), so a failure names the op without relying on its index"),
     reason: Reason.optional(),
     hint: ErrorHint.optional(),
   })

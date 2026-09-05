@@ -1,6 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { EditInput, ReadInput, buildReadInput, ToolContentResult } from "./types.js";
+import { EditInput, ReadInput, ToolContentResult } from "./types.js";
 import { formatEditContent, formatReadContent } from "./lib/envelope.js";
 import { handleBatchRead } from "./tools/read.js";
 import { handleBatchEdit } from "./tools/edit.js";
@@ -22,8 +22,6 @@ const USE_USER_AUDIENCE = parseConfigArg('user-audience', 'BATCH_TOOLS_MCP_ANNOT
 const READ_META = parseConfigArgRecord('read-meta', 'BATCH_TOOLS_READ_META');
 const EDIT_META = parseConfigArgRecord('edit-meta', 'BATCH_TOOLS_EDIT_META');
 const DRY_RUN = parseConfigArg('dry-run', 'BATCH_TOOLS_DRY_RUN', 'false') === 'true';
-const FILEINFO_ENABLED = parseConfigArg('read-enable-fileinfo', 'BATCH_TOOLS_READ_ENABLE_FILEINFO', 'false') === 'true';
-const NORMALIZE_FORMATTING = parseConfigArg('normalize-formatting', 'BATCH_TOOLS_NORMALIZE_FORMATTING', 'true') === 'true';
 const USE_STRUCTURED_CONTENT = parseConfigArg('mcp-structured-content', 'BATCH_TOOLS_MCP_STRUCTURED_CONTENT', 'false') === 'true';
 const INCLUDE_PATHS_RAW = parseConfigArg('include', 'BATCH_TOOLS_INCLUDE_PATHS', '').split(',').filter(Boolean);
 const EXCLUDE_PATHS_RAW = parseConfigArg('exclude', 'BATCH_TOOLS_EXCLUDE_PATHS', '').split(',').filter(Boolean);
@@ -63,7 +61,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.2.6",
+    version: "1.3.0",
   },
   {
     capabilities: {
@@ -128,14 +126,11 @@ async function reportProgress(
 server.registerTool(
   "batch_read",
   {
-    title: "Improved read tool which supports batching and different read modes",
-    description: FILEINFO_ENABLED
-      ? "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. 'fileinfo'= metadata (size, lines, lastChanged, refs[]) — use before reading content. Mode→op pairing: compact → replace/replace_all | verbatim → replace/replace_all | verbatim+offset+count → replace_range/insert_at_line (use line range from output header). Path: absolute or relative file, directory (expands to immediate children) or glob (e.g. proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: 'searchTerm' (case-insensitive literal string or regex) + 'count' (context lines around each match); omit count for per-line results with line numbers, set count for context windows with file-position anchors. Use cases: (1) fileinfo — check size+lines before reading content, map deps via refs[]; (2) compact — full-file overview or replace/replace_all anchor (lowest token cost); (3) verbatim — full-file replace anchor when compact whitespace stripping would break the match; (4) verbatim+offset+count — targeted slice; use line range from output header to anchor replace_range/insert_at_line. Other use cases: (5) multi-file scan — searchTerm+glob finds occurrences across files without full reads; (6) dependency map — fileinfo+glob returns metadata+refs[] per file; (7) safe global replace — compact+searchTerm to verify occurrences, then replace_all;"
-      : "Batch-read N files in one call. Mode per file: 'compact'=DEFAULT — lowest token cost; strips indent/whitespace; use for full-file reads and as replace/replace_all anchor. 'verbatim'= exact content — full-file replace anchor; sliced reads (offset+count) include line range in output header for replace_range/insert_at_line anchoring. Mode→op pairing: compact → replace/replace_all | verbatim → replace/replace_all | verbatim+offset+count → replace_range/insert_at_line (use line range from output header). Path: absolute or relative file, directory (expands to immediate children) or glob (e.g. proj/**/*.ts); all modes support glob/directory. Pagination: 'offset' (1-indexed start line) + 'count' (max lines). Search: 'searchTerm' (case-insensitive literal string or regex) + 'count' (context lines around each match); omit count for per-line results with line numbers, set count for context windows with file-position anchors. Use cases: (1) compact — full-file overview or replace/replace_all anchor (lowest token cost); (2) verbatim — full-file replace anchor when compact whitespace stripping would break the match; (3) verbatim+offset+count — targeted slice; use line range from output header to anchor replace_range/insert_at_line. Other use cases: (4) multi-file scan — searchTerm+glob finds occurrences across files without full reads; (5) safe global replace — compact+searchTerm to verify occurrences, then replace_all;",
-
-    inputSchema: buildReadInput(FILEINFO_ENABLED),
+    title: "Batch read files",
+    description: "Batch-read N files in one call — bundle every file a task needs into one request instead of reading them one at a time. Anchoring contract with batch_edit: a full read (either mode) anchors replace/replace_all with the text it returned; a sliced read (offset/count) or a searchTerm read anchors replace_range/insert_at_line with the line numbers in its output header. Strategy: to locate code, prefer a searchTerm read across a glob over reading whole files; before a replace_all, run the same search to confirm how many occurrences exist.",
+    inputSchema: ReadInput,
     annotations: {
-      title: 'Improved read tool which supports batching and different read modes',
+      title: 'Batch read files',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -159,7 +154,7 @@ server.registerTool(
         ? [...allowedDirectories, ...sessionAllowed]
         : allowedDirectories;
       const approvedPaths = [...new Set([...sessionAllowedReadPaths, ...sessionAllowed])];
-      const result = await handleBatchRead(parsed, effectiveAllowed, NORMALIZE_FORMATTING, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
+      const result = await handleBatchRead(parsed, effectiveAllowed, resolvedExcludePaths, approvedPaths, (done, total) => reportProgress(extra, done, total));
       const errCount = result.results.filter(r => r.error).length;
       const okCount = result.results.length - errCount;
       writeMcpLogLine("info", errCount > 0 ? `batch_read done — ${okCount} ok, ${errCount} error(s)` : `batch_read done — ${okCount} file(s)`, "batch_read");
@@ -179,11 +174,11 @@ server.registerTool(
 server.registerTool(
   "batch_edit",
   {
-    title: "Improved edit tool which supports batching and different output modes",
-    description: "Multi-file, multi-op edit in one call. Ops: replace, replace_all, insert_at_line, replace_range, write. write auto-creates files and parent dirs; supports append or overwrite. Use replace with new='' to delete text. Glob/folder path: ops apply to each matched file; only replace, replace_all, and write(append) supported across globs. Execution order per file: (1) line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line — line numbers always reference the ORIGINAL file, never a post-edit offset; overlapping ranges error. (2) content-addressed ops (replace, replace_all, write) run in order given. stopOnError flags available at root, file, and op level — lower levels override upper. Op selection — match the op to how you read the file: compact or verbatim → replace/replace_all (use read content as anchor); verbatim_numbered+searchTerm/offset → replace_range/insert_at_line (use returned line numbers; do not use replace — it wastes the line anchors). Errors include a nearest_anchor hint usable directly as the next old anchor. Use cases: (1) full-file edit — read compact or verbatim, use replace/replace_all; (2) targeted edit — read verbatim_numbered+searchTerm or +offset+count, use replace_range/insert_at_line with the returned line numbers; (3) multi-file refactor — replace_all+glob to rename a symbol across all matching files; (4) new file — write(overwrite) auto-creates file and any missing parent dirs; (5) safe bulk replace — batch_read searchTerm first to verify all occurrences, then replace_all with confidence; (6) multi-line content — prefer replace_range/insert_at_line over replace to avoid JSON-escaping newlines in old/new strings.",
+    title: "Batch edit files",
+    description: "Multi-file, multi-op edit in one call — bundle every change a task needs into one request. Execution order per file: line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line, so every line number refers to the ORIGINAL file and never to a post-edit offset; overlapping ranges error. Content-addressed ops (replace, replace_all, write) then run in the order given. Anchoring contract with batch_read: a full read anchors replace/replace_all with the text it returned; a sliced or searchTerm read anchors replace_range/insert_at_line with the line numbers in its output header — do not fall back to replace there, it discards line anchors already paid for. A failed anchor returns a nearest_anchor hint pasteable directly as the next 'old'. Strategy: replace_all over a glob or directory path renames a term across a whole tree in one op — confirm the occurrence count with a batch_read searchTerm over the same glob first; for multi-line content prefer replace_range/insert_at_line over escaping newlines into old/new.",
     inputSchema: EditInput,
     annotations: {
-      title: 'Improved edit tool which supports batching and different output modes',
+      title: 'Batch edit files',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
