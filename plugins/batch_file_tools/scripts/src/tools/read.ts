@@ -1,37 +1,17 @@
-import { readFile, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
-import { readFileUtf8, isPathAllowed, isAccessible, realpathOfNearestExisting, safeRealpath } from "../lib/fs.js";
+import { resolve } from "node:path";
+import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
-import { extractRefs } from "../lib/extract-refs.js";
 import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
 
 const SEARCH_MERGE_GAP = 3;
-
-function formatRelativeTime(mtimeMs: number): string {
-  const totalMinutes = Math.floor((Date.now() - mtimeMs) / 60000);
-  if (totalMinutes < 1) return '< 1min';
-  const totalHours = Math.floor(totalMinutes / 60);
-  const totalDays = Math.floor(totalHours / 24);
-  const years = Math.floor(totalDays / 365);
-  const months = Math.floor((totalDays % 365) / 30);
-  const days = totalDays % 30;
-  const hours = totalHours % 24;
-  const minutes = totalMinutes % 60;
-  if (years > 0) return months > 0 ? `${years}y ${months}mo` : `${years}y`;
-  if (months > 0) return days > 0 ? `${months}mo ${days}d` : `${months}mo`;
-  if (totalDays > 0) return hours > 0 ? `${totalDays}d ${hours}h` : `${totalDays}d`;
-  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`;
-  return `${minutes}min`;
-}
 
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
 
 export async function handleBatchRead(
   input: ReadInput,
   allowedDirectories: string[],
-  normalizeFormatting: boolean,
   excludedPaths: readonly string[] = [],
   approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
@@ -43,7 +23,7 @@ export async function handleBatchRead(
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, normalizeFormatting, excludedPaths, approvedPaths);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, excludedPaths, approvedPaths);
       await onProgress?.(++done, total);
       return result;
     })
@@ -92,11 +72,6 @@ function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
 function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
-  // fileinfo: collapse all to one
-  if (reqs.some(r => r.mode === "fileinfo")) {
-    result.push({ kind: "ok", req: { path, mode: "fileinfo" } });
-  }
-
   // search: group by (searchTerm, count), coalesce mode (same→same, mixed→verbatim)
   const searchGroups = new Map<string, ReadRequest[]>();
   for (const req of reqs) {
@@ -112,7 +87,7 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   }
 
   // range/full: coalesce mode, merge overlapping ranges
-  const rangeReqs = reqs.filter(r => r.mode !== "fileinfo" && r.searchTerm === undefined);
+  const rangeReqs = reqs.filter(r => r.searchTerm === undefined);
   if (rangeReqs.length === 0) return result;
 
   const modes = new Set(rangeReqs.map(r => r.mode));
@@ -211,46 +186,10 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, normalizeFormatting: boolean, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
   if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
     return errResult(req, 'not_authorized', `Access denied: ${req.path}`);
   }
-  // fileinfo / fileinfo_refs: stat without full content processing
-  if (req.mode === "fileinfo") {
-    if (!isAbsolute(req.path)) req.path = resolve(req.path);
-    try {
-      const authPath = await realpathOfNearestExisting(resolve(req.path));
-      if (!isPathAllowed(authPath, allowedDirectories)) {
-        return errResult(req, "not_authorized", `Access denied: ${req.path}`);
-      }
-      const resolved = await realpath(req.path);
-      const s = await stat(resolved);
-      const cachedFile = fileCache.get(req.path);
-      const raw = cachedFile?.ok ? cachedFile.content : (s.isFile() ? await readFile(resolved, "utf8") : "");
-      const lineCount = raw.length === 0 ? 0 : raw.split(/\r?\n/).length - (raw.endsWith("\n") || raw.endsWith("\r") ? 1 : 0);
-      const baseInfo = { size: s.size, lines: lineCount, lastChanged: formatRelativeTime(s.mtimeMs) };
-      const fileDir = dirname(resolved);
-      const refs = extractRefs(raw).map(ref => {
-        const abs = resolve(fileDir, ref);
-        const rel = relative(process.cwd(), abs);
-        return rel.startsWith("..") || isAbsolute(rel) ? abs : rel;
-      });
-      const info = refs.length > 0 ? { ...baseInfo, refs } : baseInfo;
-      return {
-        path: req.path,
-        mode_applied: req.mode,
-        lines: lineCount,
-        returned_lines: 0,
-        truncated: false,
-        content: JSON.stringify(info),
-      };
-    } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      const reason: Reason = e.code === "ENOENT" ? "not_found" : "io_error";
-      return errResult(req, reason, e.message ?? String(err));
-    }
-  }
-
   const file = fileCache.get(req.path) ?? await readFileUtf8(req.path, allowedDirectories);
   if (!file.ok) {
     return errResult(req, file.reason, file.message);
@@ -291,7 +230,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     const blocks: string[] = [];
     if (ctx === 0) {
       for (const idx of matchIdxs) {
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1, normalizeFormatting });
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1 });
         blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
         returnedLines += 1;
       }
@@ -311,7 +250,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       }
       for (const { s, e, matchLines } of intervals) {
         returnedLines += e - s + 1;
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1, normalizeFormatting });
+        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
         const matchSuffix = matchLines.length === 1 ? `, match at line ${matchLines[0]! + 1}` : "";
         blocks.push(`<!-- Line ${s + 1} to ${e + 1}${matchSuffix} -->\n${formatted.content}`);
       }
@@ -335,7 +274,6 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     path: req.path,
     ...(req.offset !== undefined ? { offset: req.offset } : {}),
     ...(req.count !== undefined ? { limit: req.count } : {}),
-    normalizeFormatting,
   });
 
   return {

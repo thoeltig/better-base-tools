@@ -64,7 +64,6 @@ describe("stopOnError — file level", () => {
     const p = await fixture("file.txt", "A\n");
     const out = await edit({
       dryRun: false,
-      verbose: true,
       files: [
         {
           path: p,
@@ -79,6 +78,35 @@ describe("stopOnError — file level", () => {
     expect(out.results[0]!.ops[0]!.status).toBe("error");
     expect(out.results[0]!.ops[1]!.status).toBe("skipped");
     expect(await readText(p)).toBe("A\n"); // no write
+  });
+
+  it("file.stopOnError=true: ops that ran before the failure are still written", async () => {
+    const p = await fixture("file.txt", "A\n");
+    const out = await edit({
+      files: [
+        {
+          path: p,
+          stopOnError: true,
+          ops: [
+            { type: "write", mode: "append", content: "B\n" }, // ok
+            { type: "write", mode: "append", content: "C\n" }, // ok
+            { type: "replace", old: "ZZZ", new: "x" }, // error
+            { type: "write", mode: "append", content: "D\n" }, // skipped
+          ],
+        },
+      ],
+    });
+    const r = out.results[0]!;
+    expect(r.status).toBe("partial");
+    expect(r.totalOps).toBe(4);
+    // only non-ok ops are reported, so the two successful appends are implied by totalOps
+    expect(r.ops).toHaveLength(2);
+    expect(r.ops[0]!.status).toBe("error");
+    expect(r.ops[1]!.status).toBe("skipped");
+    // a skipped op names itself, since execution order differs from request order
+    expect(r.ops[1]!.type).toBe("write");
+    expect(r.ops[1]!.target).toBe("mode: append");
+    expect(await readText(p)).toBe("A\nB\nC\n");
   });
 });
 

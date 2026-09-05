@@ -243,6 +243,7 @@ describe("formatEditContent", () => {
               index: 1,
               status: "error",
               type: "replace",
+              target: 'old: "beta\\ngamma\\nDELTA"',
               reason: "not_found",
               hint: {
                 next_action: "try anchor below",
@@ -260,7 +261,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 1 (replace); error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "beta\\ngamma\\nDELTA"; error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed`
     );
   });
 
@@ -275,6 +276,7 @@ describe("formatEditContent", () => {
               index: 0,
               status: "error",
               type: "replace",
+              target: 'old: "### Fixed"',
               reason: "ambiguous",
               hint: {
                 next_action: "widen anchor",
@@ -288,7 +290,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op 0 (replace); error: widen anchor; matches at lines 3, 17, 42 -->`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "### Fixed"; error: widen anchor; matches at lines 3, 17, 42 -->`
     );
   });
 
@@ -318,17 +320,17 @@ describe("formatEditContent", () => {
     );
   });
 
-  it("skipped ops: compact range after triggering error", () => {
+  it("skipped ops are named individually after the triggering error", () => {
     const blocks = formatEditContent({
       results: [
         {
           path: "/a.ts",
           status: "partial",
           ops: [
-            { index: 0, status: "error", type: "replace", reason: "not_found", hint: { next_action: "'foo' not found in file" } },
-            { index: 1, status: "skipped" },
-            { index: 2, status: "skipped" },
-            { index: 3, status: "skipped" },
+            { index: 0, status: "error", type: "replace", target: 'old: "foo"', reason: "not_found", hint: { next_action: "'foo' not found in file" } },
+            { index: 1, status: "skipped", type: "write", target: "mode: append" },
+            { index: 2, status: "skipped", type: "replace_range", target: "lines 10-12" },
+            { index: 3, status: "skipped", type: "replace", target: 'old: "bar"' },
           ],
           totalOps: 4,
         },
@@ -336,7 +338,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/4 ops successful -->\n\n<!-- '/a.ts': 0/4 ops successful -->\n<!-- op 0 (replace); error: 'foo' not found in file -->\n<!-- ops 1 to 3; skipped -->`,
+      `<!-- Edit: 1 file, 0/4 ops successful -->\n\n<!-- '/a.ts': 0/4 ops successful -->\n<!-- op (replace) old: "foo"; error: 'foo' not found in file -->\n<!-- op (write) mode: append; skipped -->\n<!-- op (replace_range) lines 10-12; skipped -->\n<!-- op (replace) old: "bar"; skipped -->`,
     );
   });
 });
@@ -404,16 +406,16 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(joined.includes("c1")).toBe(false);
   });
 
-  it("non-truncatable first result (fileinfo) is emitted whole to guarantee progress", () => {
-    const content = JSON.stringify({ size: 999999, lines: 12345, lastChanged: "1h ago", refs: ["a", "b", "c"] });
+  it("non-truncatable first result (single long line) is emitted whole to guarantee progress", () => {
+    const content = "x".repeat(500);
     const blocks = formatReadContent(
-      { results: [{ path: "/x.ts", mode_applied: "fileinfo", lines: 12345, returned_lines: 0, truncated: false, content }] },
+      { results: [{ path: "/x.ts", mode_applied: "verbatim", lines: 1, returned_lines: 1, truncated: false, content }] },
       [],
       false,
       10,
     );
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text.includes("Lines: 12345")).toBe(true);
+    expect(blocks[0]!.text.includes(content)).toBe(true);
     expect(blocks[0]!.text.includes("Truncated")).toBe(false);
   });
 

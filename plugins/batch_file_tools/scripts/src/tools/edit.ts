@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
-import { applyOp, toOpResult } from "../lib/edit-ops.js";
+import { applyOp, preview, toOpResult } from "../lib/edit-ops.js";
 import { isAccessible, safeRealpath } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
@@ -275,7 +275,7 @@ async function editOneFile(
   const finalContent = joinLines(buf.lines, buf.endings);
   const changed = finalContent !== originalContent || (buf.exists && !buf.existed);
 
-  if (!options.dryRun && changed && buf.exists && !abortedOps) {
+  if (!options.dryRun && changed && buf.exists) {
     try {
       await writeBuffer(buf);
     } catch (err: unknown) {
@@ -328,8 +328,23 @@ function buildWriteErrorResult(file: EditFile, opResults: OpResult[], err: unkno
 }
 
 function decorateOp(result: OpResult, op: EditOp): OpResult {
-  if (result.status !== "error") return result;
-  return { ...result, type: op.type };
+  if (result.status === "ok") return result;
+  return { ...result, type: op.type, target: describeOpTarget(op) };
+}
+
+/** Names what an op addressed, so an error identifies it by content instead of by array index. */
+function describeOpTarget(op: EditOp): string {
+  switch (op.type) {
+    case "replace":
+    case "replace_all":
+      return `old: "${preview(op.old)}"`;
+    case "insert_at_line":
+      return `line ${op.line}`;
+    case "replace_range":
+      return `lines ${op.start}-${op.end}`;
+    case "write":
+      return `mode: ${op.mode}`;
+  }
 }
 
 function filterOps(results: readonly OpResult[]): OpResult[] {

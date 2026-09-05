@@ -17,6 +17,10 @@ export const SAMPLING_DELAY_MS: number = 1500;
 export const SAMPLING_TOKEN_BUDGET: number = 75_000;
 export const ENV_INCLUDE_PATHS = 'PROJECT_INTEL_TOOL_INCLUDE_PATHS';
 export const ENV_EXCLUDE_PATHS = 'PROJECT_INTEL_TOOL_EXCLUDE_PATHS';
+export const ENV_MAX_BATCH_TOKENS = 'PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS';
+export const ENV_CHARS_PER_TOKEN = 'PROJECT_INTEL_TOOL_CHARS_PER_TOKEN';
+export const ARG_INCLUDE_PATHS = 'include';
+export const ARG_EXCLUDE_PATHS = 'exclude';
 
 export interface ScanConfig {
   maxTokensPerBatch: number;
