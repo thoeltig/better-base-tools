@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+- **`project-intel-analyst` agent** (`agents/project-intel-analyst.md`) — purpose-built analysis subagent for the default scan mode, replacing a generic subagent. Pins `model: haiku`, restricts `tools` to `Read`, `batch_read` and `submit_analysis`, and owns the analysis rules (read the batch file once, never open the listed source files, submit, reply `Done`). `scan`'s returned instruction now names `subagent_type: "project-intel-analyst"` instead of describing model and behaviour in prose.
+- **Read capacity check at session start** (`lib/config-check.ts`) — compares the analysis batch size against the output cap of every read path the analysis subagent has, using the configured value where set and the documented default otherwise. On a mismatch the hook appends a warning to `additionalContext` naming the keys to raise and the batch size to fall back to — a batch over the cap is truncated silently, so the subagent would summarise files whose content it never received.
+  - `Read` is capped by `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS`. `batch_read` is capped by the harness and by `BATCH_TOOLS_MAX_OUTPUT_TOKENS`; for the harness limit, `anthropic/maxResultSizeChars` in `BATCH_TOOLS_READ_META` **replaces** `MAX_MCP_OUTPUT_TOKENS` for that tool rather than combining with it, so the check does not advise raising an env var Claude Code ignores once the annotation is present.
+  - All comparisons are made in characters. The caps do not share a unit — `anthropic/maxResultSizeChars` is already characters, `BATCH_TOOLS_MAX_OUTPUT_TOKENS` is converted by `batch_file_tools` with `BATCH_TOOLS_CHARS_PER_TOKEN`, and the batch budget is a token estimate converted with `PROJECT_INTEL_TOOL_CHARS_PER_TOKEN` — so comparing raw token counts would silently mix ratios that need not match. Advice is phrased in each key's own unit.
+
+### Changed
+- **Batch files no longer carry behavioural instructions** — `writeBatchFiles` passes an empty `action` to `buildPrompt`, so the file holds only the output schema, context summaries and file content. Sampling mode is unaffected: `runSampling` still injects its instruction into the sampling call, since it has no agent definition to carry it.
+- **Include/exclude path parsing is resolved in one place** — `getIncludePaths()` and `getExcludePaths()` in `lib/config.ts` replace the identical `parseConfigArg(...).split(',').filter(Boolean)` pair that `index.ts` and `sessionstart-knowledge-check.ts` each carried, so the hook and the MCP server can no longer drift on how the same setting is read. The names they parse (`ARG_INCLUDE_PATHS`, `ARG_EXCLUDE_PATHS`, `ENV_INCLUDE_PATHS`, `ENV_EXCLUDE_PATHS`) are declared in `types.ts`.
+- **`ENV_MAX_BATCH_TOKENS` and `ENV_CHARS_PER_TOKEN` added to `types.ts`** — `PROJECT_INTEL_TOOL_MAX_BATCH_TOKENS` is now read by both `index.ts` and the new capacity check, so it needs a single declaration. Settings parsed only in `index.ts` keep their inline literals. Env names external to this server (`CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS`, `MAX_MCP_OUTPUT_TOKENS`, `BATCH_TOOLS_*`) stay in `lib/config-check.ts` — they are caps to fit inside, not settings this server owns.
+
+### Fixed
+- README requirements listed `zod 3.25.76` and `vitest 4.1.5`; actual dependencies are `zod 4.4.3` with tests on the built-in `node:test` runner (Vitest was dropped in 1.4.4).
+
 ## [1.4.9] - 2026-07-02
 
 ### Added
