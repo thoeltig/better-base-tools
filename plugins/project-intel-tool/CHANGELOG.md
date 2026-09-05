@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-05
+
 ### Added
 - **`project-intel-analyst` agent** (`agents/project-intel-analyst.md`) — purpose-built analysis subagent for the default scan mode, replacing a generic subagent. Pins `model: haiku`, restricts `tools` to `Read`, `batch_read` and `submit_analysis`, and owns the analysis rules (read the batch file once, never open the listed source files, submit, reply `Done`). `scan`'s returned instruction now names `subagent_type: "project-intel-analyst"` instead of describing model and behaviour in prose.
 - **Read capacity check at session start** (`lib/config-check.ts`) — compares the analysis batch size against the output cap of every read path the analysis subagent has, using the configured value where set and the documented default otherwise. On a mismatch the hook appends a warning to `additionalContext` naming the keys to raise and the batch size to fall back to — a batch over the cap is truncated silently, so the subagent would summarise files whose content it never received.
@@ -314,7 +316,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...HEAD
+[1.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...ProjectIntelTools_v1.5.0
 [1.4.9]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...ProjectIntelTools_v1.4.9
 [1.4.8]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.7...ProjectIntelTools_v1.4.8
 [1.4.7]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.6...ProjectIntelTools_v1.4.7

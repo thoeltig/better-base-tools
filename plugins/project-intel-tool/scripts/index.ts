@@ -39,7 +39,7 @@ import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord 
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.4.9' 
+    version: '1.5.0' 
   },
   { 
     capabilities: { 
