@@ -3,6 +3,7 @@ Claude_Temp_Files/
 
 node_modules/
 dist/
+dist-tests/
 *.log
 .DS_Store
 coverage/
