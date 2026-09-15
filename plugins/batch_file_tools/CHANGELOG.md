@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-15
+
+### Changed
+
+- **Dependencies bumped** — `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0, `zod` 4.4.3 → 4.5.4, `typescript` 5.9.3 → 7.0.2, `@types/node` 25.0.1 → 24.13.3; `engines.node` lowered to `>=20` (was `>=22`).
+
+### Removed
+
+- **`tsx` and `esbuild` devDependencies** — tests now compile through `tsc` instead of being transpiled on the fly.
+
 ## [1.3.0] - 2026-09-02
 
 ### Added
@@ -336,7 +346,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...HEAD
+[1.3.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...BatchFileTools_v1.3.1
 [1.3.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...BatchFileTools_v1.3.0
 [1.2.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...BatchFileTools_v1.2.6
 [1.2.5]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.4...BatchFileTools_v1.2.5
