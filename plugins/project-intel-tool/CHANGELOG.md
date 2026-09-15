@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-15
+
+### Changed
+
+- Bumped `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0, `zod` 4.4.3 → 4.5.4, `typescript` 5.9.3 → 7.0.2, `@types/node` 25.0.1 → 24.13.3; `engines.node` lowered to `>=20` (was `>=22`).
+- Test invocation switched from `tsx/esm` to compiled `tsc` output.
+
+### Removed
+
+- `tsx` and `esbuild` devDependencies, no longer needed once tests run from compiled output.
+
 ## [1.5.1] - 2026-09-06
 
 ### Fixed
@@ -323,7 +334,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.1...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.2...HEAD
+[1.5.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.1...ProjectIntelTools_v1.5.2
 [1.5.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...ProjectIntelTools_v1.5.1
 [1.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...ProjectIntelTools_v1.5.0
 [1.4.9]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.8...ProjectIntelTools_v1.4.9

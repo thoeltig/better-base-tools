@@ -12,10 +12,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - **Dependencies bumped** — `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0, `zod` 4.4.3 → 4.5.4, `typescript` 5.9.3 → 7.0.2, `@types/node` 25.0.1 → 24.13.3; `engines.node` lowered to `>=20` (was `>=22`).
+- Test invocation switched from `tsx/esm` to compiled `tsc` output.
 
 ### Removed
 
-- **`tsx` and `esbuild` devDependencies** — tests now compile through `tsc` instead of being transpiled on the fly.
+- `tsx` and `esbuild` devDependencies, no longer needed once tests run from compiled output.
 
 ## [1.3.0] - 2026-09-02
 
