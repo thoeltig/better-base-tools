@@ -2,8 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir, aggregateSubKnowledgeStats } from './lib/project-scanner.js';
-import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig } from './types.js';
-import { getExcludePaths, getIncludePaths } from './lib/config.js';
+import { HookResponse, KNOWLEDGE_DIRECTORY } from './types.js';
+import { getHookScanConfig } from './lib/config.js';
 import { checkReadCapacity } from './lib/config-check.js';
 
 const CONFIG_WARNING = checkReadCapacity(process.env);
@@ -24,11 +24,7 @@ function outputHookResponse(systemMessage: string, additionalContext: string): v
 async function main(): Promise<void> {
   const cwd = process.cwd();
 
-  const config: ScanConfig = {
-    ...DEFAULT_SCAN_CONFIG,
-    includePaths: getIncludePaths(),
-    excludePaths: getExcludePaths(),
-  };
+  const config = getHookScanConfig();
 
   const knowledgeDir = findKnowledgeDir(cwd);
 

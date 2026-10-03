@@ -5,7 +5,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/sessionstart.js\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-script.js\" sessionstart-knowledge-check SessionStart"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run-script.js\" stop-structure-refresh",
+            "async": true
           }
         ]
       }
