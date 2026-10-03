@@ -63,28 +63,16 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const clampedEnd = Math.max(clampedStart, Math.min(endIdx, totalLines));
   const returnedLines = clampedEnd - clampedStart;
 
-  let content: string;
-  let emittedLines = returnedLines;
-  if (input.mode === "compact") {
-    const compact = formatCompact(
-      split.lines,
-      split.endings,
-      clampedStart,
-      clampedEnd,
-      { path: input.path, stripIndent: !isIndentSensitive(input.path) },
-    );
-    content = compact.content;
-    emittedLines = compact.line_count;
-  } else {
-    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd);
-  }
+  const content = input.mode === "compact"
+    ? formatCompact(split.lines, split.endings, clampedStart, clampedEnd, { path: input.path, stripIndent: !isIndentSensitive(input.path) })
+    : formatRaw(split.lines, split.endings, clampedStart, clampedEnd);
 
   const truncated = returnedLines < totalLines - clampedStart;
 
   return {
     content,
     total_lines: totalLines,
-    returned_lines: emittedLines,
+    returned_lines: returnedLines,
     truncated,
     mode_applied: input.mode,
   };
@@ -119,12 +107,12 @@ function formatCompact(
   start: number,
   end: number,
   opts: { path: string | undefined; stripIndent: boolean },
-): { content: string; line_count: number } {
+): string {
   if (isJsonPath(opts.path)) {
     const raw = formatRaw(lines, endings, start, end);
     try {
       const minified = JSON.stringify(JSON.parse(raw));
-      return { content: minified, line_count: 1 };
+      return minified;
     } catch {
       // fall through to line-based compact
     }
@@ -138,12 +126,11 @@ function formatCompact(
       if (line !== "") tokens.push(line);
     }
     const out = tokens.join(" ").replace(/ {2,}/g, " ");
-    return { content: out, line_count: out.length > 0 ? 1 : 0 };
+    return out;
   }
 
   // Indent-sensitive: preserve newlines, collapse consecutive blank lines.
   let out = "";
-  let count = 0;
   let prevBlank = false;
   for (let i = start; i < end; i++) {
     let line = lines[i] ?? "";
@@ -157,8 +144,7 @@ function formatCompact(
     if (isBlank && prevBlank) continue;
     out += line;
     out += endings[i] ?? "";
-    count++;
     prevBlank = isBlank;
   }
-  return { content: out, line_count: count };
+  return out;
 }

@@ -238,19 +238,18 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
 function readResultHeader(r: ReadResult): string {
   if (r.error) {
     return `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
-  } else if (r.match_count !== undefined) {
-    return `<!-- Found ${plural(r.match_count, "match", "matches")} in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
-  } else if (r.returned_lines === 0) {
-    return `<!-- Read 0 lines of file '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
-  } else {
-    const startLine = r.start_line ?? 1;
-    const endLine = startLine + r.returned_lines - 1;
-    const linesInfo = r.returned_lines < r.lines
-      ? `${r.returned_lines} of ${r.lines} lines total`
-      : `${r.lines} ${r.lines === 1 ? "line" : "lines"} total`;
-    const lineRange = startLine === endLine ? `line ${startLine}` : `line ${startLine} to ${endLine}`;
-    return `<!-- Read ${lineRange} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
   }
+  const file = `'${shortenPath(r.path)}'`;
+  if (r.match_count !== undefined) {
+    return `<!-- ${plural(r.match_count, "match", "matches")} in ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} -->`;
+  }
+  if (r.returned_lines === r.lines) {
+    return `<!-- ${plural(r.lines, "line")} in ${file} as ${r.mode_applied} -->`;
+  }
+  const startLine = r.start_line ?? 1;
+  const endLine = startLine + r.returned_lines - 1;
+  const lineRange = endLine <= startLine ? `Line ${startLine}` : `Line ${startLine} to ${endLine}`;
+  return `<!-- ${lineRange} of ${plural(r.lines, "line")} in ${file} as ${r.mode_applied} -->`;
 }
 
 function createToolOutputForAssistant(text: string): ToolContentResult {

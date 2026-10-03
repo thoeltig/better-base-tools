@@ -109,7 +109,7 @@ describe("handleBatchRead", () => {
     expect(r.mode_applied).toBe("compact");
     expect(r.content).toBe("const a = 1; const b = 2;");
     expect(r.lines).toBe(4);
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(4);
   });
 
   it("relative paths resolve from cwd, not_authorized when outside allowed dirs", async () => {

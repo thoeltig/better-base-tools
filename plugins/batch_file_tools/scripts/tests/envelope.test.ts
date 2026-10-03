@@ -27,10 +27,10 @@ describe("formatReadContent", () => {
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 1 to 3 of file '/a.txt' as 'compact' (3 lines total) -->\nline1\nline2\nline3\n`,
+      `<!-- 3 lines in '/a.txt' as compact -->\nline1\nline2\nline3\n`,
     );
     expect(blocks[1]!.text).toBe(
-      `<!-- Read line 1 of file '/b.txt' as 'verbatim' (1 line total) -->\n1\tonly\n`,
+      `<!-- 1 line in '/b.txt' as verbatim -->\n1\tonly\n`,
     );
   });
 
@@ -49,8 +49,29 @@ describe("formatReadContent", () => {
       ],
     });
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 3 to 4 of file '/a.txt' as 'verbatim' (2 of 10 lines total) -->\n3\tc\n4\td\n`,
+      `<!-- Line 3 to 4 of 10 lines in '/a.txt' as verbatim -->\n3\tc\n4\td\n`,
     );
+  });
+
+  it("single-line slice: header names one line", () => {
+    const blocks = formatReadContent({
+      results: [{ path: "/a.ts", mode_applied: "compact", lines: 288, returned_lines: 1, start_line: 8, truncated: true, content: "x" }],
+    });
+    expect(blocks[0]!.text).toBe(`<!-- Line 8 of 288 lines in '/a.ts' as compact -->\nx\n`);
+  });
+
+  it("compact slice: header shows the source range, not the collapsed output line count", () => {
+    const blocks = formatReadContent({
+      results: [{ path: "/a.ts", mode_applied: "compact", lines: 288, returned_lines: 5, start_line: 8, truncated: true, content: "a; b; c;" }],
+    });
+    expect(blocks[0]!.text).toBe(`<!-- Line 8 to 12 of 288 lines in '/a.ts' as compact -->\na; b; c;\n`);
+  });
+
+  it("empty file: zero-line header", () => {
+    const blocks = formatReadContent({
+      results: [{ path: "/e.ts", mode_applied: "compact", lines: 0, returned_lines: 0, start_line: 1, truncated: false, content: "" }],
+    });
+    expect(blocks[0]!.text).toBe(`<!-- 0 lines in '/e.ts' as compact -->\n`);
   });
 
   it("error result: comment hint only", () => {
@@ -116,7 +137,7 @@ describe("formatReadContent", () => {
 });
 
 describe("formatReadContent — new search output formats", () => {
-  it("count=0: Found header + inline lineNum\\tcontent per match", () => {
+  it("count=0: match header + inline lineNum\\tcontent per match", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/types.ts",
@@ -130,11 +151,11 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 2 matches in 262 lines of '/src/types.ts' as 'compact' -->\n170\texport const EditInput\n176\texport type EditInput\n`
+      `<!-- 2 matches in '/src/types.ts' (262 lines) as compact -->\n170\texport const EditInput\n176\texport type EditInput\n`
     );
   });
 
-  it("count>0: Found header + <!-- Line M to N, match at line K --> blocks in content", () => {
+  it("count>0: match header + <!-- Line M to N, match at line K --> blocks in content", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/readme.md",
@@ -148,7 +169,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 1 match in 122 lines of '/src/readme.md' as 'verbatim' -->\n<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74\n`
+      `<!-- 1 match in '/src/readme.md' (122 lines) as verbatim -->\n<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74\n`
     );
   });
 
@@ -174,7 +195,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 2 matches in 100 lines of '/a.ts' as 'compact' -->\n7\timport { foo }\n91\texport const bar\n`
+      `<!-- 2 matches in '/a.ts' (100 lines) as compact -->\n7\timport { foo }\n91\texport const bar\n`
     );
     expect(blocks[1]!.text).toBe(`<!-- No match(es) found -->\n'/b.ts'\n'/c.ts'\n`);
   });
@@ -193,11 +214,11 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 168 to 179 of file '/src/types.ts' as 'verbatim' (12 of 262 lines total) -->\nexport type EditFile = z.infer<typeof EditFile>;\n`
+      `<!-- Line 168 to 179 of 262 lines in '/src/types.ts' as verbatim -->\nexport type EditFile = z.infer<typeof EditFile>;\n`
     );
   });
 
-  it("full-file read: header shows line 1 to N with total only", () => {
+  it("full-file read: header shows the line count only", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/index.ts",
@@ -211,7 +232,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 1 to 50 of file '/src/index.ts' as 'compact' (50 lines total) -->\nexport default function main() {}\n`
+      `<!-- 50 lines in '/src/index.ts' as compact -->\nexport default function main() {}\n`
     );
   });
 });
@@ -411,10 +432,9 @@ describe("formatReadContent — output budget (maxChars)", () => {
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    const m = text.match(/Read line 1 to (\d+) of file '\/big\.txt' as 'compact' \((\d+) of 100 lines total\)/);
+    const m = text.match(/^<!-- Line 1 to (\d+) of 100 lines in '\/big\.txt' as compact -->/);
     expect(m).not.toBe(null);
     const endLine = Number(m![1]);
-    expect(Number(m![2])).toBe(endLine);
     expect(endLine).toBeLessThanOrEqual(99);
     expect(text.length).toBeLessThanOrEqual(800);
     expect(text.includes(`L${String(endLine).padStart(3, "0")}X`)).toBe(true);
@@ -461,7 +481,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(blocks[0]!.text.includes("Truncated")).toBe(false);
   });
 
-  it("search (count=0) truncates at a match-line boundary, keeping the Found header", () => {
+  it("search (count=0) truncates at a match-line boundary, keeping the match header", () => {
     const content = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 3}\tmatchline-${String(i + 1).padStart(2, "0")}`).join("\n");
     const blocks = formatReadContent(
       { results: [{ path: "/s.ts", mode_applied: "compact", lines: 400, returned_lines: 40, truncated: false, content, match_count: 40 }] },
@@ -471,7 +491,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.includes("Found 40 matches")).toBe(true);
+    expect(text.startsWith("<!-- 40 matches in '/s.ts' (400 lines) as compact -->")).toBe(true);
     expect(text.includes("matchline-01")).toBe(true);
     expect(text.includes("matchline-40")).toBe(false);
     expect(text.includes("of 40 match blocks")).toBe(true);
@@ -491,7 +511,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.includes("Found 5 matches")).toBe(true);
+    expect(text.startsWith("<!-- 5 matches in '/s.ts' (200 lines) as verbatim -->")).toBe(true);
     expect(text.includes("ctx-010-a")).toBe(true);
     expect(text.includes("ctx-130-a")).toBe(false);
     expect(text.includes("match block")).toBe(true);

@@ -64,7 +64,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/a.ts",
     });
     expect(r.content).toBe("function foo() { return 1; }");
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("collapses multi-whitespace runs inside a line", () => {
@@ -91,7 +91,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/data.json",
     });
     expect(r.content).toBe('{"a":1,"b":[2,3]}');
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(4);
   });
 
   it("falls back to single-line compact on invalid JSON", () => {
@@ -120,13 +120,14 @@ describe("formatForRead — compact mode", () => {
     expect(r.content).toBe("a\r\nb\r\n\r\nc\r\n");
   });
 
-  it("returned_lines reflects post-compact line count", () => {
+  it("returned_lines counts source lines, not compacted output lines", () => {
     const r = formatForRead({
       content: "a\n\n\n\nb\n",
       mode: "compact",
     });
-    expect(r.total_lines).toBe(5); // source has 5 lines (a, 3 blanks, b)
-    expect(r.returned_lines).toBe(3); // compacted: a, 1 blank, b
+    expect(r.content).toBe("a\n\nb\n");
+    expect(r.total_lines).toBe(5);
+    expect(r.returned_lines).toBe(5);
   });
 
   it("slices source by offset/limit BEFORE compacting", () => {
@@ -141,6 +142,7 @@ describe("formatForRead — compact mode", () => {
     });
     expect(r.content).toBe("b\n\n");
     expect(r.total_lines).toBe(7);
+    expect(r.returned_lines).toBe(4);
     expect(r.truncated).toBe(true);
   });
 
@@ -159,7 +161,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/a.js",
     });
     expect(r.content).toBe("const x = 1; const y = 2;");
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("non-indent-sensitive: empty file produces empty string", () => {
@@ -171,7 +173,7 @@ describe("formatForRead — compact mode", () => {
   it("non-indent-sensitive: all-blank lines produces empty string", () => {
     const r = formatForRead({ content: "\n\n\n", mode: "compact", path: "/x/a.ts" });
     expect(r.content).toBe("");
-    expect(r.returned_lines).toBe(0);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("non-indent-sensitive: tabs and mixed indent collapsed", () => {

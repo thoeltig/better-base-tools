@@ -55,7 +55,7 @@ export const ReadResult = z.object({
     lines: z.number().int().min(0)
       .describe("Total line count (0 on error)"),
     returned_lines: z.number().int().min(0)
-      .describe("Returned line count; less than total for partial reads or search results"),
+      .describe("Source lines covered by content; compact output may span fewer physical lines"),
     truncated: z.boolean()
       .describe("True if count limited the output"),
     content: z.string(),
