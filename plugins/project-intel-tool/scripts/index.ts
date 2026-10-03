@@ -33,7 +33,7 @@ import {
 } from './types.js';
 import { generateQueryOutput, outputToFluentText, query } from './lib/query-engine.js';
 import { prepareAnalysisBatches } from './lib/analysis-batch.js';
-import { acquireLock, acquireSubmitLock, releaseLock } from './lib/lock.js';
+import { acquireLock, acquireLockWithWait, releaseLock } from './lib/lock.js';
 import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 
 const server = new McpServer(
@@ -341,7 +341,7 @@ if (!USE_MCP_SAMPLING) {
       }
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
-      if (!await acquireSubmitLock(knowledgeDir)) {
+      if (!await acquireLockWithWait(knowledgeDir)) {
         return createOutputMessage('Wait for write timed out, try again in 10s', true);
       }
       try {
