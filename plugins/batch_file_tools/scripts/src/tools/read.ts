@@ -291,6 +291,6 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     returned_lines: formatted.returned_lines,
     truncated: formatted.truncated,
     content: formatted.content,
-    start_line: req.offset ?? 1,
+    start_line: formatted.start_line,
   };
 }

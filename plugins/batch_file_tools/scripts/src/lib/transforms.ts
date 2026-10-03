@@ -13,6 +13,8 @@ export interface FormatInput {
 export interface FormatOutput {
   readonly content: string;
   readonly total_lines: number;
+  /** 1-indexed first source line of content; differs from offset when the offset was past EOF. */
+  readonly start_line: number;
   readonly returned_lines: number;
   readonly truncated: boolean;
   readonly mode_applied: ReadMode;
@@ -53,7 +55,11 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const split = splitLines(input.content);
   const totalLines = split.lines.length;
 
-  const startIdx = input.offset ? input.offset - 1 : 0;
+  let startIdx = input.offset ? input.offset - 1 : 0;
+  if (startIdx >= totalLines && totalLines > 0) {
+    // Offset past EOF: serve the requested count (or the last line) from the file tail.
+    startIdx = Math.max(0, totalLines - (input.limit ?? 1));
+  }
   const endIdx =
     input.limit !== undefined
       ? Math.min(startIdx + input.limit, totalLines)
@@ -72,6 +78,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
   return {
     content,
     total_lines: totalLines,
+    start_line: clampedStart + 1,
     returned_lines: returnedLines,
     truncated,
     mode_applied: input.mode,

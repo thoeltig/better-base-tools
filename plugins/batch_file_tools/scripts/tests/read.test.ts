@@ -75,6 +75,15 @@ describe("handleBatchRead", () => {
     expect(r.truncated).toBe(true);
   });
 
+  it("offset past EOF: start_line reports the clamped start", async () => {
+    const p = await fixture("clamp.txt", "L1\nL2\nL3\nL4\nL5\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", offset: 300, count: 3 }] });
+    const r = out.results[0]!;
+    expect(r.content).toBe("L3\nL4\nL5\n");
+    expect(r.start_line).toBe(3);
+    expect(r.returned_lines).toBe(3);
+  });
+
   it("missing file returns an error entry, not a throw", async () => {
     const missing = join(workDir, "does_not_exist.txt");
     const out = await read({

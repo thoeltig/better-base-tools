@@ -146,6 +146,45 @@ describe("formatForRead — compact mode", () => {
     expect(r.truncated).toBe(true);
   });
 
+  describe("offset clamping", () => {
+    const content = "L1\nL2\nL3\nL4\nL5\n";
+
+    it("offset past EOF with limit returns the last `limit` lines", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10, limit: 2 });
+      expect(r.content).toBe("L4\nL5\n");
+      expect(r.start_line).toBe(4);
+      expect(r.returned_lines).toBe(2);
+      expect(r.truncated).toBe(false);
+    });
+
+    it("offset past EOF without limit returns the last line", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10 });
+      expect(r.content).toBe("L5\n");
+      expect(r.start_line).toBe(5);
+      expect(r.returned_lines).toBe(1);
+    });
+
+    it("offset past EOF with limit larger than the file returns the whole file", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10, limit: 99 });
+      expect(r.content).toBe(content);
+      expect(r.start_line).toBe(1);
+      expect(r.returned_lines).toBe(5);
+    });
+
+    it("in-range offset with limit past EOF is capped at EOF", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 4, limit: 10 });
+      expect(r.content).toBe("L4\nL5\n");
+      expect(r.start_line).toBe(4);
+      expect(r.returned_lines).toBe(2);
+    });
+
+    it("empty file with offset returns zero lines from line 1", () => {
+      const r = formatForRead({ content: "", mode: "verbatim", offset: 3, limit: 2 });
+      expect(r.content).toBe("");
+      expect(r.start_line).toBe(1);
+      expect(r.returned_lines).toBe(0);
+    });
+  });
   it("collapses trailing blank-line runs that touch EOF", () => {
     const r = formatForRead({
       content: "x\n\n\n\n",
