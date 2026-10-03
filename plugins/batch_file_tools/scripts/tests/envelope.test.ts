@@ -2,6 +2,7 @@ import { join, resolve, sep } from "node:path";
 import { describe, it } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { formatEditContent, formatReadContent } from "../src/lib/envelope.js";
+import { formatForRead } from "../src/lib/transforms.js";
 
 describe("formatReadContent", () => {
   it("emits one TextContent per file, meta-header then raw content", () => {
@@ -425,14 +426,14 @@ describe("formatReadContent — output budget (maxChars)", () => {
   it("mid-file truncation: header range shrinks and inline marker gives a re-read anchor", () => {
     const content = makeLines(100).join("\n") + "\n";
     const blocks = formatReadContent(
-      { results: [{ path: "/big.txt", mode_applied: "compact", lines: 100, returned_lines: 100, truncated: false, content }] },
+      { results: [{ path: "/big.txt", mode_applied: "verbatim", lines: 100, returned_lines: 100, truncated: false, content }], sources: new Map([["/big.txt", content]]) },
       [],
       false,
       800,
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    const m = text.match(/^<!-- Line 1 to (\d+) of 100 lines in '\/big\.txt' as compact -->/);
+    const m = text.match(/^<!-- Line 1 to (\d+) of 100 lines in '\/big\.txt' as verbatim -->/);
     expect(m).not.toBe(null);
     const endLine = Number(m![1]);
     expect(endLine).toBeLessThanOrEqual(99);
@@ -443,15 +444,74 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(text.endsWith(`re-read from line ${endLine + 1} -->\n`)).toBe(true);
   });
 
+  const truncatedCompactBlock = (source: string, path: string, start: number, lineCount: number, total: number) => {
+    const body = formatForRead({ content: source, mode: "compact", path, offset: start, limit: lineCount }).content;
+    const end = start + lineCount - 1;
+    const range = lineCount === 1 ? `Line ${start}` : `Line ${start} to ${end}`;
+    const marker = `<!-- Truncated at line ${end} of ${total} — max output reached; re-read from line ${end + 1} -->`;
+    return `<!-- ${range} of ${total} lines in '${path}' as compact -->\n${body.endsWith("\n") ? body : `${body}\n`}${marker}\n`;
+  };
+
+  const compactOutput = (source: string, path: string, start: number, lineCount: number, total: number) => ({
+    results: [{
+      path,
+      mode_applied: "compact" as const,
+      lines: total,
+      returned_lines: lineCount,
+      start_line: start,
+      truncated: false,
+      content: formatForRead({ content: source, mode: "compact", path, offset: start, limit: lineCount }).content,
+    }],
+    sources: new Map([[path, source]]),
+  });
+
+  it("compact single-line output truncates by source lines, keeping as many as fit", () => {
+    const source = Array.from({ length: 100 }, (_, i) => `const v${i + 1} = ${i + 1};`).join("\n") + "\n";
+    const blocks = formatReadContent(compactOutput(source, "/big.ts", 1, 100, 100), [], false, 600);
+    expect(blocks).toHaveLength(1);
+    const text = blocks[0]!.text;
+    const kept = Number(text.match(/^<!-- Line 1 to (\d+) of 100 lines/)![1]);
+    expect(kept).toBeLessThanOrEqual(99);
+    expect(text).toBe(truncatedCompactBlock(source, "/big.ts", 1, kept, 100));
+    expect(text.length).toBeLessThanOrEqual(600);
+    expect(truncatedCompactBlock(source, "/big.ts", 1, kept + 1, 100).length).toBeGreaterThan(600);
+  });
+
+  it("compact indent-sensitive output with collapsed blank lines truncates by source lines", () => {
+    const source = Array.from({ length: 60 }, (_, i) => `v${i + 1} = ${i + 1}\n\n\n`).join("");
+    const blocks = formatReadContent(compactOutput(source, "/big.py", 1, 180, 180), [], false, 300);
+    const text = blocks[0]!.text;
+    const kept = Number(text.match(/^<!-- Line 1 to (\d+) of 180 lines/)![1]);
+    expect(kept).toBeLessThanOrEqual(179);
+    expect(text).toBe(truncatedCompactBlock(source, "/big.py", 1, kept, 180));
+    expect(truncatedCompactBlock(source, "/big.py", 1, kept + 1, 180).length).toBeGreaterThan(300);
+  });
+
+  it("compact truncation of a slice keeps the requested start line", () => {
+    const source = Array.from({ length: 100 }, (_, i) => `const v${i + 1} = ${i + 1};`).join("\n") + "\n";
+    const blocks = formatReadContent(compactOutput(source, "/big.ts", 10, 50, 100), [], false, 400);
+    const text = blocks[0]!.text;
+    const end = Number(text.match(/^<!-- Line 10 to (\d+) of 100 lines/)![1]);
+    expect(end).toBeLessThanOrEqual(58);
+    expect(text).toBe(truncatedCompactBlock(source, "/big.ts", 10, end - 9, 100));
+  });
+
+  it("compact truncation keeps at least one source line when nothing fits", () => {
+    const source = Array.from({ length: 100 }, (_, i) => `const v${i + 1} = ${i + 1};`).join("\n") + "\n";
+    const blocks = formatReadContent(compactOutput(source, "/big.ts", 1, 100, 100), [], false, 10);
+    expect(blocks[0]!.text).toBe(truncatedCompactBlock(source, "/big.ts", 1, 1, 100));
+  });
+
   it("truncation stops later files; they are listed in a trailing omitted marker", () => {
     const contentA = makeLines(100).join("\n") + "\n";
     const blocks = formatReadContent(
       {
         results: [
-          { path: "/a.txt", mode_applied: "compact", lines: 100, returned_lines: 100, truncated: false, content: contentA },
+          { path: "/a.txt", mode_applied: "verbatim", lines: 100, returned_lines: 100, truncated: false, content: contentA },
           { path: "/b.txt", mode_applied: "compact", lines: 3, returned_lines: 3, truncated: false, content: "b1\nb2\nb3\n" },
           { path: "/c.txt", mode_applied: "compact", lines: 2, returned_lines: 2, truncated: false, content: "c1\nc2\n" },
         ],
+        sources: new Map([["/a.txt", contentA]]),
       },
       [],
       false,

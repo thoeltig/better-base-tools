@@ -39,6 +39,7 @@ describe("handleBatchRead", () => {
     expect(r.returned_lines).toBe(3);
     expect(r.truncated).toBe(false);
     expect(r.content).toBe("one\ntwo\nthree\n");
+    expect(out.sources.get(p)).toBe("one\ntwo\nthree\n");
     expect(r.error).toBeUndefined();
   });
 

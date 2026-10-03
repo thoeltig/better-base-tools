@@ -3,7 +3,7 @@ import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { formatForRead } from "../lib/transforms.js";
-import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
+import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResult, Reason } from "../types.js";
 
 const SEARCH_MERGE_GAP = 3;
 
@@ -15,7 +15,7 @@ export async function handleBatchRead(
   excludedPaths: readonly string[] = [],
   approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
-): Promise<ReadOutput> {
+): Promise<ReadOutputWithSources> {
   const expanded = await expandReadRequests(input.requests.map(normalizeCount), allowedDirectories, excludedPaths, approvedPaths);
   const plan = deduplicateEntries(expanded);
   const fileCache = await buildFileCache(plan, allowedDirectories, excludedPaths, approvedPaths);
@@ -28,7 +28,11 @@ export async function handleBatchRead(
       return result;
     })
   );
-  return { results };
+  const sources = new Map<string, string>();
+  for (const [path, file] of fileCache) {
+    if (file.ok) sources.set(path, file.content);
+  }
+  return { results, sources };
 }
 
 // count=0 means "no context" for search and "no limit" for reads; both equal an unset count.

@@ -1,9 +1,11 @@
 import { isAbsolute, relative, sep } from "node:path";
+import { formatForRead } from "./transforms.js";
 import type {
   EditFile,
   EditOutput,
   FileResult,
   ReadOutput,
+  ReadOutputWithSources,
   ReadRequest,
   ReadResult,
   ToolContentResult,
@@ -20,7 +22,7 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`): s
 }
 
 export function formatReadContent(
-  result: ReadOutput,
+  result: ReadOutput & Partial<Pick<ReadOutputWithSources, "sources">>,
   requests: ReadonlyArray<ReadRequest> = [],
   addUserAudience = false,
   maxChars = 0,
@@ -54,7 +56,7 @@ export function formatReadContent(
     // Block exceeds the remaining budget: truncate line-oriented reads at a line
     // boundary, emit a non-truncatable first block whole to guarantee progress,
     // otherwise defer the whole file to the omitted list.
-    const truncated = truncateReadBlock(r, maxChars - usedChars);
+    const truncated = truncateReadBlock(r, maxChars - usedChars, result.sources?.get(r.path));
     if (truncated) {
       output.push(truncated);
       usedChars += truncated.text.length;
@@ -104,9 +106,8 @@ function searchTruncationMarkerText(kept: number, total: number): string {
   return `<!-- Truncated: showing first ${kept} of ${plural(total, "match block")} — max output reached; refine the search or read the file directly -->`;
 }
 
-// How many leading units (lines or match blocks) fit into `budget` once the header
-// and truncation-marker overhead is reserved. Always keeps at least one unit so a
-// truncated block still carries a usable re-read anchor.
+// How many leading match blocks fit into `budget` once the header and truncation-marker
+// overhead is reserved. Always keeps at least one so a truncated block stays useful.
 function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, headerChars: number, markerChars: number): number {
   const contentBudget = budget - headerChars - markerChars - 3; // 3 = "\n" after header, content and marker
   let kept = 0;
@@ -124,24 +125,39 @@ function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, he
 // via readResultToBlock. Line reads truncate at line boundaries (header shows the
 // reduced range); search reads truncate at match-block boundaries. Returns null for
 // non-truncatable results (error/single-unit) or when nothing needs trimming.
-function truncateReadBlock(r: ReadResult, budget: number): ToolContentResult | null {
+function truncateReadBlock(r: ReadResult, budget: number, source: string | undefined): ToolContentResult | null {
   if (r.error || r.content.length === 0) return null;
   if (r.match_count !== undefined) return truncateSearchBlock(r, budget);
-  if (r.returned_lines > 0) return truncateLineBlock(r, budget);
+  if (r.returned_lines > 0) return truncateLineBlock(r, budget, source);
   return null;
 }
 
-function truncateLineBlock(r: ReadResult, budget: number): ToolContentResult | null {
+// Re-slices the raw source and re-formats it, because compact output does not map
+// 1:1 to source lines. Binary search for the most source lines that fit; keeps at least one.
+function truncateLineBlock(r: ReadResult, budget: number, source: string | undefined): ToolContentResult | null {
+  if (source === undefined || r.returned_lines <= 1) return null;
   const startLine = r.start_line ?? 1;
-  const bodyLines = (r.content.endsWith('\n') ? r.content.slice(0, -1) : r.content).split('\n');
-  const markerChars = truncationMarkerText(startLine + bodyLines.length - 1, r.lines).length;
-  const kept = countUnitsWithinBudget(bodyLines, budget, readResultHeader(r).length, markerChars);
-  if (kept >= bodyLines.length) return null;
+  const blockFor = (lineCount: number): ToolContentResult => {
+    const { content } = formatForRead({ content: source, mode: r.mode_applied, path: r.path, offset: startLine, limit: lineCount });
+    const block = readResultToBlock({ ...r, returned_lines: lineCount, content });
+    block.text += `${truncationMarkerText(startLine + lineCount - 1, r.lines)}\n`;
+    return block;
+  };
 
-  const endLine = startLine + kept - 1;
-  const block = readResultToBlock({ ...r, returned_lines: kept, content: bodyLines.slice(0, kept).join('\n') });
-  block.text += `${truncationMarkerText(endLine, r.lines)}\n`;
-  return block;
+  let best = blockFor(1);
+  let low = 2;
+  let high = r.returned_lines - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = blockFor(mid);
+    if (candidate.text.length <= budget) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
 }
 
 function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult | null {

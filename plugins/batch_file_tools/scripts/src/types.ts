@@ -74,6 +74,9 @@ export const ReadOutput = z.object({
   .strict();
 export type ReadOutput = z.infer<typeof ReadOutput>;
 
+/** ReadOutput plus raw file text per resolved path, for re-slicing on truncation. Internal; never sent to the client. */
+export type ReadOutputWithSources = ReadOutput & { readonly sources: ReadonlyMap<string, string> };
+
 export const OpType = z.enum([
     "replace",
     "replace_all",

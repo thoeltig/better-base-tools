@@ -159,7 +159,7 @@ server.registerTool(
       const toolOutput: CallToolResult = {
         content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE, MAX_OUTPUT_CHARS),
       };
-      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = { results: result.results };
       return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
