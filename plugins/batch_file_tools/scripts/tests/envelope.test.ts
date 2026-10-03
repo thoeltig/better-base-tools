@@ -1,3 +1,4 @@
+import { join, resolve, sep } from "node:path";
 import { describe, it } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { formatEditContent, formatReadContent } from "../src/lib/envelope.js";
@@ -87,6 +88,31 @@ describe("formatReadContent", () => {
     expect(blocks[0]!.text.includes("\\n")).toBe(false);
     expect(blocks[0]!.text.endsWith("x\ny\n")).toBe(true);
   });
+
+  it("displays paths below cwd relative with forward slashes", () => {
+    const blocks = formatReadContent({
+      results: [{ path: join(process.cwd(), "sub", "a.txt"), mode_applied: "verbatim", lines: 1, returned_lines: 1, truncated: false, content: "x\n" }],
+    });
+    expect(blocks[0]!.text).toContain("'sub/a.txt'");
+  });
+
+  it("displays paths outside cwd absolute with forward slashes", () => {
+    const outside = resolve(process.cwd(), "..", "..", "outside.txt");
+    const blocks = formatReadContent({
+      results: [{ path: outside, mode_applied: "verbatim", lines: 1, returned_lines: 1, truncated: false, content: "x\n" }],
+    });
+    expect(blocks[0]!.text).toContain(`'${outside.split(sep).join("/")}'`);
+  });
+
+  it("user summary pluralises the error count", () => {
+    const blocks = formatReadContent(
+      { results: [{ path: "/missing.txt", mode_applied: "verbatim", lines: 0, returned_lines: 0, truncated: false, content: "", error: { reason: "not_found", message: "no such file" } }] },
+      [{ path: "/missing.txt", mode: "verbatim" }],
+      true,
+    );
+    expect(blocks[1]!.text).toContain("1 error");
+    expect(blocks[1]!.text).not.toContain("error(s)");
+  });
 });
 
 describe("formatReadContent — new search output formats", () => {
@@ -104,7 +130,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 2 match(es) in 262 lines of '/src/types.ts' as 'compact' -->\n170\texport const EditInput\n176\texport type EditInput`
+      `<!-- Found 2 matches in 262 lines of '/src/types.ts' as 'compact' -->\n170\texport const EditInput\n176\texport type EditInput\n`
     );
   });
 
@@ -122,7 +148,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 1 match(es) in 122 lines of '/src/readme.md' as 'verbatim' -->\n<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74`
+      `<!-- Found 1 match in 122 lines of '/src/readme.md' as 'verbatim' -->\n<!-- Line 70 to 74, match at line 72 -->\nline70\nTARGET\nline74\n`
     );
   });
 
@@ -135,7 +161,7 @@ describe("formatReadContent — new search output formats", () => {
       ],
     });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- No match(es) found -->\n'/a.ts'\n'/b.ts'\n'/c.ts'`);
+    expect(blocks[0]!.text).toBe(`<!-- No match(es) found -->\n'/a.ts'\n'/b.ts'\n'/c.ts'\n`);
   });
 
   it("mixed: matched files get individual blocks, no-match files get one consolidated block", () => {
@@ -148,9 +174,9 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]!.text).toBe(
-      `<!-- Found 2 match(es) in 100 lines of '/a.ts' as 'compact' -->\n7\timport { foo }\n91\texport const bar`
+      `<!-- Found 2 matches in 100 lines of '/a.ts' as 'compact' -->\n7\timport { foo }\n91\texport const bar\n`
     );
-    expect(blocks[1]!.text).toBe(`<!-- No match(es) found -->\n'/b.ts'\n'/c.ts'`);
+    expect(blocks[1]!.text).toBe(`<!-- No match(es) found -->\n'/b.ts'\n'/c.ts'\n`);
   });
 
   it("sliced read: header encodes start_line and end_line from result", () => {
@@ -167,7 +193,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 168 to 179 of file '/src/types.ts' as 'verbatim' (12 of 262 lines total) -->\nexport type EditFile = z.infer<typeof EditFile>;`
+      `<!-- Read line 168 to 179 of file '/src/types.ts' as 'verbatim' (12 of 262 lines total) -->\nexport type EditFile = z.infer<typeof EditFile>;\n`
     );
   });
 
@@ -185,7 +211,7 @@ describe("formatReadContent — new search output formats", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Read line 1 to 50 of file '/src/index.ts' as 'compact' (50 lines total) -->\nexport default function main() {}`
+      `<!-- Read line 1 to 50 of file '/src/index.ts' as 'compact' (50 lines total) -->\nexport default function main() {}\n`
     );
   });
 });
@@ -196,13 +222,13 @@ describe("formatEditContent", () => {
       results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 0 }],
     });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0 ops successful -->`);
+    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 0 ops successful -->\n`);
   });
 
   it("dryRun OK: prefixed with DRY RUN", () => {
     const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 0 }] }, [], false, true);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- DRY RUN: Edit: 1 file, 0 ops successful -->`);
+    expect(blocks[0]!.text).toBe(`<!-- DRY RUN: Edit: 1 file, 0 ops successful -->\n`);
   });
 
   it("multi-file all OK: compact one-liner with count", () => {
@@ -214,7 +240,7 @@ describe("formatEditContent", () => {
       ],
     });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 3 files, 0 ops successful -->`);
+    expect(blocks[0]!.text).toBe(`<!-- Edit: 3 files, 0 ops successful -->\n`);
   });
 
   it("successful ops: overview shows op count", () => {
@@ -229,7 +255,22 @@ describe("formatEditContent", () => {
       ],
     });
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 2 ops successful -->`);
+    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 2 ops successful -->\n`);
+  });
+
+  it("single successful op: singular op label", () => {
+    const blocks = formatEditContent({ results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 1 }] });
+    expect(blocks[0]!.text).toBe(`<!-- Edit: 1 file, 1 op successful -->\n`);
+  });
+
+  it("user summary pluralises the file count", () => {
+    const blocks = formatEditContent(
+      { results: [{ path: "/a.ts", status: "ok", ops: [], totalOps: 1 }] },
+      [{ path: "/a.ts", ops: [{ type: "replace", old: "a", new: "b" }] }],
+      true,
+    );
+    expect(blocks[1]!.text).toContain("Edited 1 file ");
+    expect(blocks[1]!.text).not.toContain("file(s)");
   });
 
   it("partial with nearest_anchor: overview + file block with inline anchor", () => {
@@ -261,7 +302,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "beta\\ngamma\\nDELTA"; error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "beta\\ngamma\\nDELTA"; error: try anchor below; possible verbatim anchor: lines 40-44 -->\nbeta\ngamma\nDELTA-changed\n`
     );
   });
 
@@ -290,7 +331,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "### Fixed"; error: widen anchor; matches at lines 3, 17, 42 -->`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/a.ts': 0/1 ops successful -->\n<!-- op (replace) old: "### Fixed"; error: widen anchor; matches at lines 3, 17, 42 -->\n`
     );
   });
 
@@ -316,7 +357,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/missing.ts': 0/1 ops successful -->\n<!-- file error: io_error: not absolute -->`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/missing.ts': 0/1 ops successful -->\n<!-- file error: io_error: not absolute -->\n`
     );
   });
 
@@ -338,7 +379,7 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/4 ops successful -->\n\n<!-- '/a.ts': 0/4 ops successful -->\n<!-- op (replace) old: "foo"; error: 'foo' not found in file -->\n<!-- op (write) mode: append; skipped -->\n<!-- op (replace_range) lines 10-12; skipped -->\n<!-- op (replace) old: "bar"; skipped -->`,
+      `<!-- Edit: 1 file, 0/4 ops successful -->\n\n<!-- '/a.ts': 0/4 ops successful -->\n<!-- op (replace) old: "foo"; error: 'foo' not found in file -->\n<!-- op (write) mode: append; skipped -->\n<!-- op (replace_range) lines 10-12; skipped -->\n<!-- op (replace) old: "bar"; skipped -->\n`,
     );
   });
 });
@@ -379,7 +420,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(text.includes(`L${String(endLine).padStart(3, "0")}X`)).toBe(true);
     expect(text.includes(`L${String(endLine + 1).padStart(3, "0")}X`)).toBe(false);
     expect(text.includes(`Truncated at line ${endLine} of 100`)).toBe(true);
-    expect(text.includes(`re-read from line ${endLine + 1}`)).toBe(true);
+    expect(text.endsWith(`re-read from line ${endLine + 1} -->\n`)).toBe(true);
   });
 
   it("truncation stops later files; they are listed in a trailing omitted marker", () => {
@@ -402,6 +443,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(last.includes("Max output reached — could not return")).toBe(true);
     expect(last.includes("/b.txt")).toBe(true);
     expect(last.includes("/c.txt")).toBe(true);
+    expect(last.endsWith("-->\n")).toBe(true);
     expect(joined.includes("b1")).toBe(false);
     expect(joined.includes("c1")).toBe(false);
   });
@@ -429,10 +471,11 @@ describe("formatReadContent — output budget (maxChars)", () => {
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.includes("Found 40 match(es)")).toBe(true);
+    expect(text.includes("Found 40 matches")).toBe(true);
     expect(text.includes("matchline-01")).toBe(true);
     expect(text.includes("matchline-40")).toBe(false);
-    expect(text.includes("of 40 match block")).toBe(true);
+    expect(text.includes("of 40 match blocks")).toBe(true);
+    expect(text.endsWith("-->\n")).toBe(true);
     expect(text.length).toBeLessThanOrEqual(500);
   });
 
@@ -448,7 +491,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.includes("Found 5 match(es)")).toBe(true);
+    expect(text.includes("Found 5 matches")).toBe(true);
     expect(text.includes("ctx-010-a")).toBe(true);
     expect(text.includes("ctx-130-a")).toBe(false);
     expect(text.includes("match block")).toBe(true);

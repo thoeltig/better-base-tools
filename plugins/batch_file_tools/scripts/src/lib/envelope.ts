@@ -1,4 +1,4 @@
-import { isAbsolute, relative } from "node:path";
+import { isAbsolute, relative, sep } from "node:path";
 import type {
   EditFile,
   EditOutput,
@@ -11,7 +11,12 @@ import type {
 
 function shortenPath(p: string): string {
   const rel = relative(process.cwd(), p);
-  return rel.startsWith("..") || isAbsolute(rel) ? p : rel;
+  const shown = rel.startsWith("..") || isAbsolute(rel) ? p : rel;
+  return shown.split(sep).join("/");
+}
+
+function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
 export function formatReadContent(
@@ -86,7 +91,7 @@ function buildOmittedMarker(paths: ReadonlyArray<string>): ToolContentResult {
   const list = paths.map(shortenPath).join(', ');
   return {
     type: 'text',
-    text: `<!-- Max output reached — could not return: ${list}. Re-request them separately. -->`,
+    text: `<!-- Max output reached — could not return: ${list}. Re-request them separately. -->\n`,
     annotations: { audience: ['assistant', 'user'], priority: 0 },
   };
 }
@@ -96,14 +101,14 @@ function truncationMarkerText(endLine: number, total: number): string {
 }
 
 function searchTruncationMarkerText(kept: number, total: number): string {
-  return `<!-- Truncated: showing first ${kept} of ${total} match block(s) — max output reached; refine the search or read the file directly -->`;
+  return `<!-- Truncated: showing first ${kept} of ${plural(total, "match block")} — max output reached; refine the search or read the file directly -->`;
 }
 
 // How many leading units (lines or match blocks) fit into `budget` once the header
 // and truncation-marker overhead is reserved. Always keeps at least one unit so a
 // truncated block still carries a usable re-read anchor.
 function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, headerChars: number, markerChars: number): number {
-  const contentBudget = budget - headerChars - markerChars - 2; // 2 = "\n" after header + "\n" before marker
+  const contentBudget = budget - headerChars - markerChars - 3; // 3 = "\n" after header, content and marker
   let kept = 0;
   let contentChars = 0;
   for (const unit of units) {
@@ -113,10 +118,6 @@ function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, he
     kept++;
   }
   return kept;
-}
-
-function headerCharsOf(r: ReadResult): number {
-  return readResultToBlock(r).text.length - r.content.length - 1; // header + separating "\n"
 }
 
 // Truncate an over-budget read block at a unit boundary, rewriting its meta header
@@ -134,12 +135,12 @@ function truncateLineBlock(r: ReadResult, budget: number): ToolContentResult | n
   const startLine = r.start_line ?? 1;
   const bodyLines = (r.content.endsWith('\n') ? r.content.slice(0, -1) : r.content).split('\n');
   const markerChars = truncationMarkerText(startLine + bodyLines.length - 1, r.lines).length;
-  const kept = countUnitsWithinBudget(bodyLines, budget, headerCharsOf(r), markerChars);
+  const kept = countUnitsWithinBudget(bodyLines, budget, readResultHeader(r).length, markerChars);
   if (kept >= bodyLines.length) return null;
 
   const endLine = startLine + kept - 1;
   const block = readResultToBlock({ ...r, returned_lines: kept, content: bodyLines.slice(0, kept).join('\n') });
-  block.text += `\n${truncationMarkerText(endLine, r.lines)}`;
+  block.text += `${truncationMarkerText(endLine, r.lines)}\n`;
   return block;
 }
 
@@ -150,11 +151,11 @@ function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult |
     ? r.content.split(/\n(?=<!-- Line )/)
     : r.content.split('\n');
   const markerChars = searchTruncationMarkerText(blocks.length, blocks.length).length;
-  const kept = countUnitsWithinBudget(blocks, budget, headerCharsOf(r), markerChars);
+  const kept = countUnitsWithinBudget(blocks, budget, readResultHeader(r).length, markerChars);
   if (kept >= blocks.length) return null;
 
   const block = readResultToBlock({ ...r, content: blocks.slice(0, kept).join('\n') });
-  block.text += `\n${searchTruncationMarkerText(kept, blocks.length)}`;
+  block.text += `${searchTruncationMarkerText(kept, blocks.length)}\n`;
   return block;
 }
 
@@ -165,19 +166,18 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
   const okOps = totalOps - nonOkOps;
   const fileCount = allResults.length;
   const dryTag = dryRun ? "DRY RUN: " : "";
-  const fileLabel = fileCount === 1 ? "file" : "files";
 
   const errorFiles = allResults.filter(r => r.status === "error" || r.status === "partial");
   const skippedFiles = allResults.filter(r => r.status === "skipped");
   const hasProblems = errorFiles.length > 0 || skippedFiles.length > 0;
 
   if (!hasProblems) {
-    const output = [createToolOutputForAssistant(`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps} ops successful -->`)];
+    const output = [createToolOutputForAssistant(`<!-- ${dryTag}Edit: ${plural(fileCount, "file")}, ${plural(okOps, "op")} successful -->`)];
     if (addUserAudience) output.push(createToolOutputForUser(buildEditSummary(files, result.results)));
     return output;
   }
 
-  const allLines: string[] = [`<!-- ${dryTag}Edit: ${fileCount} ${fileLabel}, ${okOps}/${totalOps} ops successful -->`];
+  const allLines: string[] = [`<!-- ${dryTag}Edit: ${plural(fileCount, "file")}, ${okOps}/${totalOps} ops successful -->`];
 
   for (const r of [...errorFiles, ...skippedFiles]) {
     const fileNonOkOps = r.ops.length;
@@ -232,13 +232,16 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
 }
 
 function readResultToBlock(r: ReadResult): ToolContentResult {
-  let hint = "";
+  return createToolOutputForAssistant(`${readResultHeader(r)}\n${r.content ?? ""}`);
+}
+
+function readResultHeader(r: ReadResult): string {
   if (r.error) {
-    hint = `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
+    return `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
   } else if (r.match_count !== undefined) {
-    hint = `<!-- Found ${r.match_count} match(es) in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
+    return `<!-- Found ${plural(r.match_count, "match", "matches")} in ${r.lines} lines of '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
   } else if (r.returned_lines === 0) {
-    hint = `<!-- Read 0 lines of file '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
+    return `<!-- Read 0 lines of file '${shortenPath(r.path)}' as '${r.mode_applied}' -->`;
   } else {
     const startLine = r.start_line ?? 1;
     const endLine = startLine + r.returned_lines - 1;
@@ -246,15 +249,14 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
       ? `${r.returned_lines} of ${r.lines} lines total`
       : `${r.lines} ${r.lines === 1 ? "line" : "lines"} total`;
     const lineRange = startLine === endLine ? `line ${startLine}` : `line ${startLine} to ${endLine}`;
-    hint = `<!-- Read ${lineRange} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
+    return `<!-- Read ${lineRange} of file '${shortenPath(r.path)}' as '${r.mode_applied}' (${linesInfo}) -->`;
   }
-  return createToolOutputForAssistant(`${hint}\n${r.content ?? ""}`);
 }
 
 function createToolOutputForAssistant(text: string): ToolContentResult {
   return { 
     type: "text", 
-    text: text, 
+    text: text.endsWith("\n") ? text : `${text}\n`, 
     annotations: { 
       audience: ['assistant'], 
       priority: 0.8,
@@ -289,7 +291,7 @@ function buildReadSummary(
   parts.push([...modeCounts.entries()].map(([m, c]) => `${m}: ${c}`).join(', '));
   if (searchTerms.length > 0) parts.push('searched: ' + searchTerms.map(t => '"' + t + '"').join(', '));
   const errCount = results.filter(r => r.error).length;
-  if (errCount > 0) parts.push(`${errCount} error(s)`);
+  if (errCount > 0) parts.push(plural(errCount, "error"));
   return parts.join(' — ');
 }
 
@@ -305,7 +307,7 @@ function buildEditSummary(
   }
   const okCount = results.filter(r => r.status === 'ok').length;
   const errCount = results.filter(r => r.status === 'error' || r.status === 'partial').length;
-  const parts: string[] = [`Edited ${files.length} file(s)`];
+  const parts: string[] = [`Edited ${plural(files.length, "file")}`];
   parts.push([...opCounts.entries()].map(([t, c]) => `${t}: ${c}`).join(', '));
   if (errCount > 0) parts.push(`ok: ${okCount}, error/partial: ${errCount}`);
   return parts.join(' — ');
