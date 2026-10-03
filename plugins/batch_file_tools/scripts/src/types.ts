@@ -34,7 +34,7 @@ export const ReadRequest = z.object({
       .describe("'compact' (DEFAULT) — cheapest read; collapses lines and strips indent/whitespace runs, yet still a valid replace/replace_all anchor because batch_edit falls back to whitespace-normalized matching. 'verbatim' — the file's exact bytes, indentation and line endings included."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (ignored for search)"),
-    count: z.number().int().min(1).optional()
+    count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
       .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),

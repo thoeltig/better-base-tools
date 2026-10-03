@@ -16,7 +16,7 @@ export async function handleBatchRead(
   approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
 ): Promise<ReadOutput> {
-  const expanded = await expandReadRequests(input.requests, allowedDirectories, excludedPaths, approvedPaths);
+  const expanded = await expandReadRequests(input.requests.map(normalizeCount), allowedDirectories, excludedPaths, approvedPaths);
   const plan = deduplicateEntries(expanded);
   const fileCache = await buildFileCache(plan, allowedDirectories, excludedPaths, approvedPaths);
   const total = plan.length;
@@ -29,6 +29,14 @@ export async function handleBatchRead(
     })
   );
   return { results };
+}
+
+// count=0 means "no context" for search and "no limit" for reads; both equal an unset count.
+function normalizeCount(req: ReadRequest): ReadRequest {
+  if (req.count !== 0) return req;
+  const normalized = { ...req };
+  delete normalized.count;
+  return normalized;
 }
 
 type FileCache = Map<string, ReadFileResult | ReadFileError>;

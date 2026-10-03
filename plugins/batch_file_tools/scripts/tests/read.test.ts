@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { handleBatchRead } from "../src/tools/read.js";
+import { ReadRequest } from "../src/types.js";
 import type { ReadInput } from "../src/types.js";
 
 let workDir: string;
@@ -160,6 +161,27 @@ describe("handleBatchRead", () => {
     expect(r.content).toContain("target");
     expect(r.content).toContain("line4");
     expect(r.content).not.toContain("line1");
+  });
+
+  it("schema: accepts count=0", () => {
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchTerm: "a", count: 0 }).success).toBe(true);
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", count: -1 }).success).toBe(false);
+  });
+
+  it("search: count=0 returns inline matches like unset count", async () => {
+    const p = await fixture("ctx0.ts", "line1\ntarget\nline3\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 0 }] });
+    const r = out.results[0]!;
+    expect(r.match_count).toBe(1);
+    expect(r.content).toBe("2\ttarget");
+  });
+
+  it("read: count=0 reads to end of file", async () => {
+    const p = await fixture("read-count0.ts", "L1\nL2\nL3\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", offset: 2, count: 0 }] });
+    const r = out.results[0]!;
+    expect(r.returned_lines).toBe(2);
+    expect(r.content).toBe("L2\nL3\n");
   });
 
   it("search: overlapping context blocks are merged into one block", async () => {
@@ -353,6 +375,29 @@ describe("deduplication", () => {
     });
     expect(out.results).toHaveLength(1);
     expect(out.results[0]!.returned_lines).toBe(5);
+  });
+
+  it("range: count=0 slice is subsumed like a full read", async () => {
+    const p = await fixture("dedup_range_count0.ts", "L1\nL2\nL3\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", count: 0 },
+        { path: p, mode: "verbatim", offset: 2, count: 1 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.returned_lines).toBe(3);
+  });
+
+  it("search: count=0 and unset count deduplicate", async () => {
+    const p = await fixture("dedup_search_count0.ts", "a\ntarget\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "target", count: 0 },
+        { path: p, mode: "verbatim", searchTerm: "target" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
   });
 
   it("range: overlapping slices merge to union range", async () => {
