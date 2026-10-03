@@ -6,7 +6,7 @@ import { FileSummary, KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowle
 import { buildFileMap } from './file-map.js';
 import { acquireLockWithWait, releaseLock } from './lock.js';
 
-const SCAN_LOCK_TIMEOUT_MS = 30_000;
+const SCAN_LOCK_TIMEOUT_MS = 10_000;
 
 export interface ScanResult {
   filesToScan: string[];

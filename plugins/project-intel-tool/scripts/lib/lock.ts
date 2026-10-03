@@ -47,7 +47,7 @@ export function releaseLock(): void {
   activeLockPath = null;
 }
 
-export async function acquireLockWithWait(knowledgeDir: string, timeoutMs = 30_000, intervalMs = 200): Promise<boolean> {
+export async function acquireLockWithWait(knowledgeDir: string, timeoutMs = 10_000, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (acquireLock(knowledgeDir)) return true;
