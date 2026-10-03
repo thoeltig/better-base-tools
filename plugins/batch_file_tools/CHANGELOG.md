@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-03
+
+### Fixed
+
+- A failed MCP `sendLoggingMessage` falls back to `console.error` correctly.
+
 ## [1.3.1] - 2026-09-15
 
 ### Changed
@@ -347,7 +353,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.2...HEAD
+[1.3.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...BatchFileTools_v1.3.2
 [1.3.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...BatchFileTools_v1.3.1
 [1.3.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...BatchFileTools_v1.3.0
 [1.2.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...BatchFileTools_v1.2.6

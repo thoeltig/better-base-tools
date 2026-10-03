@@ -26,6 +26,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Fixed
 
 - **Stale exports, imports and refs survived file changes** — `scanProject` started each entry from the stored one and only overwrote these fields when the new list was non-empty, so a file that lost all its exports kept the old ones. They are now rebuilt from the current content every time. `analysisDelta` of a changed file is likewise recalculated instead of kept when the size matches the analysed size again.
+- A failed MCP `sendLoggingMessage` falls back to `console.error` correctly.
 
 ## [1.5.2] - 2026-09-15
 

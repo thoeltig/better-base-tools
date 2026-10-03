@@ -74,11 +74,9 @@ const server = new McpServer(
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
-    try {
-      server.sendLoggingMessage({ level, data, logger });
-    } catch {
+    server.sendLoggingMessage({ level, data, logger }).catch(() => {
       console.error(`[${logger ?? 'server'}] ${data}`);
-    }
+    });
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
