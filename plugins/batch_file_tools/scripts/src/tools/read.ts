@@ -16,6 +16,11 @@ function searchKey(req: ReadRequest): string | undefined {
   return undefined;
 }
 
+function searchFields(req: ReadRequest): Pick<ReadResult, "search_term" | "search_regex"> {
+  if (req.searchTerm !== undefined) return { search_term: req.searchTerm };
+  return req.searchRegex !== undefined ? { search_regex: req.searchRegex } : {};
+}
+
 function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
   if (req.searchRegex !== undefined) {
     const re = new RegExp(req.searchRegex, "i");
@@ -253,6 +258,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
         truncated: false,
         content: "",
         match_count: 0,
+        ...searchFields(req),
       };
     }
 
@@ -265,24 +271,21 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
         returnedLines += 1;
       }
     } else {
-      type MatchBlock = { s: number; e: number; matchLines: number[] };
-      const intervals: MatchBlock[] = [];
+      const intervals: { s: number; e: number }[] = [];
       for (const idx of matchIdxs) {
         const s = Math.max(0, idx - ctx);
         const e = Math.min(rawLines.length - 1, idx + ctx);
         const last = intervals.at(-1);
         if (last && s - last.e - 1 <= SEARCH_MERGE_GAP) {
           last.e = Math.max(last.e, e);
-          last.matchLines.push(idx);
         } else {
-          intervals.push({ s, e, matchLines: [idx] });
+          intervals.push({ s, e });
         }
       }
-      for (const { s, e, matchLines } of intervals) {
+      for (const { s, e } of intervals) {
         returnedLines += e - s + 1;
         const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
-        const matchSuffix = matchLines.length === 1 ? `, match at line ${matchLines[0]! + 1}` : "";
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1}${matchSuffix} -->\n${formatted.content}`);
+        blocks.push(`<!-- Line ${s + 1} to ${e + 1} -->\n${formatted.content}`);
       }
     }
 
@@ -294,6 +297,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       truncated: false,
       content: blocks.join("\n"),
       match_count: matchIdxs.length,
+      ...searchFields(req),
     };
   }
 

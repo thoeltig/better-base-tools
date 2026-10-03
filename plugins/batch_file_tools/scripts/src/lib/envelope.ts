@@ -78,24 +78,28 @@ export function formatReadContent(
     stopped = true;
   }
 
-  if (noMatchResults.length > 0) {
-    const noMatchBlock = buildNoMatchBlock(noMatchResults);
-    if (!stopped && (maxChars <= 0 || usedChars + noMatchBlock.text.length <= maxChars)) {
-      output.push(noMatchBlock);
-      usedChars += noMatchBlock.text.length;
-    } else {
-      omitted.push(...noMatchResults);
-    }
-  }
+  const noMatchBlock = buildNoMatchBlock(noMatchResults, otherResults);
+  if (noMatchBlock) output.push(noMatchBlock);
 
   if (omitted.length > 0) output.push(buildOmittedMarker(omitted.map(r => r.path)));
   if (addUserAudience) output.push(createToolOutputForUser(buildReadSummary(requests, result.results)));
   return output;
 }
 
-function buildNoMatchBlock(results: ReadonlyArray<ReadResult>): ToolContentResult {
-  const fileList = results.map(r => `'${shortenPath(r.path)}'`).join('\n');
-  return createToolOutputForAssistant(`<!-- No match(es) found -->\n${fileList}`);
+// One line per search that matched in no file; files without matches are otherwise
+// omitted like grep does. Tiny, so emitted outside the output budget.
+function buildNoMatchBlock(noMatch: ReadonlyArray<ReadResult>, others: ReadonlyArray<ReadResult>): ToolContentResult | null {
+  const matched = new Set(others.map(searchLabel));
+  const labels = [...new Set(noMatch.map(searchLabel))]
+    .filter((label): label is string => label !== undefined && !matched.has(label));
+  if (labels.length === 0) return null;
+  return createToolOutputForAssistant(labels.map(label => `<!-- No matches for ${label} -->`).join('\n'));
+}
+
+function searchLabel(r: ReadResult): string | undefined {
+  if (r.search_term !== undefined) return `'${r.search_term}'`;
+  if (r.search_regex !== undefined) return `/${r.search_regex}/`;
+  return undefined;
 }
 
 function buildOmittedMarker(paths: ReadonlyArray<string>): ToolContentResult {
@@ -266,7 +270,9 @@ function readResultHeader(r: ReadResult): string {
   if (r.error) return errorComment(r.path, r.error);
   const file = `'${shortenPath(r.path)}'`;
   if (r.match_count !== undefined) {
-    return `<!-- ${plural(r.match_count, "match", "matches")} in ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} -->`;
+    const label = searchLabel(r);
+    const searched = label === undefined ? "" : ` for ${label}`;
+    return `<!-- ${plural(r.match_count, "match", "matches")}${searched} in ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} -->`;
   }
   if (r.returned_lines === r.lines) {
     return `<!-- ${plural(r.lines, "line")} in ${file} as ${r.mode_applied} -->`;

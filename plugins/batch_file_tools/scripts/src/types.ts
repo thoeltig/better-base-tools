@@ -37,7 +37,7 @@ export const ReadRequest = z.object({
     count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this literal text (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
+      .describe("If set: search file(s) for this literal text (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N --> headers."),
     searchRegex: z.string().min(1).optional()
       .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive); mutually exclusive with searchTerm."),
   })
@@ -66,6 +66,10 @@ export const ReadResult = z.object({
     content: z.string(),
     match_count: z.number().int().min(0).optional()
       .describe("Number of matches found (search mode only)"),
+    search_term: z.string().optional()
+      .describe("Literal text searched for (search mode only)"),
+    search_regex: z.string().optional()
+      .describe("Regular expression searched for (search mode only)"),
     start_line: z.number().int().min(1).optional()
       .describe("1-indexed first line of the returned content (regular reads only)"),
     error: FileError.optional(),

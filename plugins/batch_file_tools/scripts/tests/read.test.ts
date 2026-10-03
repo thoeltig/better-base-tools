@@ -159,6 +159,7 @@ describe("handleBatchRead", () => {
     const p = await fixture("no-match.ts", "const x = 1;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "zzznomatch" }] });
     const r = out.results[0]!;
+    expect(r.search_term).toBe("zzznomatch");
     expect(r.match_count).toBe(0);
     expect(r.content).toBe("");
   });
@@ -183,6 +184,7 @@ describe("handleBatchRead", () => {
     const p = await fixture("ctx0.ts", "line1\ntarget\nline3\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 0 }] });
     const r = out.results[0]!;
+    expect(r.search_term).toBe("target");
     expect(r.match_count).toBe(1);
     expect(r.content).toBe("2\ttarget");
   });
@@ -202,7 +204,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "b", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 1 to 4, match at line 2 -->");
+    expect(r.content).toContain("<!-- Line 1 to 4 -->");
   });
 
   it("search: nearby context blocks within gap are merged", async () => {
@@ -223,15 +225,17 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("match at line 1");
-    expect(r.content).toContain("match at line 10");
-    expect(r.content).not.toContain("match at lines");
+    expect(r.content).toContain("<!-- Line 1 to 3 -->");
+    expect(r.content).toContain("<!-- Line 8 to 12 -->");
+    expect(r.content).not.toContain("match at");
   });
 
   it("searchRegex: pattern matches lines", async () => {
     const p = await fixture("regex-match.ts", "const foo = 1;\nconst bar = 2;\nlet baz = 3;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "^const" }] });
     const r = out.results[0]!;
+    expect(r.search_regex).toBe("^const");
+    expect(r.search_term).toBeUndefined();
     expect(r.match_count).toBe(2);
     expect(r.content).toContain("const foo");
     expect(r.content).toContain("const bar");
@@ -337,7 +341,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 3 to 5, match at line 4 -->");
+    expect(r.content).toContain("<!-- Line 3 to 5 -->");
     expect(r.content).toContain("line3");
     expect(r.content).toContain("TARGET");
     expect(r.content).toContain("line5");
