@@ -168,7 +168,7 @@ async function expandReadRequests(
     }
 
     if (candidates.length === 0) {
-      entries.push({ kind: "err", result: errResult(req, "not_found", `no files matched: ${req.path}`) });
+      entries.push({ kind: "err", result: errResult(req, "not_found", "no files matched") });
       continue;
     }
 
@@ -200,7 +200,7 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
 
 async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
   if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
-    return errResult(req, 'not_authorized', `Access denied: ${req.path}`);
+    return errResult(req, 'not_authorized', "");
   }
   const file = fileCache.get(req.path) ?? await readFileUtf8(req.path, allowedDirectories);
   if (!file.ok) {

@@ -93,6 +93,7 @@ describe("handleBatchRead", () => {
     const r = out.results[0]!;
     expect(r.content).toBeDefined();
     expect(r.error?.reason).toBe("not_found");
+    expect(r.error?.message).toBe("");
     expect(r.lines).toBe(0);
   });
 

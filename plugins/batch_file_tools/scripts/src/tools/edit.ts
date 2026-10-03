@@ -116,7 +116,7 @@ async function planEntries(
     file.path = await safeRealpath(resolve(file.path));
     if (!(await needsExpansion(file.path))) {
       if (!isAccessible(file.path, allowedDirectories, excludedPaths, approvedPaths)) {
-        entries.push({ kind: "error", result: buildGlobError(file, "not_authorized", `Access denied: ${file.path}`) });
+        entries.push({ kind: "error", result: buildFileError(file, "not_authorized", "") });
         continue;
       }
       merge(file);
@@ -129,7 +129,7 @@ async function planEntries(
         incompatible.type === "write" ? `write(${incompatible.mode})` : incompatible.type;
       entries.push({
         kind: "error",
-        result: buildGlobError(
+        result: buildFileError(
           file,
           "not_supported",
           `op type '${opLabel}' is not allowed with glob/folder paths; allowed: replace, replace_all, write(mode='append')`,
@@ -146,7 +146,7 @@ async function planEntries(
       const msg = err instanceof Error ? err.message : String(err);
       entries.push({
         kind: "error",
-        result: buildGlobError(file, "io_error", `glob expansion failed: ${msg}`),
+        result: buildFileError(file, "io_error", `glob expansion failed: ${msg}`),
       });
       continue;
     }
@@ -154,7 +154,7 @@ async function planEntries(
     if (candidates.length === 0) {
       entries.push({
         kind: "error",
-        result: buildGlobError(file, "not_found", `no files matched: ${file.path}`),
+        result: buildFileError(file, "not_found", "no files matched"),
       });
       continue;
     }
@@ -163,7 +163,7 @@ async function planEntries(
     if (allowed.length === 0) {
       entries.push({
         kind: "error",
-        result: buildGlobError(
+        result: buildFileError(
           file,
           "not_authorized",
           `no matched files are within allowed directories`,
@@ -186,7 +186,7 @@ function isGlobAllowedOp(op: EditOp): boolean {
   return false;
 }
 
-function buildGlobError(file: EditFile, reason: Reason, message: string): FileResult {
+function buildFileError(file: EditFile, reason: Reason, message: string): FileResult {
   const ops: OpResult[] = file.ops.map((op, index) => ({
     index,
     status: "error",
@@ -272,6 +272,11 @@ async function editOneFile(
     return decorateOp({ index: i, status: "skipped" }, op);
   });
 
+  if (!buf.existed && !buf.exists) {
+    // No op created the file, so every op failed on it: report the missing file once.
+    return buildFileError(file, "not_found", "");
+  }
+
   const finalContent = joinLines(buf.lines, buf.endings);
   const changed = finalContent !== originalContent || (buf.exists && !buf.existed);
 
@@ -295,19 +300,7 @@ async function editOneFile(
 function buildFileLoadErrorResult(file: EditFile, err: unknown): FileResult {
   const message = err instanceof Error ? err.message : String(err);
   const fileReason: Reason = err instanceof BufferLoadError ? err.reason : "io_error";
-  return {
-    path: file.path,
-    status: "error",
-    error: { reason: fileReason, message },
-    ops: file.ops.map((op, index): OpResult => ({
-      index,
-      status: "error",
-      reason: fileReason,
-      type: op.type,
-      hint: { next_action: message },
-    })),
-    totalOps: file.ops.length,
-  };
+  return buildFileError(file, fileReason, message);
 }
 
 function buildWriteErrorResult(file: EditFile, opResults: OpResult[], err: unknown): FileResult {

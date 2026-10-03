@@ -393,6 +393,28 @@ describe("replace_all op", () => {
     expect(await readText(p)).toBe("X bar X baz X\n");
   });
 
+  it("missing target file that no op creates: single file-level not_found", async () => {
+    const p = tmpPath("does-not-exist.txt");
+    const out = await runEdit({ path: p, ops: [{ type: "replace", old: "a", new: "b" }, { type: "replace_all", old: "c", new: "d" }] });
+    const fr = out.results[0]!;
+    expect(fr.status).toBe("error");
+    expect(fr.error).toEqual({ reason: "not_found", message: "" });
+    expect(fr.ops.map(o => o.reason)).toEqual(["not_found", "not_found"]);
+    expect(existsSync(p)).toBe(false);
+  });
+
+  it("missing target file created by a later write: earlier op fails with a short op-level hint", async () => {
+    const p = tmpPath("created-later.txt");
+    const out = await runEdit({ path: p, ops: [{ type: "replace", old: "a", new: "b" }, { type: "write", mode: "overwrite", content: "x\n" }] });
+    const fr = out.results[0]!;
+    expect(fr.status).toBe("partial");
+    expect(fr.error).toBeUndefined();
+    expect(fr.ops).toHaveLength(1);
+    expect(fr.ops[0]!.reason).toBe("not_found");
+    expect(fr.ops[0]!.hint?.next_action).toBe("file did not exist when this op ran");
+    expect(await readText(p)).toBe("x\n");
+  });
+
   it("not_found when missing", async () => {
     const p = await fixture("ra_nf.txt", "abc\n");
     const out = await runEdit({

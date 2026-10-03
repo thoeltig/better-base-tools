@@ -268,11 +268,12 @@ function replaceAllContent(buf: EditBuffer, content: string): void {
   buf.endings = [...split.endings];
 }
 
-function createFileNotFoundResult(): OpFailure{
+// Only surfaces when a later write op creates the file; otherwise edit.ts reports a file-level not_found.
+function createFileNotFoundResult(): OpFailure {
   return {
     ok: false,
     reason: "not_found",
-    nextAction: "target file does not exist; use write(mode: 'overwrite') or write(mode: 'append') first",
+    nextAction: "file did not exist when this op ran",
   };
 }
 

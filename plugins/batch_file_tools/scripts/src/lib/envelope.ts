@@ -1,4 +1,5 @@
-import { isAbsolute, relative, sep } from "node:path";
+import { isAbsolute, relative } from "node:path";
+import { forwardSlashes } from "./fs.js";
 import { formatForRead } from "./transforms.js";
 import type {
   EditFile,
@@ -7,6 +8,7 @@ import type {
   ReadOutput,
   ReadOutputWithSources,
   ReadRequest,
+  FileError,
   ReadResult,
   ToolContentResult,
 } from "../types.js";
@@ -14,7 +16,14 @@ import type {
 function shortenPath(p: string): string {
   const rel = relative(process.cwd(), p);
   const shown = rel.startsWith("..") || isAbsolute(rel) ? p : rel;
-  return shown.split(sep).join("/");
+  return forwardSlashes(shown);
+}
+
+// not_found shows the absolute path so a wrong resolution base (server cwd) is visible.
+function errorComment(p: string, error: FileError): string {
+  const shownPath = error.reason === "not_found" ? forwardSlashes(p) : shortenPath(p);
+  const detail = error.message ? ` — ${error.message}` : "";
+  return `<!-- Error ${error.reason}: '${shownPath}'${detail} -->`;
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
@@ -196,6 +205,10 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
   const allLines: string[] = [`<!-- ${dryTag}Edit: ${plural(fileCount, "file")}, ${okOps}/${totalOps} ops successful -->`];
 
   for (const r of [...errorFiles, ...skippedFiles]) {
+    if (r.error) {
+      allLines.push(errorComment(r.path, r.error));
+      continue;
+    }
     const fileNonOkOps = r.ops.length;
     const fileTotalOps = r.totalOps;
     const fileOkOps = fileTotalOps - fileNonOkOps;
@@ -205,8 +218,6 @@ export function formatEditContent(result: EditOutput, files: ReadonlyArray<EditF
 
     if (r.status === "skipped") {
       fileLines.push(`<!-- file; skipped -->`);
-    } else if (r.error) {
-      fileLines.push(`<!-- file error: ${r.error.reason}: ${r.error.message} -->`);
     } else {
       // Skipped ops are named individually and emitted after the errors: execution order differs
       // from request order, so a count alone would not say which ops landed and which did not.
@@ -252,9 +263,7 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
 }
 
 function readResultHeader(r: ReadResult): string {
-  if (r.error) {
-    return `<!-- '${r.error.reason}' error reading file '${shortenPath(r.path)}' as '${r.mode_applied}': ${r.error.message} -->`;
-  }
+  if (r.error) return errorComment(r.path, r.error);
   const file = `'${shortenPath(r.path)}'`;
   if (r.match_count !== undefined) {
     return `<!-- ${plural(r.match_count, "match", "matches")} in ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} -->`;

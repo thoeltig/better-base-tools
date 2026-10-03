@@ -46,7 +46,7 @@ export async function loadBuffer(
       };
     }
     if (e.code === "EISDIR") {
-      throw new BufferLoadError("is_directory", `Path is a directory: ${path}`);
+      throw new BufferLoadError("is_directory", "");
     }
     throw new BufferLoadError("io_error", e.message ?? String(err));
   }

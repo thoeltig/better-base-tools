@@ -75,7 +75,7 @@ describe("formatReadContent", () => {
     expect(blocks[0]!.text).toBe(`<!-- 0 lines in '/e.ts' as compact -->\n`);
   });
 
-  it("error result: comment hint only", () => {
+  it("error result: reason and path, no detail when the message is empty", () => {
     const blocks = formatReadContent({
       results: [
         {
@@ -85,13 +85,26 @@ describe("formatReadContent", () => {
           returned_lines: 0,
           truncated: false,
           content: '',
-          error: { reason: "not_found", message: "no such file" },
+          error: { reason: "not_found", message: "" },
         },
       ],
     });
-    expect(blocks[0]!.text).toBe(
-      `<!-- 'not_found' error reading file '/missing.txt' as 'verbatim': no such file -->\n`,
-    );
+    expect(blocks[0]!.text).toBe(`<!-- Error not_found: '/missing.txt' -->\n`);
+  });
+
+  it("not_found error shows the absolute path even below cwd", () => {
+    const missing = join(process.cwd(), "sub", "missing.txt");
+    const blocks = formatReadContent({
+      results: [{ path: missing, mode_applied: "verbatim", lines: 0, returned_lines: 0, truncated: false, content: "", error: { reason: "not_found", message: "" } }],
+    });
+    expect(blocks[0]!.text).toBe(`<!-- Error not_found: '${missing.split(sep).join("/")}' -->\n`);
+  });
+
+  it("other errors keep the short path and append the detail", () => {
+    const blocks = formatReadContent({
+      results: [{ path: join(process.cwd(), "sub", "x.txt"), mode_applied: "verbatim", lines: 0, returned_lines: 0, truncated: false, content: "", error: { reason: "io_error", message: "EBUSY: resource busy" } }],
+    });
+    expect(blocks[0]!.text).toBe(`<!-- Error io_error: 'sub/x.txt' — EBUSY: resource busy -->\n`);
   });
 
   it("newlines in content are NOT json-escaped (token win over wrapped JSON)", () => {
@@ -379,8 +392,31 @@ describe("formatEditContent", () => {
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- '/missing.ts': 0/1 ops successful -->\n<!-- file error: io_error: not absolute -->\n`
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- Error io_error: '/missing.ts' — not absolute -->\n`
     );
+  });
+
+  it("file-level error with empty message: reason only", () => {
+    const blocks = formatEditContent({
+      results: [{
+        path: "/x.ts", status: "error", error: { reason: "not_authorized", message: "" }, totalOps: 1,
+        ops: [{ index: 0, status: "error", type: "replace", reason: "not_authorized", hint: { next_action: "" } }],
+      }],
+    });
+    expect(blocks[0]!.text).toBe(
+      `<!-- Edit: 1 file, 0/1 ops successful -->\n\n<!-- Error not_authorized: '/x.ts' -->\n`
+    );
+  });
+
+  it("file-level not_found shows the absolute path even below cwd", () => {
+    const pattern = join(process.cwd(), "sub", "*.ts");
+    const blocks = formatEditContent({
+      results: [{
+        path: pattern, status: "error", error: { reason: "not_found", message: "no files matched" }, totalOps: 1,
+        ops: [{ index: 0, status: "error", type: "replace", reason: "not_found", hint: { next_action: "no files matched" } }],
+      }],
+    });
+    expect(blocks[0]!.text).toContain(`<!-- Error not_found: '${pattern.split(sep).join("/")}' — no files matched -->`);
   });
 
   it("skipped ops are named individually after the triggering error", () => {

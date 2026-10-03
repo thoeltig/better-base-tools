@@ -1,9 +1,14 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, join } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, join, sep } from "node:path";
 import { homedir } from "node:os";
 import { Reason } from "../types.js";
 import { fileURLToPath } from "node:url";
 import type { Root, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
+
+/** Display form of a path: forward slashes on Windows, unchanged on POSIX where `\` is a valid filename character. */
+export function forwardSlashes(p: string): string {
+  return p.split(sep).join("/");
+}
 
 export interface ReadFileResult {
   readonly ok: true;
@@ -36,7 +41,7 @@ export async function readFileUtf8(
     const content = await readFile(guard.resolvedPath, { encoding: "utf8" });
     return { ok: true, content, resolvedPath: guard.resolvedPath };
   } catch (err: unknown) {
-    return mapFsError(err, inputPath);
+    return mapFsError(err);
   }
 }
 
@@ -147,7 +152,7 @@ async function guardPath(
     return {
       ok: false,
       reason: "not_authorized",
-      message: `No allowed directories configured; refusing access to ${inputPath}`,
+      message: "no allowed directories configured",
     };
   }
 
@@ -155,12 +160,12 @@ async function guardPath(
     const absolute = resolve(expanded);
     const authPath = await realpathOfNearestExisting(absolute);
     if (!isPathAllowed(authPath, allowedDirectories)) {
-      return { ok: false, reason: "not_authorized", message: `Access denied: ${inputPath}` };
+      return { ok: false, reason: "not_authorized", message: "" };
     }
     const resolvedPath = options.allowMissing ? authPath : await realpath(absolute);
     return { ok: true, resolvedPath };
   } catch (err: unknown) {
-    return mapFsError(err, inputPath);
+    return mapFsError(err);
   }
 }
 
@@ -204,16 +209,16 @@ export async function realpathOfNearestExisting(absolute: string): Promise<strin
   }
 }
 
-function mapFsError(err: unknown, inputPath: string): ReadFileError {
+function mapFsError(err: unknown): ReadFileError {
   const e = err as NodeJS.ErrnoException;
   if (e.code === "ENOENT") {
-    return { ok: false, reason: "not_found", message: `File not found: ${inputPath}` };
+    return { ok: false, reason: "not_found", message: "" };
   }
   if (e.code === "EISDIR") {
-    return { ok: false, reason: "is_directory", message: `Path is a directory: ${inputPath}` };
+    return { ok: false, reason: "is_directory", message: "" };
   }
   if (e.code === "EACCES" || e.code === "EPERM") {
-    return { ok: false, reason: "not_authorized", message: `Access denied: ${inputPath}` };
+    return { ok: false, reason: "not_authorized", message: "" };
   }
   return { ok: false, reason: "io_error", message: e.message ?? String(err) };
 }
