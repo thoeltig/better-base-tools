@@ -309,11 +309,12 @@ function buildReadSummary(
   for (const r of requests) {
     const m = r.mode ?? 'compact';
     modeCounts.set(m, (modeCounts.get(m) ?? 0) + 1);
-    if (r.searchTerm) searchTerms.push(r.searchTerm);
+    if (r.searchTerm) searchTerms.push(`"${r.searchTerm}"`);
+    if (r.searchRegex) searchTerms.push(`/${r.searchRegex}/`);
   }
   const parts: string[] = [`Read ${requests.length}`];
   parts.push([...modeCounts.entries()].map(([m, c]) => `${m}: ${c}`).join(', '));
-  if (searchTerms.length > 0) parts.push('searched: ' + searchTerms.map(t => '"' + t + '"').join(', '));
+  if (searchTerms.length > 0) parts.push('searched: ' + searchTerms.join(', '));
   const errCount = results.filter(r => r.error).length;
   if (errCount > 0) parts.push(plural(errCount, "error"));
   return parts.join(' — ');

@@ -9,6 +9,22 @@ const SEARCH_MERGE_GAP = 3;
 
 type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
 
+// Distinguishes literal from regex so the same text in both fields is not deduplicated.
+function searchKey(req: ReadRequest): string | undefined {
+  if (req.searchTerm !== undefined) return `term:${req.searchTerm}`;
+  if (req.searchRegex !== undefined) return `regex:${req.searchRegex}`;
+  return undefined;
+}
+
+function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
+  if (req.searchRegex !== undefined) {
+    const re = new RegExp(req.searchRegex, "i");
+    return line => re.test(line);
+  }
+  const needle = (req.searchTerm ?? "").toLowerCase();
+  return line => line.toLowerCase().includes(needle);
+}
+
 export async function handleBatchRead(
   input: ReadInput,
   allowedDirectories: string[],
@@ -84,11 +100,12 @@ function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
 function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
-  // search: group by (searchTerm, count), coalesce mode (same→same, mixed→verbatim)
+  // search: group by (search, count), coalesce mode (same→same, mixed→verbatim)
   const searchGroups = new Map<string, ReadRequest[]>();
   for (const req of reqs) {
-    if (req.searchTerm === undefined) continue;
-    const key = `${req.searchTerm}|${req.count ?? ""}`;
+    const search = searchKey(req);
+    if (search === undefined) continue;
+    const key = `${search}|${req.count ?? ""}`;
     if (!searchGroups.has(key)) searchGroups.set(key, []);
     searchGroups.get(key)!.push(req);
   }
@@ -99,7 +116,7 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   }
 
   // range/full: coalesce mode, merge overlapping ranges
-  const rangeReqs = reqs.filter(r => r.searchTerm === undefined);
+  const rangeReqs = reqs.filter(r => searchKey(r) === undefined);
   if (rangeReqs.length === 0) return result;
 
   const modes = new Set(rangeReqs.map(r => r.mode));
@@ -152,6 +169,14 @@ async function expandReadRequests(
 
   for (const req of requests) {
     req.path = await safeRealpath(resolve(req.path));
+    if (req.searchRegex !== undefined) {
+      try {
+        new RegExp(req.searchRegex, "i");
+      } catch (err) {
+        entries.push({ kind: "err", result: errResult(req, "unparseable", err instanceof Error ? err.message : String(err)) });
+        continue;
+      }
+    }
     if (!(await needsExpansion(req.path))) {
       entries.push({ kind: "ok", req });
       continue;
@@ -208,19 +233,12 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
   }
 
   // search: grep with context lines
-  if (req.searchTerm !== undefined) {
+  if (searchKey(req) !== undefined) {
     const rawLines = file.content.replace(/\r\n/g, "\n").split("\n");
     if (rawLines[rawLines.length - 1] === "") rawLines.pop();
 
     const ctx = req.count ?? 0;
-    let matchLine: (line: string) => boolean;
-    try {
-      const re = new RegExp(req.searchTerm, "i");
-      matchLine = line => re.test(line);
-    } catch {
-      const needle = req.searchTerm.toLowerCase();
-      matchLine = line => line.toLowerCase().includes(needle);
-    }
+    const matchLine = buildLineMatcher(req);
     const matchIdxs: number[] = [];
     for (let i = 0; i < rawLines.length; i++) {
       if (matchLine(rawLines[i] ?? "")) matchIdxs.push(i);

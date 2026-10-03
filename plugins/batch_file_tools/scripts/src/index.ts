@@ -145,6 +145,7 @@ server.registerTool(
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
         if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
+        if (r.searchRegex) parts.push(`search: /${r.searchRegex}/`);
         return { path: isAbsolute(r.path) ? r.path : resolve(r.path), detail: parts.join(", ") };
       });
       const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read", resolvedExcludePaths);

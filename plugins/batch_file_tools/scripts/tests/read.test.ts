@@ -228,9 +228,9 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("match at lines");
   });
 
-  it("search: regex pattern matches lines", async () => {
+  it("searchRegex: pattern matches lines", async () => {
     const p = await fixture("regex-match.ts", "const foo = 1;\nconst bar = 2;\nlet baz = 3;\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "^const" }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "^const" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
     expect(r.content).toContain("const foo");
@@ -238,21 +238,55 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("let baz");
   });
 
-  it("search: regex metacharacters work (word boundary, groups)", async () => {
-    const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo\\b" }] });
+  it("searchRegex: metacharacters work (word boundary, alternation), case-insensitive", async () => {
+    const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\nBAR\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "foo\\b|^bar$" }] });
     const r = out.results[0]!;
-    expect(r.match_count).toBe(1);
-    expect(r.content).toContain("foo");
-    expect(r.content).not.toContain("fooBar");
+    expect(r.match_count).toBe(2);
+    expect(r.content).toBe("2\tfoo\n4\tBAR");
   });
 
-  it("search: invalid regex falls back to literal string match", async () => {
-    const p = await fixture("regex-invalid.ts", "fn(arg)\nno match\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "fn(" }] });
-    const r = out.results[0]!;
-    expect(r.match_count).toBe(1);
-    expect(r.content).toContain("fn(arg)");
+  it("searchTerm is literal: regex metacharacters match themselves", async () => {
+    const p = await fixture("literal.ts", "fn(arg)\na.b\naxb\nblocks.push(`${idx + 1}`)\nconst $env = 1;\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "a.b" },
+        { path: p, mode: "verbatim", searchTerm: "fn(" },
+        { path: p, mode: "verbatim", searchTerm: "${idx + 1}" },
+        { path: p, mode: "verbatim", searchTerm: "$ENV" },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual([
+      "2\ta.b",
+      "1\tfn(arg)",
+      "4\tblocks.push(`${idx + 1}`)",
+      "5\tconst $env = 1;",
+    ]);
+  });
+
+  it("searchRegex: invalid pattern yields one unparseable error per request", async () => {
+    await fixture("rx_a.ts", "fn(a)\n");
+    await fixture("rx_b.ts", "fn(b)\n");
+    const out = await read({ requests: [{ path: join(workDir, "rx_*.ts"), mode: "verbatim", searchRegex: "fn(" }] });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.error?.reason).toBe("unparseable");
+    expect(out.results[0]!.error?.message).toContain("Invalid regular expression");
+  });
+
+  it("same text as searchTerm and searchRegex on one file is not deduplicated", async () => {
+    const p = await fixture("term-vs-regex.ts", "a.b\naxb\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "a.b" },
+        { path: p, mode: "verbatim", searchRegex: "a.b" },
+      ],
+    });
+    expect(out.results.map(r => r.match_count)).toEqual([1, 2]);
+  });
+
+  it("schema: searchTerm and searchRegex are mutually exclusive", () => {
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchTerm: "a", searchRegex: "a" }).success).toBe(false);
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchRegex: "a" }).success).toBe(true);
   });
 
   it("glob read: expands to one result per matched file", async () => {

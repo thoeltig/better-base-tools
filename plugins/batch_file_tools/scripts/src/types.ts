@@ -37,9 +37,14 @@ export const ReadRequest = z.object({
     count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
+      .describe("If set: search file(s) for this literal text (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
+    searchRegex: z.string().min(1).optional()
+      .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive); mutually exclusive with searchTerm."),
   })
-  .strict();
+  .strict()
+  .refine(r => r.searchTerm === undefined || r.searchRegex === undefined, {
+    message: "searchTerm and searchRegex are mutually exclusive",
+  });
 export type ReadRequest = z.infer<typeof ReadRequest>;
 
 export const ReadInput = z.object({
