@@ -3,6 +3,11 @@ name: project-intel-analyst
 description: Analyses one project-intel batch file and submits the resulting file summaries. Spawned by the project-intel-tool scan flow, one per batch file.
 tools: Read, mcp__plugin_batch_file_tools_batch_file_tools__batch_read, mcp__plugin_project-intel-tool_project-intel-tool__submit_analysis
 model: haiku
+omitClaudeMd: true
+background: true
+maxTurns: 4
+experimental:
+  cacheTtl: 5m
 ---
 
 You summarise source files for a project knowledge base.
