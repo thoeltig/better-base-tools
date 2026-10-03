@@ -365,27 +365,28 @@ function scanProjectUnlocked(location: string, knowledgeDir: string, scanConfig:
       const hasChanged = changedSet.has(absPath);
       const hasPriorMetrics = existing.sizeCharsWhenAnalysed !== undefined && existing.lineCountWhenAnalysed !== undefined;
       const shouldComputeDelta = wasAnalyzed && hasChanged && hasPriorMetrics;
-      let analysisDelta: string | undefined;
-      if (shouldComputeDelta) {
-        const deltaLines = fm.lineCount - existing.lineCountWhenAnalysed!;
-        const deltaChars = fm.sizeChars - existing.sizeCharsWhenAnalysed!;
-        if (deltaLines !== 0 || deltaChars !== 0) {
-          analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
-        }
-      }
       const fileEntry: FileSummary = {
         ...existing,
         sizeChars: fm.sizeChars,
         lineCount: fm.lineCount,
         deleted: false,
       };
+      // Structural fields describe the current content only; never keep values from an older version
+      delete fileEntry.exports;
+      delete fileEntry.imports;
+      delete fileEntry.refs;
       if (fm.exports.length > 0) fileEntry.exports = fm.exports;
       if (Object.keys(fm.imports).length > 0) fileEntry.imports = fm.imports;
       if (refs.length > 0) fileEntry.refs = refs;
-      summaries.files.set(absPath, {
-        ...fileEntry,
-        ...(analysisDelta !== undefined ? { analysisDelta } : {}),
-      });
+      if (shouldComputeDelta) {
+        delete fileEntry.analysisDelta;
+        const deltaLines = fm.lineCount - existing.lineCountWhenAnalysed!;
+        const deltaChars = fm.sizeChars - existing.sizeCharsWhenAnalysed!;
+        if (deltaLines !== 0 || deltaChars !== 0) {
+          fileEntry.analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
+        }
+      }
+      summaries.files.set(absPath, fileEntry);
     }
     writeSummaries(knowledgeDir, summaries, projectRoot);
   }

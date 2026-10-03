@@ -103,6 +103,21 @@ describe('scanProject', () => {
     analysisDelta: 'stale delta',
     lastUpdated: '2000-01-01T00:00:00.000Z',
   };
+
+  it('drops structural fields of a changed file that no longer has them', async () => {
+    writeSummariesFile({ 'a.ts': staleEntry });
+    fs.writeFileSync(path.join(root, 'a.ts'), 'const local = 1;\n');
+
+    await scanProject(root, kdir, DEFAULT_SCAN_CONFIG);
+
+    const entry = getOrCreateSummaries(kdir, root).files.get(toAbsReal(root, 'a.ts'));
+    expect(entry?.summary).toBe('kept');
+    expect(entry?.exports).toBeUndefined();
+    expect(entry?.imports).toBeUndefined();
+    expect(entry?.refs).toBeUndefined();
+    expect(entry?.analysisDelta).not.toBe('stale delta');
+  });
+
   it('releases the summaries lock after scanning', async () => {
     writeSummariesFile({ 'a.ts': staleEntry });
     fs.writeFileSync(path.join(root, 'a.ts'), 'x');
