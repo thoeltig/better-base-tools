@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-05T00:31:05.839Z",
+  "generated": "2026-10-03T19:01:34.864Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "sizeChars": 498,
@@ -24,13 +24,13 @@
       "lineCountWhenAnalysed": 21
     },
     ".gitignore": {
-      "sizeChars": 84,
-      "lineCount": 9,
+      "sizeChars": 106,
+      "lineCount": 10,
       "deleted": false,
       "path": ".gitignore",
-      "summary": "Git ignore configuration file. Excludes common development and build artifacts: .claude/ directory, Claude_Temp_Files/, node_modules/, dist/, log files, DS_Store, coverage reports, and vitest cache directory.",
+      "summary": "Standard git ignore configuration excluding common build artifacts, dependency directories, logs, cache directories, and IDE files. Covers typical Node.js, Python, and platform-specific patterns.",
       "technologies": [
-        "gitignore"
+        "git"
       ],
       "searchTags": [
         "ignore-rules",
@@ -38,10 +38,10 @@
         "cache",
         "temporary-files"
       ],
-      "lastUpdated": "2026-06-07T01:08:10.775Z",
-      "role": "configuration",
-      "sizeCharsWhenAnalysed": 84,
-      "lineCountWhenAnalysed": 9
+      "lastUpdated": "2026-10-03T19:01:34.860Z",
+      "sizeCharsWhenAnalysed": 106,
+      "lineCountWhenAnalysed": 10,
+      "role": "configuration"
     },
     "LICENSE": {
       "sizeChars": 1090,
@@ -68,17 +68,16 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/batch_file_tools/.claude-plugin/plugin.json",
-      "summary": "Plugin configuration file for batch_file_tools declaring metadata: name, version 1.3.0, description of batching file I/O to cut tool calls and context by 50-60%, author Thore Höltig, repository, MIT license, and keywords for token efficiency and file optimization.",
+      "summary": "Plugin manifest for batch_file_tools MCP server. Declares name, version 1.3.1, description emphasizing batch I/O efficiency, author metadata, repository links, MIT license, and keywords related to token efficiency and file operations.",
       "technologies": [
-        "JSON",
-        "MCP plugins"
+        "MCP"
       ],
       "searchTags": [
         "metadata",
         "version",
         "registry"
       ],
-      "lastUpdated": "2026-09-05T00:30:10.109Z",
+      "lastUpdated": "2026-10-03T19:01:34.861Z",
       "sizeCharsWhenAnalysed": 549,
       "lineCountWhenAnalysed": 14,
       "role": "configuration"
@@ -106,23 +105,23 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/batch_file_tools/CHANGELOG.md": {
-      "sizeChars": 32763,
-      "lineCount": 366,
+      "sizeChars": 33299,
+      "lineCount": 378,
       "deleted": false,
       "path": "plugins/batch_file_tools/CHANGELOG.md",
-      "summary": "Comprehensive changelog documenting all versions 0.1.0 to 1.3.0 (plus unreleased). Tracks 20+ releases with feature additions (fileinfo removal, PreToolUse hooks, path access control), schema redesigns, output format overhauls (flatten error comments, merge search results), fixes (stopOnError not persisting ops, batch_edit reporting 0/N ops, anchor matching bugs), and breaking changes to support evolving schema and harness compatibility.",
+      "summary": "Comprehensive changelog from v0.1.0 to v1.3.1 documenting tool evolution: read/edit op types, verbatim/compact modes, glob expansion, search with context lines, path access control with elicitation, dry-run support, progress callbacks, and error handling improvements with nearest-anchor hints.",
       "technologies": [
-        "Markdown"
+        "MCP",
+        "TypeScript"
       ],
       "searchTags": [
-        "version history",
-        "breaking changes",
-        "features",
-        "bugfixes"
+        "versioning",
+        "release-notes",
+        "breaking-changes"
       ],
-      "lastUpdated": "2026-09-05T00:30:10.109Z",
-      "sizeCharsWhenAnalysed": 32763,
-      "lineCountWhenAnalysed": 366,
+      "lastUpdated": "2026-10-03T19:01:34.861Z",
+      "sizeCharsWhenAnalysed": 33299,
+      "lineCountWhenAnalysed": 378,
       "refs": [
         "README.md"
       ],
@@ -242,14 +241,13 @@
       "role": "documentation"
     },
     "plugins/batch_file_tools/scripts/package-lock.json": {
-      "sizeChars": 58581,
-      "lineCount": 1701,
+      "sizeChars": 56088,
+      "lineCount": 1573,
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/package-lock.json",
-      "summary": "Dependency lock file for batch-tools-mcp-server (v1.2.5). Locks exact versions of 100+ packages including @modelcontextprotocol/sdk 1.29.0, zod 4.4.3, express, and esbuild. Ensures reproducible builds across environments. Contains platform-specific optional dependencies for esbuild (win32, linux, darwin).",
+      "summary": "Dependency lock file pinning exact versions for batch_file_tools build. Core deps: MCP SDK 1.30.0, Zod 4.5.4. Dev deps: TypeScript 7.0.2, @types/node 24.13.3. Documents full transitive dependency tree for reproducible builds.",
       "technologies": [
         "npm",
-        "lockfile",
         "Node.js"
       ],
       "searchTags": [
@@ -257,17 +255,17 @@
         "versions",
         "reproducibility"
       ],
-      "lastUpdated": "2026-06-29T23:39:58.411Z",
-      "sizeCharsWhenAnalysed": 58581,
-      "lineCountWhenAnalysed": 1701,
+      "lastUpdated": "2026-10-03T19:01:34.862Z",
+      "sizeCharsWhenAnalysed": 56088,
+      "lineCountWhenAnalysed": 1573,
       "role": "configuration"
     },
     "plugins/batch_file_tools/scripts/package.json": {
-      "sizeChars": 1214,
-      "lineCount": 42,
+      "sizeChars": 1264,
+      "lineCount": 40,
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/package.json",
-      "summary": "Package metadata for batch-tools-mcp-server v1.3.0. Defines npm bin entry (dist/index.js), build/test scripts (TypeScript compilation, Node.js test runner with custom reporter, type-checking), dependencies (@modelcontextprotocol/sdk 1.29.0, zod 4.4.3), dev dependencies (TypeScript, tsx, esbuild), and Node.js >=22 engine requirement.",
+      "summary": "NPM package configuration for batch-tools-mcp-server. Defines bin entry, build scripts (tsc), test runner (node:test with custom reporter), dependencies on MCP SDK and Zod, requires Node >=20. Licenses MIT and provides repository/bug tracking links.",
       "technologies": [
         "npm",
         "Node.js",
@@ -280,10 +278,10 @@
         "scripts",
         "bin"
       ],
-      "lastUpdated": "2026-09-05T00:30:10.110Z",
-      "sizeCharsWhenAnalysed": 1214,
-      "lineCountWhenAnalysed": 42,
-      "role": "build"
+      "lastUpdated": "2026-10-03T19:01:34.862Z",
+      "sizeCharsWhenAnalysed": 1264,
+      "lineCountWhenAnalysed": 40,
+      "role": "configuration"
     },
     "plugins/batch_file_tools/scripts/src/index.ts": {
       "sizeChars": 16940,
@@ -333,24 +331,22 @@
         ]
       },
       "path": "plugins/batch_file_tools/scripts/src/index.ts",
-      "summary": "MCP server entry point for batch_read and batch_edit tools. Manages allowed directories via CLI args/env, updates roots from client, handles progress notifications, executes authorization checks via elicitInput, processes config flags (dry-run, user-audience, max-output-tokens), and coordinates shutdown via stdin/signals.",
+      "summary": "MCP server implementation for batch file I/O. Registers batch_read and batch_edit tools with request handling, path authorization, and elicitation workflows. Manages configuration via env vars/args, coordinates progress reporting, and enforces access control with session-scoped allow lists.",
       "technologies": [
-        "TypeScript",
         "MCP",
-        "Node.js",
-        "Stdio"
+        "TypeScript",
+        "Node.js"
       ],
       "searchTags": [
-        "server",
-        "cli",
-        "authorization",
-        "roots",
-        "configuration"
+        "tool-registration",
+        "auth",
+        "elicitation",
+        "permissions"
       ],
-      "lastUpdated": "2026-09-05T00:30:29.680Z",
+      "lastUpdated": "2026-10-03T19:01:34.862Z",
       "sizeCharsWhenAnalysed": 16940,
       "lineCountWhenAnalysed": 364,
-      "role": "executable"
+      "role": "implementation"
     },
     "plugins/batch_file_tools/scripts/src/lib/buffer.ts": {
       "sizeChars": 1907,
@@ -1433,10 +1429,9 @@
       "lineCount": 30,
       "deleted": false,
       "path": "plugins/batch_file_tools/scripts/tsconfig.json",
-      "summary": "TypeScript compiler configuration for batch_file_tools scripts. Targets ES2022 with strict type checking enabled, including exact optional properties and unknown catch variables. Output compiled to dist/ from src/. Generates source maps and declarations for full type safety.",
+      "summary": "TypeScript compiler configuration targeting ES2024 with strict mode, source maps, and declaration files. Configures module resolution for Node, output to dist/, and excludes tests and node_modules from main build.",
       "technologies": [
-        "TypeScript",
-        "ESM"
+        "TypeScript"
       ],
       "searchTags": [
         "compiler",
@@ -1445,15 +1440,29 @@
         "build config",
         "NodeNext"
       ],
-      "lastUpdated": "2026-06-07T01:06:30.291Z",
-      "role": "configuration",
+      "lastUpdated": "2026-10-03T19:01:34.862Z",
       "sizeCharsWhenAnalysed": 841,
-      "lineCountWhenAnalysed": 30
+      "lineCountWhenAnalysed": 30,
+      "role": "configuration"
+    },
+    "plugins/batch_file_tools/scripts/tsconfig.tests.json": {
+      "sizeChars": 230,
+      "lineCount": 10,
+      "deleted": false,
+      "path": "plugins/batch_file_tools/scripts/tsconfig.tests.json",
+      "summary": "Extended TypeScript configuration for test compilation. Extends base config, outputs to dist-tests/, includes both src/ and tests/ directories, enabling independent type-checking of test code alongside implementation.",
+      "technologies": [
+        "TypeScript"
+      ],
+      "lastUpdated": "2026-10-03T19:01:34.863Z",
+      "role": "configuration",
+      "sizeCharsWhenAnalysed": 230,
+      "lineCountWhenAnalysed": 10
     },
     "plugins/batch_file_tools/scripts/tsconfig.typecheck.json": {
       "sizeChars": 208,
       "lineCount": 10,
-      "deleted": false,
+      "deleted": true,
       "path": "plugins/batch_file_tools/scripts/tsconfig.typecheck.json",
       "summary": "TypeScript configuration for type checking. Extends main tsconfig, disables emit and declarations, includes src and tests, excludes dist and node_modules. Used for validation before build.",
       "technologies": [
@@ -1498,16 +1507,16 @@
       "lineCount": 14,
       "deleted": false,
       "path": "plugins/project-intel-tool/.claude-plugin/plugin.json",
-      "summary": "Plugin metadata for project-intel-tool. Declares lightweight reconnaissance system for semantic file discovery and direction before exploration. Version 1.5.0, MIT licensed, authored by Thore Höltig, targeting token efficiency and context optimization.",
+      "summary": "Plugin manifest for project-intel-tool MCP server. Version 1.5.2 with description emphasizing lightweight reconnaissance and semantic file search. Keywords cover tokens, efficiency, exploration, codebase reconnaissance. MIT licensed.",
       "technologies": [
-        "JSON"
+        "MCP"
       ],
       "searchTags": [
         "metadata",
         "plugin",
         "configuration"
       ],
-      "lastUpdated": "2026-09-05T00:30:29.683Z",
+      "lastUpdated": "2026-10-03T19:01:34.863Z",
       "sizeCharsWhenAnalysed": 741,
       "lineCountWhenAnalysed": 14,
       "role": "configuration"
@@ -1533,48 +1542,43 @@
       "lineCountWhenAnalysed": 8
     },
     "plugins/project-intel-tool/agents/project-intel-analyst.md": {
-      "sizeChars": 1411,
-      "lineCount": 19,
+      "sizeChars": 1551,
+      "lineCount": 23,
       "deleted": false,
       "path": "plugins/project-intel-tool/agents/project-intel-analyst.md",
-      "summary": "MCP agent definition that analyzes batch files for the project-intel-tool scan workflow. Purpose-built subagent running on Haiku model with restricted tools (Read, batch_read, submit_analysis). Holds analysis rules: read batch file once, never open source files directly, submit summaries with max 450 chars per file. Replaces generic analysis subagent with tailored behavior to reduce token overhead and improve summary quality.",
+      "summary": "Agent definition for batch file analysis subagent. Specifies haiku model, restricted tool access (Read, batch_read, submit_analysis), max 4 turns. Instructs agent to read batch file once, analyze files inline, call submit_analysis, and reply Done.",
       "technologies": [
         "MCP",
-        "Haiku",
-        "Claude Code"
+        "agents"
       ],
       "searchTags": [
         "subagent",
-        "analyst",
-        "batch",
-        "analysis",
-        "scanning"
+        "workflow",
+        "batch-processing"
       ],
-      "lastUpdated": "2026-09-05T00:29:56.324Z",
-      "role": "executable",
-      "sizeCharsWhenAnalysed": 1411,
-      "lineCountWhenAnalysed": 19
+      "lastUpdated": "2026-10-03T19:01:34.863Z",
+      "sizeCharsWhenAnalysed": 1551,
+      "lineCountWhenAnalysed": 23,
+      "role": "configuration"
     },
     "plugins/project-intel-tool/CHANGELOG.md": {
-      "sizeChars": 27307,
-      "lineCount": 342,
+      "sizeChars": 29039,
+      "lineCount": 362,
       "deleted": false,
       "path": "plugins/project-intel-tool/CHANGELOG.md",
-      "summary": "Comprehensive version history for project-intel-tool from v0.1.0 to v1.5.0. Documents major features (semantic scoring, batching improvements, query optimization, scanning modes), structural changes (batch file instruction removal, import handling), and bug fixes. Shows evolution from initial MCP port through numerous enhancements in file analysis, scanning accuracy, display quality, and configuration.",
+      "summary": "Version history from v0.1.0 to v1.5.2. Highlights: subagent analyst agent, capacity checks for batch vs read limits, nested sub-knowledge aggregation, semantic scoring with change-delta weighting, verbosity modes, C# import resolution, and git non-ASCII path fixes.",
       "technologies": [
         "MCP",
-        "Node.js"
+        "TypeScript"
       ],
       "searchTags": [
-        "version",
-        "history",
-        "release",
-        "feature",
-        "improvement"
+        "releases",
+        "features",
+        "fixes"
       ],
-      "lastUpdated": "2026-09-05T00:29:56.324Z",
-      "sizeCharsWhenAnalysed": 27307,
-      "lineCountWhenAnalysed": 342,
+      "lastUpdated": "2026-10-03T19:01:34.863Z",
+      "sizeCharsWhenAnalysed": 29039,
+      "lineCountWhenAnalysed": 362,
       "role": "documentation"
     },
     "plugins/project-intel-tool/hooks/hooks.json": {
@@ -1753,24 +1757,21 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/index.ts",
-      "summary": "Main MCP server entry point implementing project-intel server with three tools: scan (detects file changes and batches for AI analysis), query (semantic/structural search across summaries), and submit_analysis (subagent callback to persist analysis results). Manages project roots, process lifecycle, configuration parsing, and supports both MCP sampling and subagent-based analysis workflows.",
+      "summary": "MCP server orchestrating semantic file indexing. Registers scan, query, and submit_analysis tools. Manages sampling batches or subagent workflow, enforces file locking for concurrent safety. Query aggregates nested knowledge bases and scores results by path/semantics/changesets.",
       "technologies": [
-        "TypeScript",
-        "Node.js",
         "MCP",
-        "Zod"
+        "TypeScript",
+        "Node.js"
       ],
       "searchTags": [
-        "server",
-        "tools",
-        "MCP protocol",
-        "lifecycle",
-        "roots"
+        "orchestration",
+        "semantic-search",
+        "batching"
       ],
-      "lastUpdated": "2026-09-05T00:31:05.839Z",
+      "lastUpdated": "2026-10-03T19:01:34.864Z",
       "sizeCharsWhenAnalysed": 19172,
       "lineCountWhenAnalysed": 453,
-      "role": "executable"
+      "role": "implementation"
     },
     "plugins/project-intel-tool/scripts/lib/analysis-batch.ts": {
       "sizeChars": 912,
@@ -2185,7 +2186,7 @@
       "lineCountWhenAnalysed": 65
     },
     "plugins/project-intel-tool/scripts/lib/project-scanner.ts": {
-      "sizeChars": 15219,
+      "sizeChars": 15267,
       "lineCount": 389,
       "deleted": false,
       "exports": [
@@ -2224,21 +2225,19 @@
         ]
       },
       "path": "plugins/project-intel-tool/scripts/lib/project-scanner.ts",
-      "summary": "Orchestrates project file scanning with git-aware change detection. Detects new/modified/deleted files via git history or filesystem mtime, discovers nested .knowledge directories, builds dependency metadata via file-map, manages incremental summary updates with delta metrics. Handles include/exclude paths, sub-project boundaries, and aggregates sub-knowledge statistics.",
+      "summary": "Core scanning engine detecting new/modified/deleted files via git history or filesystem mtime. Builds dependency metadata, discovers nested .knowledge directories, computes analysis deltas for changed files. Handles include/exclude paths, reports per-extension file counts and project statistics.",
       "technologies": [
         "TypeScript",
         "Node.js",
-        "Git"
+        "git"
       ],
       "searchTags": [
-        "scanning",
-        "change detection",
-        "dependencies",
-        "git",
-        "file metadata"
+        "file-discovery",
+        "git-integration",
+        "change-detection"
       ],
-      "lastUpdated": "2026-09-05T00:31:05.839Z",
-      "sizeCharsWhenAnalysed": 15219,
+      "lastUpdated": "2026-10-03T19:01:34.863Z",
+      "sizeCharsWhenAnalysed": 15267,
       "lineCountWhenAnalysed": 389,
       "role": "implementation"
     },
@@ -2591,45 +2590,48 @@
       "lineCountWhenAnalysed": 113
     },
     "plugins/project-intel-tool/scripts/package-lock.json": {
-      "sizeChars": 69822,
-      "lineCount": 1718,
+      "sizeChars": 65818,
+      "lineCount": 1573,
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/package-lock.json",
-      "summary": "NPM lock file pinning exact dependency versions for project-intel-tool server. Captures resolved versions of @modelcontextprotocol/sdk v1.29.0, zod v4.4.3, and dev dependencies (typescript, tsx, esbuild). Ensures reproducible builds and consistent environments across installations.",
+      "summary": "npm dependency lock file (lockfileVersion 3) recording exact versions of all project dependencies for reproducible builds. Includes 100+ transitive dependencies: @modelcontextprotocol/sdk 1.30.0, zod 4.5.4, express 5.2.1, typescript 7.0.2, and dev utilities. Ensures consistent installs across environments.",
       "technologies": [
         "npm",
         "Node.js"
       ],
       "searchTags": [
-        "dependencies",
         "lock",
-        "versioning"
+        "dependencies",
+        "versions",
+        "reproducible builds"
       ],
-      "lastUpdated": "2026-09-05T00:29:56.325Z",
-      "sizeCharsWhenAnalysed": 69822,
-      "lineCountWhenAnalysed": 1718,
+      "lastUpdated": "2026-10-03T19:01:29.665Z",
+      "sizeCharsWhenAnalysed": 65818,
+      "lineCountWhenAnalysed": 1573,
       "role": "build"
     },
     "plugins/project-intel-tool/scripts/package.json": {
-      "sizeChars": 1552,
-      "lineCount": 50,
+      "sizeChars": 1612,
+      "lineCount": 48,
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/package.json",
-      "summary": "NPM package manifest for project-intel-tool MCP server v1.5.0. Declares project metadata (MIT license), runtime dependencies (@modelcontextprotocol/sdk, zod), dev dependencies (typescript, tsx, esbuild), build scripts (tsc, test, typecheck, inspect), and bin entry point. Node.js >= 22 required. Enables npm installation and script execution.",
+      "summary": "Main project manifest for project-intel-mcp-server v1.5.2. MCP tool providing lightweight file reconnaissance to query relevant files before reading them, avoiding blind exploration. Defines entry point, dependencies (@modelcontextprotocol/sdk, zod), build/test/inspect scripts, and metadata. Author: Thore Höltig. Requires Node 20+.",
       "technologies": [
         "npm",
         "Node.js",
-        "TypeScript"
+        "TypeScript",
+        "Model Context Protocol"
       ],
       "searchTags": [
         "manifest",
-        "metadata",
-        "scripts",
-        "bin"
+        "dependencies",
+        "MCP server",
+        "build scripts",
+        "reconnaissance"
       ],
-      "lastUpdated": "2026-09-05T00:29:56.325Z",
-      "sizeCharsWhenAnalysed": 1552,
-      "lineCountWhenAnalysed": 50,
+      "lastUpdated": "2026-10-03T19:01:29.665Z",
+      "sizeCharsWhenAnalysed": 1612,
+      "lineCountWhenAnalysed": 48,
       "role": "configuration"
     },
     "plugins/project-intel-tool/scripts/sessionstart-knowledge-check.ts": {
@@ -2739,26 +2741,44 @@
       "lineCountWhenAnalysed": 72
     },
     "plugins/project-intel-tool/scripts/tsconfig.json": {
-      "sizeChars": 877,
-      "lineCount": 36,
+      "sizeChars": 957,
+      "lineCount": 38,
       "deleted": false,
       "path": "plugins/project-intel-tool/scripts/tsconfig.json",
-      "summary": "TypeScript compiler config targeting ES2022, NodeNext modules. Strict mode enabled with noUnused* and no* checks. Includes lib/** and root ts files, excludes node_modules/dist. Generates source maps, declarations. Enables exact optional properties and unknown catch variables for type safety.",
+      "summary": "TypeScript compiler configuration for project-intel-mcp-server. Targets ES2024 with NodeNext modules, enables strict type checking, source maps, and declaration files. Includes lib/, index.ts, and sessionstart-knowledge-check.ts. Outputs to dist/ with comprehensive compiler options for type safety and best practices.",
       "technologies": [
-        "typescript",
-        "compiler-config"
+        "TypeScript"
       ],
       "searchTags": [
-        "tsconfig",
-        "typescript-config",
-        "strict-mode",
-        "compilation-settings",
-        "node-next"
+        "compiler options",
+        "strict mode",
+        "ES2024",
+        "source maps"
       ],
-      "lastUpdated": "2026-06-07T01:06:26.138Z",
+      "lastUpdated": "2026-10-03T19:01:29.665Z",
+      "sizeCharsWhenAnalysed": 957,
+      "lineCountWhenAnalysed": 38,
+      "role": "configuration"
+    },
+    "plugins/project-intel-tool/scripts/tsconfig.tests.json": {
+      "sizeChars": 198,
+      "lineCount": 9,
+      "deleted": false,
+      "path": "plugins/project-intel-tool/scripts/tsconfig.tests.json",
+      "summary": "TypeScript configuration extending tsconfig.json for test builds. Outputs compiled tests to dist-tests/ without declaration files. Includes lib/ directory for testing all library code. Enables separate test compilation pipeline independent from production build.",
+      "technologies": [
+        "TypeScript",
+        "testing"
+      ],
+      "searchTags": [
+        "test configuration",
+        "extends",
+        "compiler setup"
+      ],
+      "lastUpdated": "2026-10-03T19:01:29.665Z",
       "role": "configuration",
-      "sizeCharsWhenAnalysed": 877,
-      "lineCountWhenAnalysed": 36
+      "sizeCharsWhenAnalysed": 198,
+      "lineCountWhenAnalysed": 9
     },
     "plugins/project-intel-tool/scripts/types.ts": {
       "sizeChars": 5548,
