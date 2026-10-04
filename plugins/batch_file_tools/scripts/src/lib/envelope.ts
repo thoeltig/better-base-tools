@@ -199,7 +199,7 @@ function truncateLineBlock(r: ReadResult, budget: number, source: string | undef
 }
 
 function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult | null {
-  // Every search output line is one labelled unit ("N:\t" or a compact "M-N:\t" run).
+  // Every search output line is one labelled unit ("N:", "N-" or a compact "M..N:" run).
   const blocks = r.content.split("\n");
   const markerChars = searchTruncationMarkerText(blocks.length, blocks.length).length;
   const kept = countUnitsWithinBudget(blocks, budget, readResultHeader(r).length, markerChars);

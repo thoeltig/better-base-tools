@@ -18,22 +18,23 @@ export function searchKey(req: ReadRequest): string | undefined {
 
 /**
  * Runs all searches bundled for one file (target supplies path and mode); each search widens
- * its matches by its own count. Every output line carries its source position: verbatim prints
- * each shown line as "N:\t", compact collapses each run of consecutive lines into one
- * "M-N:\t" line.
+ * its matches by its own count. Output follows ripgrep's -n -C format: a line printed on its own
+ * is "N:content" when matched and "N-content" when context; compact collapses each run of
+ * consecutive lines into one "M..N:content" line.
  */
 export function searchFile(target: ReadRequest, searches: readonly ReadRequest[], content: string): ReadResult {
   const split = splitLines(content);
   const perSearch = searches.map(search => findMatchRanges(search, split, content));
-  const shownLines = collectShownLines(searches, perSearch, split.lines.length);
+  const marks = markLines(searches, perSearch, split.lines.length);
+  const labelLine: LabelLine = (line, text) => `${line + 1}${marks.matched[line] ? ":" : "-"}${text}`;
   const outputLines = target.mode === "verbatim"
-    ? shownLines.map(line => `${line + 1}:\t${split.lines[line]}`)
-    : contiguousRuns(shownLines).flatMap(run => formatCompactRun(split, target.path, run));
+    ? marks.shown.map(line => labelLine(line, split.lines[line] ?? ""))
+    : contiguousRuns(marks.shown).flatMap(run => formatCompactRun(split, target.path, run, labelLine));
   return {
     path: target.path,
     mode_applied: target.mode,
     lines: split.lines.length,
-    returned_lines: shownLines.length,
+    returned_lines: marks.shown.length,
     truncated: false,
     content: outputLines.join("\n"),
     match_count: uniqueSortedRanges(perSearch.flat()).length,
@@ -41,20 +42,26 @@ export function searchFile(target: ReadRequest, searches: readonly ReadRequest[]
   };
 }
 
-// Matched lines widened by each search's own count; ascending, each line once.
-function collectShownLines(searches: readonly ReadRequest[], perSearch: readonly LineRange[][], lineCount: number): number[] {
-  const shown = new Uint8Array(lineCount);
+type LabelLine = (line: number, text: string) => string;
+
+/** shown: matched lines widened by each search's own count, ascending; matched: 1 per matched line. */
+type LineMarks = { shown: number[]; matched: Uint8Array };
+
+function markLines(searches: readonly ReadRequest[], perSearch: readonly LineRange[][], lineCount: number): LineMarks {
+  const shownFlags = new Uint8Array(lineCount);
+  const matched = new Uint8Array(lineCount);
   perSearch.forEach((ranges, i) => {
     const ctx = searches[i]!.count ?? 0;
     for (const { start, end } of ranges) {
-      for (let line = Math.max(0, start - ctx); line <= Math.min(lineCount - 1, end + ctx); line++) shown[line] = 1;
+      matched.fill(1, start, end + 1);
+      shownFlags.fill(1, Math.max(0, start - ctx), Math.min(lineCount, end + ctx + 1));
     }
   });
-  const lines: number[] = [];
-  shown.forEach((flag, line) => {
-    if (flag) lines.push(line);
+  const shown: number[] = [];
+  shownFlags.forEach((flag, line) => {
+    if (flag) shown.push(line);
   });
-  return lines;
+  return { shown, matched };
 }
 
 function contiguousRuns(lines: readonly number[]): LineRange[] {
@@ -69,12 +76,12 @@ function contiguousRuns(lines: readonly number[]): LineRange[] {
 
 // Compact keeps line breaks in indent-sensitive files; such a run is printed line by line so
 // every output line still carries its own label.
-function formatCompactRun(split: SplitResult, path: string, run: LineRange): string[] {
+function formatCompactRun(split: SplitResult, path: string, run: LineRange, labelLine: LabelLine): string[] {
   const formatted = formatSplitRange(split, "compact", path, run.start, run.end + 1).replace(/\r?\n$/, "");
-  if (!formatted.includes("\n")) return [`${lineLabel(run.start, run.end)}:\t${formatted}`];
+  if (!formatted.includes("\n")) return [`${lineLabel(run.start, run.end)}:${formatted}`];
   const lines: string[] = [];
   for (let line = run.start; line <= run.end; line++) {
-    lines.push(`${line + 1}:\t${formatSplitRange(split, "compact", path, line, line + 1).replace(/\r?\n$/, "")}`);
+    lines.push(labelLine(line, formatSplitRange(split, "compact", path, line, line + 1).replace(/\r?\n$/, "")));
   }
   return lines;
 }
@@ -91,7 +98,7 @@ function searchFields(req: ReadRequest): Pick<SearchCount, "search_term" | "sear
 }
 
 function lineLabel(start: number, end: number): string {
-  return start === end ? `${start + 1}` : `${start + 1}-${end + 1}`;
+  return start === end ? `${start + 1}` : `${start + 1}..${end + 1}`;
 }
 
 function findMatchRanges(req: ReadRequest, split: SplitResult, content: string): LineRange[] {
