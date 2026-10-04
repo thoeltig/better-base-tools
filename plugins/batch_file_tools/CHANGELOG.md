@@ -24,6 +24,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - **`searchRegex`** read request field, see above.
 - **`count: 0`** — accepted on search (no context lines) and plain reads (no limit).
+- **`searchRegex` hint on literal terms that look like a regex** — a `searchTerm` without matches that contains `|`, `\b`/`\d`/`\s`/`\w`, `.*`/`.+` or `^`/`$` anchors gets `(searchTerm is literal; use searchRegex for patterns)` on its no-match line. Grep-style alternation in `searchTerm` is an easy habit to carry over.
 - **`offset` past the end of the file returns the file tail** — the last `count` lines, or the last line without `count`, instead of an empty result.
 - **Searches on one file are bundled into one result** — all searches on a file share one header and one set of lines in file order (a line matched by several searches appears once), with a count per search in the header. Each search keeps its own `count`; the result is `verbatim` if any of them asks for it. Separate searches cost a repeated header each and a regex alternation loses per-term counts and silently hides terms that matched nothing; bundling keeps both. `ReadResult.searches` carries the per-search counts.
 

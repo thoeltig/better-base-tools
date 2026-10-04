@@ -200,6 +200,32 @@ describe("formatReadContent — new search output formats", () => {
     expect(blocks.map(b => b.text)).toEqual([`<!-- No matches for 'zzz' -->\n<!-- No matches for /y+/ -->\n`]);
   });
 
+  it("a regex-looking searchTerm without matches gets a searchRegex hint; plain terms and regexes do not", () => {
+    const noMatch = (search: { search_term?: string; search_regex?: string }) =>
+      ({ path: "/a.ts", mode_applied: "compact" as const, lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ ...search, match_count: 0 }] });
+    const blocks = formatReadContent({
+      results: [
+        noMatch({ search_term: "foo|bar" }),
+        noMatch({ search_term: "\\bfoo" }),
+        noMatch({ search_term: "get.*Name" }),
+        noMatch({ search_term: "^import" }),
+        noMatch({ search_term: "items[0]" }),
+        noMatch({ search_regex: "a|b" }),
+      ],
+    });
+    const hint = " (searchTerm is literal; use searchRegex for patterns)";
+    expect(blocks.map(b => b.text)).toEqual([
+      [
+        `<!-- No matches for 'foo|bar'${hint} -->`,
+        `<!-- No matches for '\\bfoo'${hint} -->`,
+        `<!-- No matches for 'get.*Name'${hint} -->`,
+        `<!-- No matches for '^import'${hint} -->`,
+        `<!-- No matches for 'items[0]' -->`,
+        `<!-- No matches for /a|b/ -->`,
+      ].join("\n") + "\n",
+    ]);
+  });
+
   it("line breaks in searches are shown escaped in headers and no-match lines", () => {
     const blocks = formatReadContent({
       results: [

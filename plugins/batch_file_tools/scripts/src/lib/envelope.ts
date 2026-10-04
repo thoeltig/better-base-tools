@@ -94,11 +94,21 @@ function buildNoMatchBlock(results: ReadonlyArray<ReadResult>): ToolContentResul
   const unmatched = new Map<string, string>();
   for (const search of results.flatMap(r => r.searches ?? [])) {
     if (search.match_count > 0) matched.add(searchIdentity(search));
-    else unmatched.set(searchIdentity(search), searchLabel(search));
+    else unmatched.set(searchIdentity(search), noMatchLine(search));
   }
-  const labels = [...unmatched].filter(([identity]) => !matched.has(identity)).map(([, label]) => label);
-  if (labels.length === 0) return null;
-  return createToolOutputForAssistant(labels.map(label => `<!-- No matches for ${label} -->`).join('\n'));
+  const lines = [...unmatched].filter(([identity]) => !matched.has(identity)).map(([, line]) => line);
+  if (lines.length === 0) return null;
+  return createToolOutputForAssistant(lines.join('\n'));
+}
+
+// searchTerm is literal; a failed term with alternation, escapes like \b, .* / .+ or ^ / $
+// anchors most likely meant searchRegex. [ and ( are left out: they are common in literal code.
+const REGEX_LIKE = /\||\\[bdswBDSW]|\.[*+]|^\^|\$$/;
+
+function noMatchLine(search: SearchCount): string {
+  const looksLikeRegex = search.search_term !== undefined && REGEX_LIKE.test(search.search_term);
+  const hint = looksLikeRegex ? " (searchTerm is literal; use searchRegex for patterns)" : "";
+  return `<!-- No matches for ${searchLabel(search)}${hint} -->`;
 }
 
 // Groups by the raw search: escaped labels of a real line break and a literal "\n" would collide.
