@@ -189,9 +189,13 @@ A 20-file-read, 15-edit session using native tools adds roughly 600k–800k char
 | Mode | Output | Use for |
 |---|---|---|
 | `compact` *(default)* | Single-line collapsed, stripped indent and consecutive whitespace | Information gathering and `replace`/`replace_all` anchor — cheapest read; whitespace differences resolved by `batch_edit`'s normalization fallback |
-| `verbatim` | Byte-exact file content | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include `<!-- Read line X to Y ... -->` header for `replace_range`/`insert_at_line` anchoring |
+| `verbatim` | Byte-exact file content | Full-file `replace`/`replace_all` anchor; sliced reads (`offset`+`count`) include a `<!-- Line X to Y of N lines in ... -->` header for `replace_range`/`insert_at_line` anchoring |
 
-Requests also support glob and directory expansion, `offset` and `count` for pagination, and a `searchTerm` parameter for case-insensitive search (literal string or regex pattern). Search output format depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent` on a single line; `count>0` returns context blocks — nearby windows are merged into one block, single-match blocks are annotated `<!-- Line M to N, match at line K -->`, merged multi-match blocks use `<!-- Line M to N -->` only. Files with no matches across a call are merged into a single `<!-- No match(es) found -->` output block.
+Requests also support glob and directory expansion and `offset`/`count` pagination. Header line numbers always refer to source lines, also in `compact` mode where the output spans fewer lines. An `offset` past the end of the file returns the last `count` lines (the last line without `count`); `count: 0` on a plain read means no limit.
+
+Search takes either `searchTerm` (case-insensitive literal text) or `searchRegex` (case-insensitive JavaScript regular expression); the two are mutually exclusive, and an invalid regex returns an `unparseable` error for that request. Output depends on `count`: `count=0` (default) returns each match as `lineNum\tcontent`; `count>0` returns context blocks headed `<!-- Line M to N -->`, with nearby windows merged into one block. The result header names the search (`for 'term'` or `for /regex/`). Files without matches are omitted; a search that matched in no file returns a single `<!-- No matches for 'term' -->` line.
+
+Results follow request order. Errors use `<!-- Error <reason>: 'path' — detail -->`, where `not_found` shows the absolute path so a wrong resolution base is visible.
 
 The following example reads three files in a single call — a full compact read, a search, and a line-range slice.
 
@@ -201,6 +205,14 @@ The following example reads three files in a single call — a full compact read
   { "path": "/src/user.ts", "mode": "verbatim", "searchTerm": "validateToken" },
   { "path": "/src/config.ts", "mode": "verbatim", "offset": 40, "count": 20 }
 ]}
+```
+
+Each result starts with a header line:
+
+```
+<!-- 120 lines in '/src/auth.ts' as compact -->
+<!-- 2 matches for 'validateToken' in '/src/user.ts' (88 lines) as verbatim -->
+<!-- Line 40 to 59 of 210 lines in '/src/config.ts' as verbatim -->
 ```
 
 ### `batch_edit`
@@ -217,7 +229,7 @@ The following example reads three files in a single call — a full compact read
 
 Anchor matching for `replace` and `replace_all` uses a two-step fallback: exact string match first; if not found, a whitespace-normalized match (tabs, spaces, and newlines collapsed) against the original file content — the matched original text becomes the replacement target. This is what makes `compact` mode output a reliable anchor despite its whitespace stripping. Only if both steps fail is a `nearest_anchor` error returned, containing verbatim context around the closest match pasteable directly as the corrected `old` string.
 
-`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Ops that already ran before the failing one are kept and written to disk; the failing op is reported as `error` and everything after it as `skipped`, so the `N/M ops successful` count always matches what landed. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
+`stopOnError` is configurable at the root, file and op level. The lowest-defined level takes precedence and the default is to continue on error. Ops that already ran before the failing one are kept and written to disk; the failing op is reported as `error` and everything after it as `skipped`, so the `N/M ops successful` count always matches what landed. A target file that does not exist and is not created by a `write` op in the same request fails once at file level as `<!-- Error not_found: '<absolute path>' -->`. Dry-run mode can be enabled server-wide via `BATCH_TOOLS_DRY_RUN` (see [Configuration](#configuration)).
 
 When a path falls outside the allowed directories the tool prompts for authorization with per-file options to allow access once or for the remainder of the session.
 
@@ -251,7 +263,7 @@ All options can be set via environment variable or command-line argument. Args a
 | `BATCH_TOOLS_MCP_STRUCTURED_CONTENT` | `--mcp-structured-content` | `false` | Include the raw result object as `structuredContent` in tool responses alongside `content[]`. Some harnesses surface `structuredContent` to the model instead of `content[]`, which re-wraps text and escapes newlines — leave disabled unless your harness handles both correctly. |
 | `BATCH_TOOLS_INCLUDE_PATHS` | `--include` | *(empty)* | Comma-separated paths added to the allow list. Accepts absolute, relative (resolved from the server cwd), and `~`-expanded paths; each is canonicalized (symlinks resolved). Grants access outside MCP roots but does **not** override `BATCH_TOOLS_EXCLUDE_PATHS`. |
 | `BATCH_TOOLS_EXCLUDE_PATHS` | `--exclude` | *(empty)* | Comma-separated files/folders placed behind an elicitation gate. Takes precedence over the allow list and `--include`: paths inside are **blocked** (returning `not_authorized`) until the user approves them via elicitation, even when inside an allowed root. Approving a folder lifts the gate for its whole subtree. Relative entries apply inside every allowed directory (MCP roots + `--include`); absolute/`~` entries match a fixed location. See [Path Access Control](#path-access-control). |
-| `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `--max-output-tokens` | `75000` | Maximum total formatted `batch_read` output in tokens. When the emitted content exceeds this limit, the overflowing read is truncated at a unit boundary — normal reads at a line boundary (header shows the reduced range, inline `<!-- Truncated at line N of M … -->` marker gives a re-read anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match block(s) … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable. |
+| `BATCH_TOOLS_MAX_OUTPUT_TOKENS` | `--max-output-tokens` | `75000` | Maximum total formatted `batch_read` output in tokens. When the emitted content exceeds this limit, the overflowing read is truncated at a unit boundary — normal reads at a source-line boundary (`compact` output is re-formatted from the source, so the header shows the reduced source range and the inline `<!-- Truncated at line N of M … -->` marker gives a re-read anchor), search reads at a match-block boundary (`<!-- Truncated: showing first K of M match blocks … -->`) — and any reads that did not fit at all are listed in a trailing `<!-- Max output reached … -->` note. Set to `0` to disable. |
 | `BATCH_TOOLS_CHARS_PER_TOKEN` | `--chars-per-token` | `2.5` | Char-to-token ratio used to convert `BATCH_TOOLS_MAX_OUTPUT_TOKENS` into a character budget. |
 
 ### Recommended Claude Code setup
