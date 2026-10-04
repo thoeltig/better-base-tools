@@ -8,7 +8,9 @@ import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResul
 
 const SEARCH_MERGE_GAP = 3;
 
-type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
+// order: position in the expanded request list; dedup keeps the earliest so results follow request order.
+type PlanEntry = ({ kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult }) & { order: number };
+type OkEntry = Extract<PlanEntry, { kind: "ok" }>;
 
 // Distinguishes literal from regex so the same text in both fields is not deduplicated.
 function searchKey(req: ReadRequest): string | undefined {
@@ -81,58 +83,55 @@ async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[], e
 
 function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
-  const pathOrder: string[] = [];
-  const byPath = new Map<string, ReadRequest[]>();
+  const byPath = new Map<string, OkEntry[]>();
 
   for (const entry of entries) {
     if (entry.kind === "err") {
       result.push(entry);
       continue;
     }
-    if (!byPath.has(entry.req.path)) {
-      pathOrder.push(entry.req.path);
-      byPath.set(entry.req.path, []);
-    }
-    byPath.get(entry.req.path)!.push(entry.req);
+    if (!byPath.has(entry.req.path)) byPath.set(entry.req.path, []);
+    byPath.get(entry.req.path)!.push(entry);
   }
 
-  for (const path of pathOrder) {
-    result.push(...deduplicatePath(path, byPath.get(path)!));
+  for (const [path, pathEntries] of byPath) {
+    result.push(...deduplicatePath(path, pathEntries));
   }
 
-  return result;
+  return result.sort((a, b) => a.order - b.order);
 }
 
-function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
+function deduplicatePath(path: string, entries: OkEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
   // search: group by (search, count), coalesce mode (same→same, mixed→verbatim)
-  const searchGroups = new Map<string, ReadRequest[]>();
-  for (const req of reqs) {
-    const search = searchKey(req);
+  const searchGroups = new Map<string, OkEntry[]>();
+  for (const entry of entries) {
+    const search = searchKey(entry.req);
     if (search === undefined) continue;
-    const key = `${search}|${req.count ?? ""}`;
+    const key = `${search}|${entry.req.count ?? ""}`;
     if (!searchGroups.has(key)) searchGroups.set(key, []);
-    searchGroups.get(key)!.push(req);
+    searchGroups.get(key)!.push(entry);
   }
   for (const group of searchGroups.values()) {
-    const modes = new Set(group.map(r => r.mode));
+    const modes = new Set(group.map(e => e.req.mode));
     const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
-    result.push({ kind: "ok", req: { ...group[0]!, mode: coalescedMode } });
+    result.push({ kind: "ok", req: { ...group[0]!.req, mode: coalescedMode }, order: group[0]!.order });
   }
 
   // range/full: coalesce mode, merge overlapping ranges
-  const rangeReqs = reqs.filter(r => searchKey(r) === undefined);
-  if (rangeReqs.length === 0) return result;
+  const rangeEntries = entries.filter(e => searchKey(e.req) === undefined);
+  if (rangeEntries.length === 0) return result;
 
-  const modes = new Set(rangeReqs.map(r => r.mode));
+  const modes = new Set(rangeEntries.map(e => e.req.mode));
   const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
 
-  type RangeEntry = { start: number; end: number; sources: number; originalReq: ReadRequest | undefined };
-  const ranges: RangeEntry[] = rangeReqs.map(req => ({
+  type RangeEntry = { start: number; end: number; sources: number; order: number; originalReq: ReadRequest | undefined };
+  const ranges: RangeEntry[] = rangeEntries.map(({ req, order }) => ({
     start: req.offset ?? 1,
     end: req.count !== undefined ? (req.offset ?? 1) + req.count - 1 : Infinity,
     sources: 1,
+    order,
     originalReq: req,
   }));
   ranges.sort((a, b) => a.start - b.start);
@@ -144,6 +143,7 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
       merged.push({ ...r });
     } else {
       last.sources += r.sources;
+      last.order = Math.min(last.order, r.order);
       last.originalReq = undefined;
       last.end = last.end === Infinity || r.end === Infinity ? Infinity : Math.max(last.end, r.end);
     }
@@ -152,14 +152,13 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   for (const range of merged) {
     // Single source with no merging: pass through the original request unchanged
     if (range.sources === 1 && range.originalReq) {
-      result.push({ kind: "ok", req: range.originalReq });
+      result.push({ kind: "ok", req: range.originalReq, order: range.order });
       continue;
     }
-    const finalMode = coalescedMode;
-    const req: ReadRequest = { path, mode: finalMode };
+    const req: ReadRequest = { path, mode: coalescedMode };
     if (range.start > 1) req.offset = range.start;
     if (range.end !== Infinity) req.count = range.end - range.start + 1;
-    result.push({ kind: "ok", req });
+    result.push({ kind: "ok", req, order: range.order });
   }
 
   return result;
@@ -179,38 +178,37 @@ async function expandReadRequests(
       try {
         new RegExp(req.searchRegex, "i");
       } catch (err) {
-        entries.push({ kind: "err", result: errResult(req, "unparseable", err instanceof Error ? err.message : String(err)) });
+        entries.push({ kind: "err", result: errResult(req, "unparseable", err instanceof Error ? err.message : String(err)), order: entries.length });
         continue;
       }
     }
     if (!(await needsExpansion(req.path))) {
-      entries.push({ kind: "ok", req });
+      entries.push({ kind: "ok", req, order: entries.length });
       continue;
     }
-
 
     let candidates: string[];
     try {
       candidates = await expandToFiles(req.path);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      entries.push({ kind: "err", result: errResult(req, "io_error", `glob expansion failed: ${msg}`) });
+      entries.push({ kind: "err", result: errResult(req, "io_error", `glob expansion failed: ${msg}`), order: entries.length });
       continue;
     }
 
     if (candidates.length === 0) {
-      entries.push({ kind: "err", result: errResult(req, "not_found", "no files matched") });
+      entries.push({ kind: "err", result: errResult(req, "not_found", "no files matched"), order: entries.length });
       continue;
     }
 
     const allowed = candidates.filter(p => isAccessible(p, allowedDirs, excludedPaths, approvedPaths));
     if (allowed.length === 0) {
-      entries.push({ kind: "err", result: errResult(req, "not_authorized", "no matched files are within allowed directories") });
+      entries.push({ kind: "err", result: errResult(req, "not_authorized", "no matched files are within allowed directories"), order: entries.length });
       continue;
     }
 
     for (const resolvedPath of allowed) {
-      entries.push({ kind: "ok", req: { ...req, path: await safeRealpath(resolvedPath) } });
+      entries.push({ kind: "ok", req: { ...req, path: await safeRealpath(resolvedPath) }, order: entries.length });
     }
   }
 

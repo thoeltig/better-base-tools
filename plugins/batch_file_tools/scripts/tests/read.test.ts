@@ -57,6 +57,35 @@ describe("handleBatchRead", () => {
     expect(out.results[1]!.content).toBe("B1\n");
   });
 
+  it("results follow request order across searches, slices and files", async () => {
+    const a = await fixture("order_a.ts", "a1\na2\na3\na4\na5\na6\n");
+    const b = await fixture("order_b.ts", "b1\n");
+    const out = await read({
+      requests: [
+        { path: a, mode: "verbatim", offset: 2, count: 1 },
+        { path: a, mode: "verbatim", searchTerm: "a4" },
+        { path: join(workDir, "missing-order.ts"), mode: "verbatim" },
+        { path: b, mode: "verbatim" },
+        { path: a, mode: "verbatim", offset: 6, count: 1 },
+      ],
+    });
+    expect(out.results.map(r => r.content || r.error?.reason)).toEqual(["a2\n", "4\ta4", "not_found", "b1\n", "a6\n"]);
+  });
+
+  it("merged ranges take the position of their earliest request", async () => {
+    const a = await fixture("order_merge_a.ts", "a1\na2\na3\na4\n");
+    const b = await fixture("order_merge_b.ts", "b1\n");
+    const out = await read({
+      requests: [
+        { path: b, mode: "verbatim" },
+        { path: a, mode: "verbatim", offset: 1, count: 2 },
+        { path: b, mode: "verbatim", searchTerm: "b1" },
+        { path: a, mode: "verbatim", offset: 2, count: 3 },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual(["b1\n", "a1\na2\na3\na4\n", "1\tb1"]);
+  });
+
   it("raw mode preserves CRLF byte-exactly", async () => {
     const p = await fixture("crlf.txt", "x\r\ny\r\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim" }] });
