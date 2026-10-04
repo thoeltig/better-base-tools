@@ -498,34 +498,6 @@
       },
       "role": "implementation"
     },
-    "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts": {
-      "sizeChars": 1168,
-      "lineCount": 35,
-      "deleted": true,
-      "exports": [
-        "extractRefs"
-      ],
-      "imports": {
-        "path": []
-      },
-      "path": "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts",
-      "summary": "Utility module for extracting file references from code and markdown content. Uses regex patterns to identify imports, requires, markdown links, and path literals. Filters out non-file URLs and package names, returning a deduplicated sorted array of relative/absolute file references.",
-      "technologies": [
-        "TypeScript",
-        "regex",
-        "fs-references"
-      ],
-      "searchTags": [
-        "path extraction",
-        "import detection",
-        "reference scanning",
-        "glob patterns"
-      ],
-      "lastUpdated": "2026-06-07T01:06:40.794Z",
-      "role": "implementation",
-      "sizeCharsWhenAnalysed": 1168,
-      "lineCountWhenAnalysed": 35
-    },
     "plugins/batch_file_tools/scripts/src/lib/fs.ts": {
       "sizeChars": 7027,
       "lineCount": 224,
@@ -1193,41 +1165,6 @@
       },
       "role": "test"
     },
-    "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts": {
-      "sizeChars": 3622,
-      "lineCount": 104,
-      "deleted": true,
-      "imports": {
-        "node:test": [
-          "describe",
-          "it"
-        ],
-        "plugins/batch_file_tools/scripts/tests/helpers/expect.ts": [
-          "expect"
-        ],
-        "plugins/batch_file_tools/scripts/src/lib/extract-refs.ts": [
-          "extractRefs"
-        ],
-        "path": []
-      },
-      "path": "plugins/batch_file_tools/scripts/tests/extract-refs.test.ts",
-      "summary": "Tests file reference extraction from code (imports/requires/dynamic) and markdown links. Validates filtering of npm packages and node builtins, path normalization, deduplication, and regex patterns for both ES and CommonJS modules.",
-      "technologies": [
-        "TypeScript",
-        "Node.js test",
-        "regex"
-      ],
-      "searchTags": [
-        "import extraction",
-        "references",
-        "dependencies",
-        "markdown parsing"
-      ],
-      "lastUpdated": "2026-06-29T23:40:09.545Z",
-      "sizeCharsWhenAnalysed": 3622,
-      "lineCountWhenAnalysed": 104,
-      "role": "test"
-    },
     "plugins/batch_file_tools/scripts/tests/glob.test.ts": {
       "sizeChars": 9176,
       "lineCount": 242,
@@ -1533,49 +1470,6 @@
       "sizeCharsWhenAnalysed": 230,
       "lineCountWhenAnalysed": 10
     },
-    "plugins/batch_file_tools/scripts/tsconfig.typecheck.json": {
-      "sizeChars": 208,
-      "lineCount": 10,
-      "deleted": true,
-      "path": "plugins/batch_file_tools/scripts/tsconfig.typecheck.json",
-      "summary": "TypeScript configuration for type checking. Extends main tsconfig, disables emit and declarations, includes src and tests, excludes dist and node_modules. Used for validation before build.",
-      "technologies": [
-        "TypeScript"
-      ],
-      "searchTags": [
-        "configuration",
-        "typecheck"
-      ],
-      "lastUpdated": "2026-09-05T00:30:29.682Z",
-      "role": "configuration",
-      "sizeCharsWhenAnalysed": 208,
-      "lineCountWhenAnalysed": 10
-    },
-    "plugins/batch_file_tools/scripts/vitest.config.ts": {
-      "sizeChars": 158,
-      "lineCount": 8,
-      "deleted": true,
-      "imports": {
-        "vitest": [
-          "defineConfig"
-        ]
-      },
-      "path": "plugins/batch_file_tools/scripts/vitest.config.ts",
-      "summary": "Vitest test runner configuration for batch_file_tools scripts. Runs tests from tests/**/*.test.ts files in Node.js environment. Minimal setup providing baseline for TypeScript unit and integration test execution.",
-      "technologies": [
-        "Vitest",
-        "Node.js"
-      ],
-      "searchTags": [
-        "test runner",
-        "testing framework",
-        "unit tests"
-      ],
-      "lastUpdated": "2026-06-07T01:06:30.292Z",
-      "role": "configuration",
-      "sizeCharsWhenAnalysed": 158,
-      "lineCountWhenAnalysed": 8
-    },
     "plugins/project-intel-tool/.claude-plugin/plugin.json": {
       "sizeChars": 741,
       "lineCount": 14,
@@ -1702,33 +1596,6 @@
       "role": "executable",
       "sizeCharsWhenAnalysed": 1681,
       "lineCountWhenAnalysed": 59
-    },
-    "plugins/project-intel-tool/hooks/sessionstart.js": {
-      "sizeChars": 1182,
-      "lineCount": 44,
-      "deleted": true,
-      "imports": {
-        "fs": [],
-        "path": [],
-        "child_process": []
-      },
-      "path": "plugins/project-intel-tool/hooks/sessionstart.js",
-      "summary": "Node.js hook script for SessionStart event. Validates CLAUDE_PLUGIN_ROOT environment variable and checks if sessionstart-knowledge-check.js is built. Spawns the knowledge check subprocess and relays stdio/exit code. Provides actionable error if build is missing.",
-      "technologies": [
-        "Node.js",
-        "child_process"
-      ],
-      "searchTags": [
-        "validation",
-        "build check",
-        "subprocess",
-        "error handling",
-        "lifecycle"
-      ],
-      "lastUpdated": "2026-06-07T01:06:30.295Z",
-      "role": "executable",
-      "sizeCharsWhenAnalysed": 1182,
-      "lineCountWhenAnalysed": 44
     },
     "plugins/project-intel-tool/LICENSE": {
       "sizeChars": 1090,
