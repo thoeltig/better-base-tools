@@ -19,6 +19,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **Error output unified across read and edit** — `<!-- Error <reason>: 'path' — detail -->`. Messages that only repeated the path and reason (`File not found: …`, `Access denied: …`, `Path is a directory: …`) are now empty; `not_found` shows the absolute path so a wrong resolution base (server cwd) is visible.
 - **`batch_edit` on a missing file reports one file-level `not_found`** — every op previously failed with `target file does not exist; use write(mode: 'overwrite') … first`, which after a wrong relative path invited creating the file in the wrong place. When a later `write` in the same request creates the file, earlier ops keep an op-level `file did not exist when this op ran`.
 - **Paths are displayed with forward slashes** on Windows.
+- **Tool descriptions point search anchors at the line labels** — both said a search read carries its line numbers in the output header; they are now on each line (`N:`), and the label has to be stripped when a search line is reused as a `replace` anchor.
 
 ### Added
 
