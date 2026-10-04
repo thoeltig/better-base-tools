@@ -200,6 +200,19 @@ describe("formatReadContent — new search output formats", () => {
     expect(blocks.map(b => b.text)).toEqual([`<!-- No matches for 'zzz' -->\n<!-- No matches for /y+/ -->\n`]);
   });
 
+  it("line breaks in searches are shown escaped in headers and no-match lines", () => {
+    const blocks = formatReadContent({
+      results: [
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 2, truncated: false, content: "2-3:\tfoo bar", match_count: 1, search_term: "bar\r\nbaz" },
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "x\ny" },
+      ],
+    });
+    expect(blocks.map(b => b.text)).toEqual([
+      `<!-- 1 match for 'bar\\r\\nbaz' in '/a.ts' (10 lines) as compact -->\n2-3:\tfoo bar\n`,
+      `<!-- No matches for 'x\\ny' -->\n`,
+    ]);
+  });
+
   it("files without matches are omitted when the same search matched elsewhere", () => {
     const blocks = formatReadContent({
       results: [

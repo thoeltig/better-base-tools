@@ -376,6 +376,71 @@ describe("handleBatchRead", () => {
     expect(out.results[0]!.lines).toBe(3);
   });
 
+  describe("multi-line search", () => {
+    const content = "start\nfoo bar\nbaz qux\nmiddle\nfoo bar\nbaz end\nlast\n";
+
+    it("searchTerm with a line break matches across lines and reports the line range", async () => {
+      const p = await fixture("ml-term.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "BAR\nbaz" }] });
+      const r = out.results[0]!;
+      expect(r.match_count).toBe(2);
+      expect(r.returned_lines).toBe(4);
+      expect(r.content).toBe("2-3:\tfoo bar\nbaz qux\n5-6:\tfoo bar\nbaz end");
+    });
+
+    it("searchTerm with a line break matches CRLF files, with either line ending in the term", async () => {
+      const p = await fixture("ml-crlf.ts", "x\r\nFoo\r\nBar\r\n");
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchTerm: "foo\nbar" },
+          { path: p, mode: "verbatim", searchTerm: "foo\r\nbar" },
+        ],
+      });
+      expect(out.results.map(r => r.content)).toEqual(["2-3:\tFoo\r\nBar", "2-3:\tFoo\r\nBar"]);
+    });
+
+    it("multi-line matches get context windows that merge like single-line ones", async () => {
+      const p = await fixture("ml-ctx.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "bar\nbaz", count: 1 }] });
+      expect(out.results[0]!.content).toBe("1-7:\tstart\nfoo bar\nbaz qux\nmiddle\nfoo bar\nbaz end\nlast");
+    });
+
+    it("compact multi-line match is one line labelled with its range", async () => {
+      const p = await fixture("ml-compact.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "middle\nfoo" }] });
+      expect(out.results[0]!.content).toBe("4-5:\tmiddle foo bar");
+    });
+
+    it("multi-line searchTerm without a match reports zero matches", async () => {
+      const p = await fixture("ml-none.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "qux\nlast" }] });
+      expect(out.results[0]!.match_count).toBe(0);
+    });
+
+    it("searchRegex with \\n matches across lines; ^ and $ keep their line meaning", async () => {
+      const p = await fixture("ml-regex.ts", content);
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchRegex: "bar\\nbaz" },
+          { path: p, mode: "verbatim", searchRegex: "^middle$\\n^foo" },
+        ],
+      });
+      expect(out.results.map(r => r.content)).toEqual(["2-3:\tfoo bar\nbaz qux\n5-6:\tfoo bar\nbaz end", "4-5:\tmiddle\nfoo bar"]);
+    });
+
+    it("searchRegex without \\n stays line-based; an escaped backslash before n is not a line break", async () => {
+      const p = await fixture("ml-regex-line.ts", "foo bar\nbaz\npath a\\nb\n");
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchRegex: "bar\\sbaz" },
+          { path: p, mode: "verbatim", searchRegex: "a\\\\nb" },
+        ],
+      });
+      expect(out.results.map(r => r.match_count)).toEqual([0, 1]);
+      expect(out.results[1]!.content).toBe("3:\tpath a\\nb");
+    });
+  });
+
   it("search: a one-line context window uses the single-line label", async () => {
     const p = await fixture("one-line.ts", "only TARGET\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 2 }] });

@@ -29,6 +29,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Fixed
 
+- **Multi-line searches never matched** — search ran line by line, so a `searchTerm` containing a line break (e.g. checking that a multi-line `old` anchor is unique) or a `searchRegex` containing `\n` silently returned no matches. Such searches now run on the whole text with line endings normalized; each match is reported as `M-N:<tab>content`, and line breaks in headers are shown as `\n`.
 - **`count: 0` was rejected although the schema description advertised it** — the description documented `count=0` for inline search output while the schema enforced `min(1)`.
 - **Output blocks ran into each other** — blocks without a trailing newline (compact output, search results) had the next block's header glued onto their last line. Every block now ends with `\n`.
 - **Compact output could not be truncated correctly** — single-line compact output was emitted whole over budget or dropped, and indent-sensitive files with collapsed blank lines got wrong header ranges and re-read hints. Truncation now re-slices and re-formats the source to the largest line count that fits.

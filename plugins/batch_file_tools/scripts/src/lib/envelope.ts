@@ -89,17 +89,32 @@ export function formatReadContent(
 // One line per search that matched in no file; files without matches are otherwise
 // omitted like grep does. Tiny, so emitted outside the output budget.
 function buildNoMatchBlock(noMatch: ReadonlyArray<ReadResult>, others: ReadonlyArray<ReadResult>): ToolContentResult | null {
-  const matched = new Set(others.map(searchLabel));
-  const labels = [...new Set(noMatch.map(searchLabel))]
-    .filter((label): label is string => label !== undefined && !matched.has(label));
-  if (labels.length === 0) return null;
-  return createToolOutputForAssistant(labels.map(label => `<!-- No matches for ${label} -->`).join('\n'));
+  const matched = new Set(others.map(searchIdentity));
+  const unmatched = new Map<string, string>();
+  for (const r of noMatch) {
+    const identity = searchIdentity(r);
+    if (identity !== undefined && !matched.has(identity)) unmatched.set(identity, searchLabel(r) ?? identity);
+  }
+  if (unmatched.size === 0) return null;
+  return createToolOutputForAssistant([...unmatched.values()].map(label => `<!-- No matches for ${label} -->`).join('\n'));
+}
+
+// Groups by the raw search: escaped labels of a real line break and a literal "\n" would collide.
+function searchIdentity(r: ReadResult): string | undefined {
+  if (r.search_term !== undefined) return `term:${r.search_term}`;
+  if (r.search_regex !== undefined) return `regex:${r.search_regex}`;
+  return undefined;
 }
 
 function searchLabel(r: ReadResult): string | undefined {
-  if (r.search_term !== undefined) return `'${r.search_term}'`;
-  if (r.search_regex !== undefined) return `/${r.search_regex}/`;
+  if (r.search_term !== undefined) return `'${escapeLineBreaks(r.search_term)}'`;
+  if (r.search_regex !== undefined) return `/${escapeLineBreaks(r.search_regex)}/`;
   return undefined;
+}
+
+// Keeps a multi-line search on the single header line.
+function escapeLineBreaks(text: string): string {
+  return text.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
 }
 
 function buildOmittedMarker(paths: ReadonlyArray<string>): ToolContentResult {

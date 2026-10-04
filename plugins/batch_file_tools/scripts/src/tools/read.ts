@@ -2,41 +2,13 @@ import { resolve } from "node:path";
 import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
-import { splitLines } from "../lib/lines.js";
-import { formatForRead, formatSplitRange } from "../lib/transforms.js";
+import { searchFile, searchKey } from "../lib/search.js";
+import { formatForRead } from "../lib/transforms.js";
 import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResult, Reason } from "../types.js";
-
-const SEARCH_MERGE_GAP = 3;
 
 // order: position in the expanded request list; dedup keeps the earliest so results follow request order.
 type PlanEntry = ({ kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult }) & { order: number };
 type OkEntry = Extract<PlanEntry, { kind: "ok" }>;
-
-// Distinguishes literal from regex so the same text in both fields is not deduplicated.
-function searchKey(req: ReadRequest): string | undefined {
-  if (req.searchTerm !== undefined) return `term:${req.searchTerm}`;
-  if (req.searchRegex !== undefined) return `regex:${req.searchRegex}`;
-  return undefined;
-}
-
-function searchFields(req: ReadRequest): Pick<ReadResult, "search_term" | "search_regex"> {
-  if (req.searchTerm !== undefined) return { search_term: req.searchTerm };
-  return req.searchRegex !== undefined ? { search_regex: req.searchRegex } : {};
-}
-
-// 0-based inclusive range → "N" or "M-N" (1-based), the prefix of each search output unit.
-function lineLabel(start: number, end: number): string {
-  return start === end ? `${start + 1}` : `${start + 1}-${end + 1}`;
-}
-
-function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
-  if (req.searchRegex !== undefined) {
-    const re = new RegExp(req.searchRegex, "i");
-    return line => re.test(line);
-  }
-  const needle = (req.searchTerm ?? "").toLowerCase();
-  return line => line.toLowerCase().includes(needle);
-}
 
 export async function handleBatchRead(
   input: ReadInput,
@@ -241,69 +213,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     return errResult(req, file.reason, file.message);
   }
 
-  // search: grep with context lines
-  if (searchKey(req) !== undefined) {
-    const split = splitLines(file.content);
-    const lines = split.lines;
-
-    const ctx = req.count ?? 0;
-    const matchLine = buildLineMatcher(req);
-    const matchIdxs: number[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      if (matchLine(lines[i] ?? "")) matchIdxs.push(i);
-    }
-
-    if (matchIdxs.length === 0) {
-      return {
-        path: req.path,
-        mode_applied: req.mode,
-        lines: lines.length,
-        returned_lines: 0,
-        truncated: false,
-        content: "",
-        match_count: 0,
-        ...searchFields(req),
-      };
-    }
-
-    let returnedLines = 0;
-    const blocks: string[] = [];
-    if (ctx === 0) {
-      for (const idx of matchIdxs) {
-        const formatted = formatSplitRange(split, req.mode, req.path, idx, idx + 1);
-        blocks.push(`${lineLabel(idx, idx)}:\t${formatted.replace(/\r?\n$/, "")}`);
-        returnedLines += 1;
-      }
-    } else {
-      const intervals: { s: number; e: number }[] = [];
-      for (const idx of matchIdxs) {
-        const s = Math.max(0, idx - ctx);
-        const e = Math.min(lines.length - 1, idx + ctx);
-        const last = intervals.at(-1);
-        if (last && s - last.e - 1 <= SEARCH_MERGE_GAP) {
-          last.e = Math.max(last.e, e);
-        } else {
-          intervals.push({ s, e });
-        }
-      }
-      for (const { s, e } of intervals) {
-        returnedLines += e - s + 1;
-        const formatted = formatSplitRange(split, req.mode, req.path, s, e + 1);
-        blocks.push(`${lineLabel(s, e)}:\t${formatted.replace(/\r?\n$/, "")}`);
-      }
-    }
-
-    return {
-      path: req.path,
-      mode_applied: req.mode,
-      lines: lines.length,
-      returned_lines: returnedLines,
-      truncated: false,
-      content: blocks.join("\n"),
-      match_count: matchIdxs.length,
-      ...searchFields(req),
-    };
-  }
+  if (searchKey(req) !== undefined) return searchFile(req, file.content);
 
   // normal read
   const formatted = formatForRead({
