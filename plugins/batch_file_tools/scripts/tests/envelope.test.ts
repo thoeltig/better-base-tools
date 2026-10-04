@@ -151,7 +151,7 @@ describe("formatReadContent", () => {
 });
 
 describe("formatReadContent — new search output formats", () => {
-  it("count=0: match header + inline lineNum\\tcontent per match", () => {
+  it("count=0: match header + inline lineNum:\\tcontent per match", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/types.ts",
@@ -159,18 +159,18 @@ describe("formatReadContent — new search output formats", () => {
         lines: 262,
         returned_lines: 2,
         truncated: false,
-        content: "170\texport const EditInput\n176\texport type EditInput",
+        content: "170:\texport const EditInput\n176:\texport type EditInput",
         match_count: 2,
         search_term: "EditInput",
       }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- 2 matches for 'EditInput' in '/src/types.ts' (262 lines) as compact -->\n170\texport const EditInput\n176\texport type EditInput\n`
+      `<!-- 2 matches for 'EditInput' in '/src/types.ts' (262 lines) as compact -->\n170:\texport const EditInput\n176:\texport type EditInput\n`
     );
   });
 
-  it("count>0: match header names the regex + <!-- Line M to N --> blocks in content", () => {
+  it("count>0: match header names the regex + start-end: blocks in content", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/readme.md",
@@ -178,14 +178,14 @@ describe("formatReadContent — new search output formats", () => {
         lines: 122,
         returned_lines: 5,
         truncated: false,
-        content: "<!-- Line 70 to 74 -->\nline70\nTARGET\nline74",
+        content: "70-74:\tline70\nTARGET\nline74",
         match_count: 1,
         search_regex: "tar.et",
       }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- 1 match for /tar.et/ in '/src/readme.md' (122 lines) as verbatim -->\n<!-- Line 70 to 74 -->\nline70\nTARGET\nline74\n`
+      `<!-- 1 match for /tar.et/ in '/src/readme.md' (122 lines) as verbatim -->\n70-74:\tline70\nTARGET\nline74\n`
     );
   });
 
@@ -203,13 +203,13 @@ describe("formatReadContent — new search output formats", () => {
   it("files without matches are omitted when the same search matched elsewhere", () => {
     const blocks = formatReadContent({
       results: [
-        { path: "/a.ts", mode_applied: "compact", lines: 100, returned_lines: 2, truncated: false, content: "7\timport { foo }\n91\tfoo()", match_count: 2, search_term: "foo" },
+        { path: "/a.ts", mode_applied: "compact", lines: 100, returned_lines: 2, truncated: false, content: "7:\timport { foo }\n91:\tfoo()", match_count: 2, search_term: "foo" },
         { path: "/b.ts", mode_applied: "compact", lines: 50,  returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "foo" },
         { path: "/c.ts", mode_applied: "compact", lines: 30,  returned_lines: 0, truncated: false, content: "", match_count: 0, search_regex: "bar" },
       ],
     });
     expect(blocks.map(b => b.text)).toEqual([
-      `<!-- 2 matches for 'foo' in '/a.ts' (100 lines) as compact -->\n7\timport { foo }\n91\tfoo()\n`,
+      `<!-- 2 matches for 'foo' in '/a.ts' (100 lines) as compact -->\n7:\timport { foo }\n91:\tfoo()\n`,
       `<!-- No matches for /bar/ -->\n`,
     ]);
   });
@@ -597,7 +597,7 @@ describe("formatReadContent — output budget (maxChars)", () => {
   });
 
   it("search (count=0) truncates at a match-line boundary, keeping the match header", () => {
-    const content = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 3}\tmatchline-${String(i + 1).padStart(2, "0")}`).join("\n");
+    const content = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 3}:\tmatchline-${String(i + 1).padStart(2, "0")}`).join("\n");
     const blocks = formatReadContent(
       { results: [{ path: "/s.ts", mode_applied: "compact", lines: 400, returned_lines: 40, truncated: false, content, match_count: 40 }] },
       [],
@@ -616,13 +616,13 @@ describe("formatReadContent — output budget (maxChars)", () => {
 
   it("search (count>0) truncates at a context-block boundary", () => {
     const mkBlock = (n: number) =>
-      `<!-- Line ${n} to ${n + 2}, match at line ${n + 1} -->\nctx-${String(n).padStart(3, "0")}-a\nctx-${String(n).padStart(3, "0")}-b\nctx-${String(n).padStart(3, "0")}-c`;
+      `${n}-${n + 2}:\tctx-${String(n).padStart(3, "0")}-a\nctx-${String(n).padStart(3, "0")}-b\nctx-${String(n).padStart(3, "0")}-c`;
     const content = [10, 40, 70, 100, 130].map(mkBlock).join("\n");
     const blocks = formatReadContent(
       { results: [{ path: "/s.ts", mode_applied: "verbatim", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5 }] },
       [],
       false,
-      260,
+      230,
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
@@ -630,5 +630,8 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(text.includes("ctx-010-a")).toBe(true);
     expect(text.includes("ctx-130-a")).toBe(false);
     expect(text.includes("match block")).toBe(true);
+    for (const n of ["010", "040", "070", "100", "130"]) {
+      expect(text.includes(`ctx-${n}-a`)).toBe(text.includes(`ctx-${n}-c`));
+    }
   });
 });

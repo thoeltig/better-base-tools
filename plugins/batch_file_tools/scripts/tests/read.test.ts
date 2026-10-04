@@ -69,7 +69,7 @@ describe("handleBatchRead", () => {
         { path: a, mode: "verbatim", offset: 6, count: 1 },
       ],
     });
-    expect(out.results.map(r => r.content || r.error?.reason)).toEqual(["a2\n", "4\ta4", "not_found", "b1\n", "a6\n"]);
+    expect(out.results.map(r => r.content || r.error?.reason)).toEqual(["a2\n", "4:\ta4", "not_found", "b1\n", "a6\n"]);
   });
 
   it("merged ranges take the position of their earliest request", async () => {
@@ -83,7 +83,7 @@ describe("handleBatchRead", () => {
         { path: a, mode: "verbatim", offset: 2, count: 3 },
       ],
     });
-    expect(out.results.map(r => r.content)).toEqual(["b1\n", "a1\na2\na3\na4\n", "1\tb1"]);
+    expect(out.results.map(r => r.content)).toEqual(["b1\n", "a1\na2\na3\na4\n", "1:\tb1"]);
   });
 
   it("raw mode preserves CRLF byte-exactly", async () => {
@@ -164,7 +164,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("2\tconst b = 2;");
+    expect(r.content).toContain("2:\tconst b = 2;");
   });
 
   it("search: multiple matches", async () => {
@@ -172,8 +172,8 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("1\tfoo();");
-    expect(r.content).toContain("3\tfoo();");
+    expect(r.content).toContain("1:\tfoo();");
+    expect(r.content).toContain("3:\tfoo();");
   });
 
   it("search: multiple matches on the same line returns that line once", async () => {
@@ -181,7 +181,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("1\tfoo foo foo");
+    expect(r.content).toContain("1:\tfoo foo foo");
   });
 
   it("search: no match returns match_count=0 and empty content", async () => {
@@ -215,7 +215,7 @@ describe("handleBatchRead", () => {
     const r = out.results[0]!;
     expect(r.search_term).toBe("target");
     expect(r.match_count).toBe(1);
-    expect(r.content).toBe("2\ttarget");
+    expect(r.content).toBe("2:\ttarget");
   });
 
   it("read: count=0 reads to end of file", async () => {
@@ -233,7 +233,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "b", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 1 to 4 -->");
+    expect(r.content).toBe("1-4:\ta\nb\nc\nd");
   });
 
   it("search: nearby context blocks within gap are merged", async () => {
@@ -243,7 +243,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("<!-- Line 1 to 10 -->");
+    expect(r.content.startsWith("1-10:\tTARGET\n")).toBe(true);
     expect(r.content).not.toContain("match at");
   });
 
@@ -254,8 +254,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("<!-- Line 1 to 3 -->");
-    expect(r.content).toContain("<!-- Line 8 to 12 -->");
+    expect(r.content).toBe("1-3:\tTARGET\nline2\nline3\n8-12:\tline8\nline9\nTARGET\nline11\nline12");
     expect(r.content).not.toContain("match at");
   });
 
@@ -276,7 +275,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "foo\\b|^bar$" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toBe("2\tfoo\n4\tBAR");
+    expect(r.content).toBe("2:\tfoo\n4:\tBAR");
   });
 
   it("searchTerm is literal: regex metacharacters match themselves", async () => {
@@ -290,10 +289,10 @@ describe("handleBatchRead", () => {
       ],
     });
     expect(out.results.map(r => r.content)).toEqual([
-      "2\ta.b",
-      "1\tfn(arg)",
-      "4\tblocks.push(`${idx + 1}`)",
-      "5\tconst $env = 1;",
+      "2:\ta.b",
+      "1:\tfn(arg)",
+      "4:\tblocks.push(`${idx + 1}`)",
+      "5:\tconst $env = 1;",
     ]);
   });
 
@@ -373,8 +372,20 @@ describe("handleBatchRead", () => {
         { path: p, mode: "verbatim", searchTerm: "target" },
       ],
     });
-    expect(out.results.map(r => r.content)).toEqual(["<!-- Line 1 to 3 -->\nl1\r\nTARGET\r\nl3\r\n", "2\tTARGET"]);
+    expect(out.results.map(r => r.content)).toEqual(["1-3:\tl1\r\nTARGET\r\nl3", "2:\tTARGET"]);
     expect(out.results[0]!.lines).toBe(3);
+  });
+
+  it("search: a one-line context window uses the single-line label", async () => {
+    const p = await fixture("one-line.ts", "only TARGET\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 2 }] });
+    expect(out.results[0]!.content).toBe("1:\tonly TARGET");
+  });
+
+  it("search: compact context block is one line with its source range", async () => {
+    const p = await fixture("compact-ctx.ts", "const a = 1;\nconst target = 2;\nconst c = 3;\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "target", count: 1 }] });
+    expect(out.results[0]!.content).toBe("1-3:\tconst a = 1; const target = 2; const c = 3;");
   });
 
   it("search: match blocks use absolute file line numbers", async () => {
@@ -382,7 +393,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 3 to 5 -->");
+    expect(r.content.startsWith("3-5:\tline3\n")).toBe(true);
     expect(r.content).toContain("line3");
     expect(r.content).toContain("TARGET");
     expect(r.content).toContain("line5");
@@ -393,7 +404,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("2\t");
+    expect(r.content).toContain("2:\t");
     expect(r.content).toContain("const b = 2;");
   });
 

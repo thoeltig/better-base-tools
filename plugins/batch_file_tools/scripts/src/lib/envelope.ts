@@ -174,11 +174,9 @@ function truncateLineBlock(r: ReadResult, budget: number, source: string | undef
 }
 
 function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult | null {
-  // count>0 emits multi-line "<!-- Line M to N -->" blocks joined by "\n"; count=0
-  // emits one "lineNo\tcontent" match per line.
-  const blocks = r.content.startsWith('<!-- Line ')
-    ? r.content.split(/\n(?=<!-- Line )/)
-    : r.content.split('\n');
+  // Every match line or context block starts with "N:\t" or "M-N:\t"; continuation
+  // lines of a verbatim block do not, so they stay with their block.
+  const blocks = r.content.split(/\n(?=\d+(?:-\d+)?:\t)/);
   const markerChars = searchTruncationMarkerText(blocks.length, blocks.length).length;
   const kept = countUnitsWithinBudget(blocks, budget, readResultHeader(r).length, markerChars);
   if (kept >= blocks.length) return null;

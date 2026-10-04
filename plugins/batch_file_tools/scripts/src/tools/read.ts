@@ -24,6 +24,11 @@ function searchFields(req: ReadRequest): Pick<ReadResult, "search_term" | "searc
   return req.searchRegex !== undefined ? { search_regex: req.searchRegex } : {};
 }
 
+// 0-based inclusive range → "N" or "M-N" (1-based), the prefix of each search output unit.
+function lineLabel(start: number, end: number): string {
+  return start === end ? `${start + 1}` : `${start + 1}-${end + 1}`;
+}
+
 function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
   if (req.searchRegex !== undefined) {
     const re = new RegExp(req.searchRegex, "i");
@@ -266,7 +271,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     if (ctx === 0) {
       for (const idx of matchIdxs) {
         const formatted = formatSplitRange(split, req.mode, req.path, idx, idx + 1);
-        blocks.push(`${idx + 1}\t${formatted.replace(/\r?\n$/, "")}`);
+        blocks.push(`${lineLabel(idx, idx)}:\t${formatted.replace(/\r?\n$/, "")}`);
         returnedLines += 1;
       }
     } else {
@@ -284,7 +289,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       for (const { s, e } of intervals) {
         returnedLines += e - s + 1;
         const formatted = formatSplitRange(split, req.mode, req.path, s, e + 1);
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1} -->\n${formatted}`);
+        blocks.push(`${lineLabel(s, e)}:\t${formatted.replace(/\r?\n$/, "")}`);
       }
     }
 
