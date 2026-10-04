@@ -1,5 +1,6 @@
 import type { ReadMode } from "../types.js";
 import { splitLines } from "./lines.js";
+import type { SplitResult } from "./lines.js";
 import { basename, extname } from "node:path";
 
 export interface FormatInput {
@@ -69,9 +70,7 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const clampedEnd = Math.max(clampedStart, Math.min(endIdx, totalLines));
   const returnedLines = clampedEnd - clampedStart;
 
-  const content = input.mode === "compact"
-    ? formatCompact(split.lines, split.endings, clampedStart, clampedEnd, { path: input.path, stripIndent: !isIndentSensitive(input.path) })
-    : formatRaw(split.lines, split.endings, clampedStart, clampedEnd);
+  const content = formatSplitRange(split, input.mode, input.path, clampedStart, clampedEnd);
 
   const truncated = returnedLines < totalLines - clampedStart;
 
@@ -85,6 +84,13 @@ export function formatForRead(input: FormatInput): FormatOutput {
   };
 }
 
+
+/** Formats the 0-based line range [start, end) of an already split file; lets callers split once for many ranges. */
+export function formatSplitRange(split: SplitResult, mode: ReadMode, path: string | undefined, start: number, end: number): string {
+  return mode === "compact"
+    ? formatCompact(split.lines, split.endings, start, end, { path, stripIndent: !isIndentSensitive(path) })
+    : formatRaw(split.lines, split.endings, start, end);
+}
 
 function formatRaw(
   lines: readonly string[],

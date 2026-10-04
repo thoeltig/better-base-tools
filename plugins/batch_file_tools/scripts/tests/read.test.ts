@@ -336,6 +336,18 @@ describe("handleBatchRead", () => {
     expect(paths).toContain(b);
   });
 
+  it("search: CRLF file keeps endings in blocks and strips them from inline matches", async () => {
+    const p = await fixture("search-crlf.ts", "l1\r\nTARGET\r\nl3\r\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "target", count: 1 },
+        { path: p, mode: "verbatim", searchTerm: "target" },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual(["<!-- Line 1 to 3 -->\nl1\r\nTARGET\r\nl3\r\n", "2\tTARGET"]);
+    expect(out.results[0]!.lines).toBe(3);
+  });
+
   it("search: match blocks use absolute file line numbers", async () => {
     const p = await fixture("search-numbered.ts", "line1\nline2\nline3\nTARGET\nline5\nline6\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });

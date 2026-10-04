@@ -2,7 +2,8 @@ import { resolve } from "node:path";
 import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
-import { formatForRead } from "../lib/transforms.js";
+import { splitLines } from "../lib/lines.js";
+import { formatForRead, formatSplitRange } from "../lib/transforms.js";
 import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResult, Reason } from "../types.js";
 
 const SEARCH_MERGE_GAP = 3;
@@ -239,21 +240,21 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
 
   // search: grep with context lines
   if (searchKey(req) !== undefined) {
-    const rawLines = file.content.replace(/\r\n/g, "\n").split("\n");
-    if (rawLines[rawLines.length - 1] === "") rawLines.pop();
+    const split = splitLines(file.content);
+    const lines = split.lines;
 
     const ctx = req.count ?? 0;
     const matchLine = buildLineMatcher(req);
     const matchIdxs: number[] = [];
-    for (let i = 0; i < rawLines.length; i++) {
-      if (matchLine(rawLines[i] ?? "")) matchIdxs.push(i);
+    for (let i = 0; i < lines.length; i++) {
+      if (matchLine(lines[i] ?? "")) matchIdxs.push(i);
     }
 
     if (matchIdxs.length === 0) {
       return {
         path: req.path,
         mode_applied: req.mode,
-        lines: rawLines.length,
+        lines: lines.length,
         returned_lines: 0,
         truncated: false,
         content: "",
@@ -266,15 +267,15 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     const blocks: string[] = [];
     if (ctx === 0) {
       for (const idx of matchIdxs) {
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1 });
-        blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
+        const formatted = formatSplitRange(split, req.mode, req.path, idx, idx + 1);
+        blocks.push(`${idx + 1}\t${formatted.replace(/\r?\n$/, "")}`);
         returnedLines += 1;
       }
     } else {
       const intervals: { s: number; e: number }[] = [];
       for (const idx of matchIdxs) {
         const s = Math.max(0, idx - ctx);
-        const e = Math.min(rawLines.length - 1, idx + ctx);
+        const e = Math.min(lines.length - 1, idx + ctx);
         const last = intervals.at(-1);
         if (last && s - last.e - 1 <= SEARCH_MERGE_GAP) {
           last.e = Math.max(last.e, e);
@@ -284,15 +285,15 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
       }
       for (const { s, e } of intervals) {
         returnedLines += e - s + 1;
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1} -->\n${formatted.content}`);
+        const formatted = formatSplitRange(split, req.mode, req.path, s, e + 1);
+        blocks.push(`<!-- Line ${s + 1} to ${e + 1} -->\n${formatted}`);
       }
     }
 
     return {
       path: req.path,
       mode_applied: req.mode,
-      lines: rawLines.length,
+      lines: lines.length,
       returned_lines: returnedLines,
       truncated: false,
       content: blocks.join("\n"),
