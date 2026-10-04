@@ -3,9 +3,6 @@ import type { SplitResult } from "./lines.js";
 import { formatSplitRange } from "./transforms.js";
 import type { ReadRequest, ReadResult, SearchCount } from "../types.js";
 
-/** Context windows closer than this many lines are merged into one block. */
-const SEARCH_MERGE_GAP = 3;
-
 /** 0-based inclusive line range. */
 type LineRange = { start: number; end: number };
 
@@ -20,32 +17,69 @@ export function searchKey(req: ReadRequest): string | undefined {
 }
 
 /**
- * Runs all bundled searches on one file (target supplies path, mode and count) and merges
- * their matches in line order. count=0 yields one "N:\t" unit per matched line ("M-N:\t"
- * for multi-line matches); count>0 yields merged context windows as "M-N:\t" blocks.
+ * Runs all searches bundled for one file (target supplies path and mode); each search widens
+ * its matches by its own count. Every output line carries its source position: verbatim prints
+ * each shown line as "N:\t", compact collapses each run of consecutive lines into one
+ * "M-N:\t" line.
  */
 export function searchFile(target: ReadRequest, searches: readonly ReadRequest[], content: string): ReadResult {
   const split = splitLines(content);
   const perSearch = searches.map(search => findMatchRanges(search, split, content));
-  const ranges = uniqueSortedRanges(perSearch.flat());
-  const units = target.count ? contextWindows(ranges, target.count, split.lines.length - 1) : ranges;
-  const blocks = units.map(({ start, end }) => {
-    const formatted = formatSplitRange(split, target.mode, target.path, start, end + 1);
-    return `${lineLabel(start, end)}:\t${formatted.replace(/\r?\n$/, "")}`;
-  });
+  const shownLines = collectShownLines(searches, perSearch, split.lines.length);
+  const outputLines = target.mode === "verbatim"
+    ? shownLines.map(line => `${line + 1}:\t${split.lines[line]}`)
+    : contiguousRuns(shownLines).flatMap(run => formatCompactRun(split, target.path, run));
   return {
     path: target.path,
     mode_applied: target.mode,
     lines: split.lines.length,
-    returned_lines: units.reduce((sum, unit) => sum + unit.end - unit.start + 1, 0),
+    returned_lines: shownLines.length,
     truncated: false,
-    content: blocks.join("\n"),
-    match_count: ranges.length,
+    content: outputLines.join("\n"),
+    match_count: uniqueSortedRanges(perSearch.flat()).length,
     searches: searches.map((search, i) => ({ ...searchFields(search), match_count: perSearch[i]!.length })),
   };
 }
 
-// A line matched by several searches is reported once.
+// Matched lines widened by each search's own count; ascending, each line once.
+function collectShownLines(searches: readonly ReadRequest[], perSearch: readonly LineRange[][], lineCount: number): number[] {
+  const shown = new Uint8Array(lineCount);
+  perSearch.forEach((ranges, i) => {
+    const ctx = searches[i]!.count ?? 0;
+    for (const { start, end } of ranges) {
+      for (let line = Math.max(0, start - ctx); line <= Math.min(lineCount - 1, end + ctx); line++) shown[line] = 1;
+    }
+  });
+  const lines: number[] = [];
+  shown.forEach((flag, line) => {
+    if (flag) lines.push(line);
+  });
+  return lines;
+}
+
+function contiguousRuns(lines: readonly number[]): LineRange[] {
+  const runs: LineRange[] = [];
+  for (const line of lines) {
+    const last = runs.at(-1);
+    if (last && line === last.end + 1) last.end = line;
+    else runs.push({ start: line, end: line });
+  }
+  return runs;
+}
+
+// Compact keeps line breaks in indent-sensitive files; such a run is printed line by line so
+// every output line still carries its own label.
+function formatCompactRun(split: SplitResult, path: string, run: LineRange): string[] {
+  const formatted = formatSplitRange(split, "compact", path, run.start, run.end + 1).replace(/\r?\n$/, "");
+  if (!formatted.includes("\n")) return [`${lineLabel(run.start, run.end)}:\t${formatted}`];
+  const lines: string[] = [];
+  for (let line = run.start; line <= run.end; line++) {
+    lines.push(`${line + 1}:\t${formatSplitRange(split, "compact", path, line, line + 1).replace(/\r?\n$/, "")}`);
+  }
+  return lines;
+}
+
+// A line or range matched by several searches counts once.
 function uniqueSortedRanges(ranges: readonly LineRange[]): LineRange[] {
   const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
   return sorted.filter((range, i) => i === 0 || range.start !== sorted[i - 1]!.start || range.end !== sorted[i - 1]!.end);
@@ -131,17 +165,3 @@ function lastIndexAtOrBelow(sorted: readonly number[], target: number): number {
   return low;
 }
 
-function contextWindows(ranges: readonly LineRange[], ctx: number, lastLine: number): LineRange[] {
-  const windows: LineRange[] = [];
-  for (const range of ranges) {
-    const start = Math.max(0, range.start - ctx);
-    const end = Math.min(lastLine, range.end + ctx);
-    const last = windows.at(-1);
-    if (last && start - last.end - 1 <= SEARCH_MERGE_GAP) {
-      last.end = Math.max(last.end, end);
-    } else {
-      windows.push({ start, end });
-    }
-  }
-  return windows;
-}

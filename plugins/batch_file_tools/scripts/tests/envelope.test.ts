@@ -170,22 +170,22 @@ describe("formatReadContent — new search output formats", () => {
     );
   });
 
-  it("count>0: match header names the regex + start-end: blocks in content", () => {
+  it("count>0: match header names the regex + compact run in content", () => {
     const blocks = formatReadContent({
       results: [{
         path: "/src/readme.md",
-        mode_applied: "verbatim",
+        mode_applied: "compact",
         lines: 122,
         returned_lines: 5,
         truncated: false,
-        content: "70-74:\tline70\nTARGET\nline74",
+        content: "70-74:\tline70 line71 TARGET line73 line74",
         match_count: 1,
         searches: [{ search_regex: "tar.et", match_count: 1 }],
       }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- '/src/readme.md' (122 lines) as verbatim — /tar.et/: 1 -->\n70-74:\tline70\nTARGET\nline74\n`
+      `<!-- '/src/readme.md' (122 lines) as compact — /tar.et/: 1 -->\n70-74:\tline70 line71 TARGET line73 line74\n`
     );
   });
 
@@ -644,27 +644,27 @@ describe("formatReadContent — output budget (maxChars)", () => {
     expect(text.startsWith("<!-- '/s.ts' (400 lines) as compact — 'matchline': 40 -->")).toBe(true);
     expect(text.includes("matchline-01")).toBe(true);
     expect(text.includes("matchline-40")).toBe(false);
-    expect(text.includes("of 40 match blocks")).toBe(true);
+    expect(text.includes("of 40 result lines")).toBe(true);
     expect(text.endsWith("-->\n")).toBe(true);
     expect(text.length).toBeLessThanOrEqual(500);
   });
 
-  it("search (count>0) truncates at a context-block boundary", () => {
-    const mkBlock = (n: number) =>
-      `${n}-${n + 2}:\tctx-${String(n).padStart(3, "0")}-a\nctx-${String(n).padStart(3, "0")}-b\nctx-${String(n).padStart(3, "0")}-c`;
-    const content = [10, 40, 70, 100, 130].map(mkBlock).join("\n");
+  it("search (count>0, compact) truncates between runs", () => {
+    const mkRun = (n: number) =>
+      `${n}-${n + 2}:\tctx-${String(n).padStart(3, "0")}-a ctx-${String(n).padStart(3, "0")}-b ctx-${String(n).padStart(3, "0")}-c`;
+    const content = [10, 40, 70, 100, 130].map(mkRun).join("\n");
     const blocks = formatReadContent(
-      { results: [{ path: "/s.ts", mode_applied: "verbatim", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5, searches: [{ search_term: "ctx", match_count: 5 }] }] },
+      { results: [{ path: "/s.ts", mode_applied: "compact", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5, searches: [{ search_term: "ctx", match_count: 5 }] }] },
       [],
       false,
       230,
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.startsWith("<!-- '/s.ts' (200 lines) as verbatim — 'ctx': 5 -->")).toBe(true);
+    expect(text.startsWith("<!-- '/s.ts' (200 lines) as compact — 'ctx': 5 -->")).toBe(true);
     expect(text.includes("ctx-010-a")).toBe(true);
     expect(text.includes("ctx-130-a")).toBe(false);
-    expect(text.includes("match block")).toBe(true);
+    expect(text.includes("result lines")).toBe(true);
     for (const n of ["010", "040", "070", "100", "130"]) {
       expect(text.includes(`ctx-${n}-a`)).toBe(text.includes(`ctx-${n}-c`));
     }

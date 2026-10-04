@@ -37,7 +37,7 @@ export const ReadRequest = z.object({
     count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count=0 returns one 'N:<tab>content' line per match; count>0 returns merged context windows as 'M-N:<tab>content' blocks. All searches on one file with the same count are bundled into one result with a match count per search."),
+      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count adds that many context lines around each match. verbatim prints each shown line as 'N:<tab>content'; compact collapses each run of consecutive lines into one 'M-N:<tab>content' line. All searches on one file are bundled into one result (verbatim if any of them asks for it), each with its own count and match count."),
     searchRegex: z.string().min(1).optional()
       .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive; a pattern containing \\n matches across lines, ^ and $ still mean line start and end); mutually exclusive with searchTerm."),
   })

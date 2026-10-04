@@ -82,21 +82,18 @@ function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
 function deduplicatePath(path: string, entries: OkEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
-  // search: bundle all searches with the same context size into one result; mixed modes coalesce to verbatim
-  const searchGroups = new Map<string, OkEntry[]>();
-  for (const entry of entries) {
-    if (searchKey(entry.req) === undefined) continue;
-    const key = `${entry.req.count ?? ""}`;
-    if (!searchGroups.has(key)) searchGroups.set(key, []);
-    searchGroups.get(key)!.push(entry);
-  }
-  for (const group of searchGroups.values()) {
-    const modes = new Set(group.map(e => e.req.mode));
-    const target: ReadRequest = { path, mode: modes.size === 1 ? [...modes][0]! : "verbatim" };
-    const count = group[0]!.req.count;
-    if (count !== undefined) target.count = count;
-    const searches = [...new Map(group.map(e => [searchKey(e.req), e.req])).values()];
-    result.push({ kind: "ok", req: target, searches, order: group[0]!.order });
+  // search: bundle every search on this file into one result; any verbatim search makes it verbatim.
+  // A search requested twice is kept once, with the larger count.
+  const searchEntries = entries.filter(e => searchKey(e.req) !== undefined);
+  if (searchEntries.length > 0) {
+    const mode: ReadMode = searchEntries.some(e => e.req.mode === "verbatim") ? "verbatim" : "compact";
+    const searches = new Map<string, ReadRequest>();
+    for (const { req } of searchEntries) {
+      const key = searchKey(req)!;
+      const existing = searches.get(key);
+      if (!existing || (req.count ?? 0) > (existing.count ?? 0)) searches.set(key, req);
+    }
+    result.push({ kind: "ok", req: { path, mode }, searches: [...searches.values()], order: searchEntries[0]!.order });
   }
 
   // range/full: coalesce mode, merge overlapping ranges

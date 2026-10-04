@@ -131,10 +131,10 @@ function truncationMarkerText(endLine: number, total: number): string {
 }
 
 function searchTruncationMarkerText(kept: number, total: number): string {
-  return `<!-- Truncated: showing first ${kept} of ${plural(total, "match block")} — max output reached; refine the search or read the file directly -->`;
+  return `<!-- Truncated: showing first ${kept} of ${plural(total, "result line")} — max output reached; refine the search or read the file directly -->`;
 }
 
-// How many leading match blocks fit into `budget` once the header and truncation-marker
+// How many leading search result lines fit into `budget` once the header and truncation-marker
 // overhead is reserved. Always keeps at least one so a truncated block stays useful.
 function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, headerChars: number, markerChars: number): number {
   const contentBudget = budget - headerChars - markerChars - 3; // 3 = "\n" after header, content and marker
@@ -189,9 +189,8 @@ function truncateLineBlock(r: ReadResult, budget: number, source: string | undef
 }
 
 function truncateSearchBlock(r: ReadResult, budget: number): ToolContentResult | null {
-  // Every match line or context block starts with "N:\t" or "M-N:\t"; continuation
-  // lines of a verbatim block do not, so they stay with their block.
-  const blocks = r.content.split(/\n(?=\d+(?:-\d+)?:\t)/);
+  // Every search output line is one labelled unit ("N:\t" or a compact "M-N:\t" run).
+  const blocks = r.content.split("\n");
   const markerChars = searchTruncationMarkerText(blocks.length, blocks.length).length;
   const kept = countUnitsWithinBudget(blocks, budget, readResultHeader(r).length, markerChars);
   if (kept >= blocks.length) return null;
