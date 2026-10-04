@@ -10,6 +10,7 @@ import type {
   ReadRequest,
   FileError,
   ReadResult,
+  SearchCount,
   ToolContentResult,
 } from "../types.js";
 
@@ -78,7 +79,7 @@ export function formatReadContent(
     stopped = true;
   }
 
-  const noMatchBlock = buildNoMatchBlock(noMatchResults, otherResults);
+  const noMatchBlock = buildNoMatchBlock(result.results);
   if (noMatchBlock) output.push(noMatchBlock);
 
   if (omitted.length > 0) output.push(buildOmittedMarker(omitted.map(r => r.path)));
@@ -88,28 +89,27 @@ export function formatReadContent(
 
 // One line per search that matched in no file; files without matches are otherwise
 // omitted like grep does. Tiny, so emitted outside the output budget.
-function buildNoMatchBlock(noMatch: ReadonlyArray<ReadResult>, others: ReadonlyArray<ReadResult>): ToolContentResult | null {
-  const matched = new Set(others.map(searchIdentity));
+function buildNoMatchBlock(results: ReadonlyArray<ReadResult>): ToolContentResult | null {
+  const matched = new Set<string>();
   const unmatched = new Map<string, string>();
-  for (const r of noMatch) {
-    const identity = searchIdentity(r);
-    if (identity !== undefined && !matched.has(identity)) unmatched.set(identity, searchLabel(r) ?? identity);
+  for (const search of results.flatMap(r => r.searches ?? [])) {
+    if (search.match_count > 0) matched.add(searchIdentity(search));
+    else unmatched.set(searchIdentity(search), searchLabel(search));
   }
-  if (unmatched.size === 0) return null;
-  return createToolOutputForAssistant([...unmatched.values()].map(label => `<!-- No matches for ${label} -->`).join('\n'));
+  const labels = [...unmatched].filter(([identity]) => !matched.has(identity)).map(([, label]) => label);
+  if (labels.length === 0) return null;
+  return createToolOutputForAssistant(labels.map(label => `<!-- No matches for ${label} -->`).join('\n'));
 }
 
 // Groups by the raw search: escaped labels of a real line break and a literal "\n" would collide.
-function searchIdentity(r: ReadResult): string | undefined {
-  if (r.search_term !== undefined) return `term:${r.search_term}`;
-  if (r.search_regex !== undefined) return `regex:${r.search_regex}`;
-  return undefined;
+function searchIdentity(search: SearchCount): string {
+  return search.search_term !== undefined ? `term:${search.search_term}` : `regex:${search.search_regex ?? ""}`;
 }
 
-function searchLabel(r: ReadResult): string | undefined {
-  if (r.search_term !== undefined) return `'${escapeLineBreaks(r.search_term)}'`;
-  if (r.search_regex !== undefined) return `/${escapeLineBreaks(r.search_regex)}/`;
-  return undefined;
+function searchLabel(search: SearchCount): string {
+  return search.search_term !== undefined
+    ? `'${escapeLineBreaks(search.search_term)}'`
+    : `/${escapeLineBreaks(search.search_regex ?? "")}/`;
 }
 
 // Keeps a multi-line search on the single header line.
@@ -155,7 +155,7 @@ function countUnitsWithinBudget(units: ReadonlyArray<string>, budget: number, he
 // non-truncatable results (error/single-unit) or when nothing needs trimming.
 function truncateReadBlock(r: ReadResult, budget: number, source: string | undefined): ToolContentResult | null {
   if (r.error || r.content.length === 0) return null;
-  if (r.match_count !== undefined) return truncateSearchBlock(r, budget);
+  if (r.searches !== undefined) return truncateSearchBlock(r, budget);
   if (r.returned_lines > 0) return truncateLineBlock(r, budget, source);
   return null;
 }
@@ -282,10 +282,10 @@ function readResultToBlock(r: ReadResult): ToolContentResult {
 function readResultHeader(r: ReadResult): string {
   if (r.error) return errorComment(r.path, r.error);
   const file = `'${shortenPath(r.path)}'`;
-  if (r.match_count !== undefined) {
-    const label = searchLabel(r);
-    const searched = label === undefined ? "" : ` for ${label}`;
-    return `<!-- ${plural(r.match_count, "match", "matches")}${searched} in ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} -->`;
+  if (r.searches !== undefined) {
+    // Only searches that matched here; ones matching nowhere get the global no-match line.
+    const counts = r.searches.filter(s => s.match_count > 0).map(s => `${searchLabel(s)}: ${s.match_count}`).join(", ");
+    return `<!-- ${file} (${plural(r.lines, "line")}) as ${r.mode_applied} — ${counts} -->`;
   }
   if (r.returned_lines === r.lines) {
     return `<!-- ${plural(r.lines, "line")} in ${file} as ${r.mode_applied} -->`;

@@ -161,12 +161,12 @@ describe("formatReadContent — new search output formats", () => {
         truncated: false,
         content: "170:\texport const EditInput\n176:\texport type EditInput",
         match_count: 2,
-        search_term: "EditInput",
+        searches: [{ search_term: "EditInput", match_count: 2 }],
       }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- 2 matches for 'EditInput' in '/src/types.ts' (262 lines) as compact -->\n170:\texport const EditInput\n176:\texport type EditInput\n`
+      `<!-- '/src/types.ts' (262 lines) as compact — 'EditInput': 2 -->\n170:\texport const EditInput\n176:\texport type EditInput\n`
     );
   });
 
@@ -180,21 +180,21 @@ describe("formatReadContent — new search output formats", () => {
         truncated: false,
         content: "70-74:\tline70\nTARGET\nline74",
         match_count: 1,
-        search_regex: "tar.et",
+        searches: [{ search_regex: "tar.et", match_count: 1 }],
       }],
     });
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text).toBe(
-      `<!-- 1 match for /tar.et/ in '/src/readme.md' (122 lines) as verbatim -->\n70-74:\tline70\nTARGET\nline74\n`
+      `<!-- '/src/readme.md' (122 lines) as verbatim — /tar.et/: 1 -->\n70-74:\tline70\nTARGET\nline74\n`
     );
   });
 
   it("search without matches in any file: one line per search, no file list", () => {
     const blocks = formatReadContent({
       results: [
-        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "zzz" },
-        { path: "/b.ts", mode_applied: "compact", lines: 20, returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "zzz" },
-        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, search_regex: "y+" },
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_term: "zzz", match_count: 0 }] },
+        { path: "/b.ts", mode_applied: "compact", lines: 20, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_term: "zzz", match_count: 0 }] },
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_regex: "y+", match_count: 0 }] },
       ],
     });
     expect(blocks.map(b => b.text)).toEqual([`<!-- No matches for 'zzz' -->\n<!-- No matches for /y+/ -->\n`]);
@@ -203,12 +203,12 @@ describe("formatReadContent — new search output formats", () => {
   it("line breaks in searches are shown escaped in headers and no-match lines", () => {
     const blocks = formatReadContent({
       results: [
-        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 2, truncated: false, content: "2-3:\tfoo bar", match_count: 1, search_term: "bar\r\nbaz" },
-        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "x\ny" },
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 2, truncated: false, content: "2-3:\tfoo bar", match_count: 1, searches: [{ search_term: "bar\r\nbaz", match_count: 1 }] },
+        { path: "/a.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_term: "x\ny", match_count: 0 }] },
       ],
     });
     expect(blocks.map(b => b.text)).toEqual([
-      `<!-- 1 match for 'bar\\r\\nbaz' in '/a.ts' (10 lines) as compact -->\n2-3:\tfoo bar\n`,
+      `<!-- '/a.ts' (10 lines) as compact — 'bar\\r\\nbaz': 1 -->\n2-3:\tfoo bar\n`,
       `<!-- No matches for 'x\\ny' -->\n`,
     ]);
   });
@@ -216,14 +216,36 @@ describe("formatReadContent — new search output formats", () => {
   it("files without matches are omitted when the same search matched elsewhere", () => {
     const blocks = formatReadContent({
       results: [
-        { path: "/a.ts", mode_applied: "compact", lines: 100, returned_lines: 2, truncated: false, content: "7:\timport { foo }\n91:\tfoo()", match_count: 2, search_term: "foo" },
-        { path: "/b.ts", mode_applied: "compact", lines: 50,  returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "foo" },
-        { path: "/c.ts", mode_applied: "compact", lines: 30,  returned_lines: 0, truncated: false, content: "", match_count: 0, search_regex: "bar" },
+        { path: "/a.ts", mode_applied: "compact", lines: 100, returned_lines: 2, truncated: false, content: "7:\timport { foo }\n91:\tfoo()", match_count: 2, searches: [{ search_term: "foo", match_count: 2 }] },
+        { path: "/b.ts", mode_applied: "compact", lines: 50,  returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_term: "foo", match_count: 0 }] },
+        { path: "/c.ts", mode_applied: "compact", lines: 30,  returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_regex: "bar", match_count: 0 }] },
       ],
     });
     expect(blocks.map(b => b.text)).toEqual([
-      `<!-- 2 matches for 'foo' in '/a.ts' (100 lines) as compact -->\n7:\timport { foo }\n91:\tfoo()\n`,
+      `<!-- '/a.ts' (100 lines) as compact — 'foo': 2 -->\n7:\timport { foo }\n91:\tfoo()\n`,
       `<!-- No matches for /bar/ -->\n`,
+    ]);
+  });
+
+  it("bundled searches: header lists matched searches with counts; unmatched ones only if they matched nowhere", () => {
+    const blocks = formatReadContent({
+      results: [
+        {
+          path: "/a.ts", mode_applied: "compact", lines: 50, returned_lines: 3, truncated: false,
+          content: "3:\tfoo bar\n9:\tfoo\n12:\tbar", match_count: 3,
+          searches: [{ search_term: "foo", match_count: 2 }, { search_regex: "ba.", match_count: 2 }, { search_term: "qux", match_count: 0 }, { search_term: "zzz", match_count: 0 }],
+        },
+        {
+          path: "/b.ts", mode_applied: "compact", lines: 20, returned_lines: 1, truncated: false,
+          content: "4:\tqux", match_count: 1,
+          searches: [{ search_term: "qux", match_count: 1 }, { search_term: "zzz", match_count: 0 }],
+        },
+      ],
+    });
+    expect(blocks.map(b => b.text)).toEqual([
+      `<!-- '/a.ts' (50 lines) as compact — 'foo': 2, /ba./: 2 -->\n3:\tfoo bar\n9:\tfoo\n12:\tbar\n`,
+      `<!-- '/b.ts' (20 lines) as compact — 'qux': 1 -->\n4:\tqux\n`,
+      `<!-- No matches for 'zzz' -->\n`,
     ]);
   });
 
@@ -233,7 +255,7 @@ describe("formatReadContent — new search output formats", () => {
       {
         results: [
           { path: "/big.txt", mode_applied: "verbatim", lines: 100, returned_lines: 100, truncated: false, content },
-          { path: "/s.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, search_term: "zzz" },
+          { path: "/s.ts", mode_applied: "compact", lines: 10, returned_lines: 0, truncated: false, content: "", match_count: 0, searches: [{ search_term: "zzz", match_count: 0 }] },
         ],
         sources: new Map([["/big.txt", content]]),
       },
@@ -612,14 +634,14 @@ describe("formatReadContent — output budget (maxChars)", () => {
   it("search (count=0) truncates at a match-line boundary, keeping the match header", () => {
     const content = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 3}:\tmatchline-${String(i + 1).padStart(2, "0")}`).join("\n");
     const blocks = formatReadContent(
-      { results: [{ path: "/s.ts", mode_applied: "compact", lines: 400, returned_lines: 40, truncated: false, content, match_count: 40 }] },
+      { results: [{ path: "/s.ts", mode_applied: "compact", lines: 400, returned_lines: 40, truncated: false, content, match_count: 40, searches: [{ search_term: "matchline", match_count: 40 }] }] },
       [],
       false,
       500,
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.startsWith("<!-- 40 matches in '/s.ts' (400 lines) as compact -->")).toBe(true);
+    expect(text.startsWith("<!-- '/s.ts' (400 lines) as compact — 'matchline': 40 -->")).toBe(true);
     expect(text.includes("matchline-01")).toBe(true);
     expect(text.includes("matchline-40")).toBe(false);
     expect(text.includes("of 40 match blocks")).toBe(true);
@@ -632,14 +654,14 @@ describe("formatReadContent — output budget (maxChars)", () => {
       `${n}-${n + 2}:\tctx-${String(n).padStart(3, "0")}-a\nctx-${String(n).padStart(3, "0")}-b\nctx-${String(n).padStart(3, "0")}-c`;
     const content = [10, 40, 70, 100, 130].map(mkBlock).join("\n");
     const blocks = formatReadContent(
-      { results: [{ path: "/s.ts", mode_applied: "verbatim", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5 }] },
+      { results: [{ path: "/s.ts", mode_applied: "verbatim", lines: 200, returned_lines: 15, truncated: false, content, match_count: 5, searches: [{ search_term: "ctx", match_count: 5 }] }] },
       [],
       false,
       230,
     );
     expect(blocks).toHaveLength(1);
     const text = blocks[0]!.text;
-    expect(text.startsWith("<!-- 5 matches in '/s.ts' (200 lines) as verbatim -->")).toBe(true);
+    expect(text.startsWith("<!-- '/s.ts' (200 lines) as verbatim — 'ctx': 5 -->")).toBe(true);
     expect(text.includes("ctx-010-a")).toBe(true);
     expect(text.includes("ctx-130-a")).toBe(false);
     expect(text.includes("match block")).toBe(true);

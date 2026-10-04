@@ -188,7 +188,7 @@ describe("handleBatchRead", () => {
     const p = await fixture("no-match.ts", "const x = 1;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "zzznomatch" }] });
     const r = out.results[0]!;
-    expect(r.search_term).toBe("zzznomatch");
+    expect(r.searches).toEqual([{ search_term: "zzznomatch", match_count: 0 }]);
     expect(r.match_count).toBe(0);
     expect(r.content).toBe("");
   });
@@ -213,7 +213,7 @@ describe("handleBatchRead", () => {
     const p = await fixture("ctx0.ts", "line1\ntarget\nline3\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 0 }] });
     const r = out.results[0]!;
-    expect(r.search_term).toBe("target");
+    expect(r.searches).toEqual([{ search_term: "target", match_count: 1 }]);
     expect(r.match_count).toBe(1);
     expect(r.content).toBe("2:\ttarget");
   });
@@ -262,8 +262,7 @@ describe("handleBatchRead", () => {
     const p = await fixture("regex-match.ts", "const foo = 1;\nconst bar = 2;\nlet baz = 3;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "^const" }] });
     const r = out.results[0]!;
-    expect(r.search_regex).toBe("^const");
-    expect(r.search_term).toBeUndefined();
+    expect(r.searches).toEqual([{ search_regex: "^const", match_count: 2 }]);
     expect(r.match_count).toBe(2);
     expect(r.content).toContain("const foo");
     expect(r.content).toContain("const bar");
@@ -288,12 +287,9 @@ describe("handleBatchRead", () => {
         { path: p, mode: "verbatim", searchTerm: "$ENV" },
       ],
     });
-    expect(out.results.map(r => r.content)).toEqual([
-      "2:\ta.b",
-      "1:\tfn(arg)",
-      "4:\tblocks.push(`${idx + 1}`)",
-      "5:\tconst $env = 1;",
-    ]);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.content).toBe("1:\tfn(arg)\n2:\ta.b\n4:\tblocks.push(`${idx + 1}`)\n5:\tconst $env = 1;");
+    expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([1, 1, 1, 1]);
   });
 
   it("searchRegex: invalid pattern yields one unparseable error per request", async () => {
@@ -305,7 +301,7 @@ describe("handleBatchRead", () => {
     expect(out.results[0]!.error?.message).toContain("Invalid regular expression");
   });
 
-  it("same text as searchTerm and searchRegex on one file is not deduplicated", async () => {
+  it("same text as searchTerm and searchRegex on one file stays two searches", async () => {
     const p = await fixture("term-vs-regex.ts", "a.b\naxb\n");
     const out = await read({
       requests: [
@@ -313,7 +309,9 @@ describe("handleBatchRead", () => {
         { path: p, mode: "verbatim", searchRegex: "a.b" },
       ],
     });
-    expect(out.results.map(r => r.match_count)).toEqual([1, 2]);
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.searches).toEqual([{ search_term: "a.b", match_count: 1 }, { search_regex: "a.b", match_count: 2 }]);
+    expect(out.results[0]!.content).toBe("1:\ta.b\n2:\taxb");
   });
 
   it("schema: searchTerm and searchRegex are mutually exclusive", () => {
@@ -396,7 +394,9 @@ describe("handleBatchRead", () => {
           { path: p, mode: "verbatim", searchTerm: "foo\r\nbar" },
         ],
       });
-      expect(out.results.map(r => r.content)).toEqual(["2-3:\tFoo\r\nBar", "2-3:\tFoo\r\nBar"]);
+      expect(out.results).toHaveLength(1);
+      expect(out.results[0]!.content).toBe("2-3:\tFoo\r\nBar");
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([1, 1]);
     });
 
     it("multi-line matches get context windows that merge like single-line ones", async () => {
@@ -425,7 +425,8 @@ describe("handleBatchRead", () => {
           { path: p, mode: "verbatim", searchRegex: "^middle$\\n^foo" },
         ],
       });
-      expect(out.results.map(r => r.content)).toEqual(["2-3:\tfoo bar\nbaz qux\n5-6:\tfoo bar\nbaz end", "4-5:\tmiddle\nfoo bar"]);
+      expect(out.results[0]!.content).toBe("2-3:\tfoo bar\nbaz qux\n4-5:\tmiddle\nfoo bar\n5-6:\tfoo bar\nbaz end");
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([2, 1]);
     });
 
     it("searchRegex without \\n stays line-based; an escaped backslash before n is not a line break", async () => {
@@ -436,8 +437,8 @@ describe("handleBatchRead", () => {
           { path: p, mode: "verbatim", searchRegex: "a\\\\nb" },
         ],
       });
-      expect(out.results.map(r => r.match_count)).toEqual([0, 1]);
-      expect(out.results[1]!.content).toBe("3:\tpath a\\nb");
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([0, 1]);
+      expect(out.results[0]!.content).toBe("3:\tpath a\\nb");
     });
   });
 
@@ -496,15 +497,32 @@ describe("deduplication", () => {
     expect(out.results[0]!.match_count).toBe(1);
   });
 
-  it("search: same file different searchTerm keeps both", async () => {
-    const p = await fixture("dedup_search_terms.ts", "foo\nbar\n");
+  it("search: different searches on one file bundle into one result in line order", async () => {
+    const p = await fixture("dedup_search_terms.ts", "bar\nfoo\nfoo bar\n");
     const out = await read({
       requests: [
         { path: p, mode: "verbatim", searchTerm: "foo" },
-        { path: p, mode: "verbatim", searchTerm: "bar" },
+        { path: p, mode: "compact", searchTerm: "bar" },
+        { path: p, mode: "verbatim", searchTerm: "foo" },
       ],
     });
-    expect(out.results).toHaveLength(2);
+    expect(out.results).toHaveLength(1);
+    const r = out.results[0]!;
+    expect(r.mode_applied).toBe("verbatim");
+    expect(r.content).toBe("1:\tbar\n2:\tfoo\n3:\tfoo bar");
+    expect(r.match_count).toBe(3);
+    expect(r.searches).toEqual([{ search_term: "foo", match_count: 2 }, { search_term: "bar", match_count: 2 }]);
+  });
+
+  it("search: searches with different count stay separate results", async () => {
+    const p = await fixture("dedup_search_counts.ts", "foo\nbar\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+        { path: p, mode: "verbatim", searchTerm: "bar", count: 1 },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual(["1:\tfoo", "1-2:\tfoo\nbar"]);
   });
 
   it("search: same file same searchTerm different mode coalesces to verbatim", async () => {

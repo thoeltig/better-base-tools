@@ -12,7 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - **`searchTerm` is literal; regex search moved to the new `searchRegex`** — _breaking_. Terms were compiled as a regex first and fell back to literal only when the regex was invalid, so code searches silently missed (`${idx` never matched because `$` anchored the line end) or overcounted (`a.b` also matched `axb`). That also broke the advice to confirm a `replace_all` count with a search, since `old` matches literally. The fields are mutually exclusive; an invalid `searchRegex` returns one `unparseable` error per request.
-- **Read headers lead with the line range** — `<!-- Read line 8 to 12 of file 'x' as 'compact' (5 of 288 lines total) -->` became `<!-- Line 8 to 12 of 288 lines in 'x' as compact -->`; full reads show `<!-- 288 lines in 'x' as compact -->`. Search headers name the search: `<!-- 2 matches for 'term' in 'x' (254 lines) as compact -->`, regexes as `/re/`.
+- **Read headers lead with the line range** — `<!-- Read line 8 to 12 of file 'x' as 'compact' (5 of 288 lines total) -->` became `<!-- Line 8 to 12 of 288 lines in 'x' as compact -->`; full reads show `<!-- 288 lines in 'x' as compact -->`. Search headers list each search that matched with its count: `<!-- 'x' (254 lines) as compact — 'term': 2, /re/: 1 -->`.
 - **`returned_lines` counts source lines in every mode** — compact mode reported output lines, so a 5-line compact slice of a `.ts` file was announced as `line 8 (1 of 288)`, breaking the `replace_range`/`insert_at_line` anchoring contract.
 - **Files without search matches are no longer listed** — the `<!-- No match(es) found -->` block listed every non-matching file (thousands for a broad glob) without saying which term missed. A search that matched in no file now returns one `<!-- No matches for 'term' -->` line, emitted outside the output budget.
 - **Search output labels every match line and context block with its source range** — `count: 0` lines are `N:<tab>content` (was `N<tab>content`), and context blocks are `M-N:<tab>content` instead of a separate `<!-- Line M to N, match at line K -->` line, so a compact block is one line carrying its range. The `match at line K` suffix is gone; `count: 0` gives exact match lines.
@@ -25,7 +25,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **`searchRegex`** read request field, see above.
 - **`count: 0`** — accepted on search (no context lines) and plain reads (no limit).
 - **`offset` past the end of the file returns the file tail** — the last `count` lines, or the last line without `count`, instead of an empty result.
-- **`search_term` / `search_regex`** on search results.
+- **Searches on one file are bundled into one result** — all searches with the same `count` share one header and one set of lines in file order (a line matched by several searches appears once), with a count per search in the header. Separate searches cost a repeated header each and a regex alternation loses per-term counts and silently hides terms that matched nothing; bundling keeps both. `ReadResult.searches` carries the per-search counts.
 
 ### Fixed
 

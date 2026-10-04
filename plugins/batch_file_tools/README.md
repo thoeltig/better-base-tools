@@ -193,7 +193,7 @@ A 20-file-read, 15-edit session using native tools adds roughly 600k–800k char
 
 Requests also support glob and directory expansion and `offset`/`count` pagination. Header line numbers always refer to source lines, also in `compact` mode where the output spans fewer lines. An `offset` past the end of the file returns the last `count` lines (the last line without `count`); `count: 0` on a plain read means no limit.
 
-Search takes either `searchTerm` (case-insensitive literal text) or `searchRegex` (case-insensitive JavaScript regular expression); the two are mutually exclusive, and an invalid regex returns an `unparseable` error for that request. A `searchTerm` containing a line break, or a `searchRegex` containing `\n`, is matched across lines (line endings normalized to `\n`; `^`/`$` still mean line start and end), and each match is reported with its line range. Output depends on `count`: `count=0` (default) returns one `N:<tab>content` line per match; `count>0` returns context windows as `M-N:<tab>content` blocks, with nearby windows merged into one block (in `compact` mode a block is a single line). The result header names the search (`for 'term'` or `for /regex/`). Files without matches are omitted; a search that matched in no file returns a single `<!-- No matches for 'term' -->` line.
+Search takes either `searchTerm` (case-insensitive literal text) or `searchRegex` (case-insensitive JavaScript regular expression); the two are mutually exclusive, and an invalid regex returns an `unparseable` error for that request. A `searchTerm` containing a line break, or a `searchRegex` containing `\n`, is matched across lines (line endings normalized to `\n`; `^`/`$` still mean line start and end), and each match is reported with its line range. Output depends on `count`: `count=0` (default) returns one `N:<tab>content` line per match; `count>0` returns context windows as `M-N:<tab>content` blocks, with nearby windows merged into one block (in `compact` mode a block is a single line). All searches on one file with the same `count` are bundled into one result: matched lines appear once in line order, and the header lists each search that matched with its count. Files without matches are omitted; a search that matched in no file returns a single `<!-- No matches for 'term' -->` line.
 
 Results follow request order. Errors use `<!-- Error <reason>: 'path' — detail -->`, where `not_found` shows the absolute path so a wrong resolution base is visible.
 
@@ -211,7 +211,7 @@ Each result starts with a header line:
 
 ```
 <!-- 120 lines in '/src/auth.ts' as compact -->
-<!-- 2 matches for 'validateToken' in '/src/user.ts' (88 lines) as verbatim -->
+<!-- '/src/user.ts' (88 lines) as verbatim — 'validateToken': 2 -->
 <!-- Line 40 to 59 of 210 lines in '/src/config.ts' as verbatim -->
 ```
 

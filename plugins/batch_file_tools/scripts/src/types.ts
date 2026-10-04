@@ -37,7 +37,7 @@ export const ReadRequest = z.object({
     count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count=0 returns one 'N:<tab>content' line per match; count>0 returns merged context windows as 'M-N:<tab>content' blocks."),
+      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count=0 returns one 'N:<tab>content' line per match; count>0 returns merged context windows as 'M-N:<tab>content' blocks. All searches on one file with the same count are bundled into one result with a match count per search."),
     searchRegex: z.string().min(1).optional()
       .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive; a pattern containing \\n matches across lines, ^ and $ still mean line start and end); mutually exclusive with searchTerm."),
   })
@@ -53,6 +53,14 @@ export const ReadInput = z.object({
   .strict();
 export type ReadInput = z.infer<typeof ReadInput>;
 
+export const SearchCount = z.object({
+    search_term: z.string().optional(),
+    search_regex: z.string().optional(),
+    match_count: z.number().int().min(0),
+  })
+  .strict();
+export type SearchCount = z.infer<typeof SearchCount>;
+
 export const ReadResult = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path"),
@@ -65,11 +73,9 @@ export const ReadResult = z.object({
       .describe("True if count limited the output"),
     content: z.string(),
     match_count: z.number().int().min(0).optional()
-      .describe("Number of matches found (search mode only)"),
-    search_term: z.string().optional()
-      .describe("Literal text searched for (search mode only)"),
-    search_regex: z.string().optional()
-      .describe("Regular expression searched for (search mode only)"),
+      .describe("Distinct matched lines or multi-line ranges across all bundled searches (search mode only)"),
+    searches: z.array(SearchCount).optional()
+      .describe("Searches bundled into this result — all searches on one file with the same count — with their own match counts (search mode only)"),
     start_line: z.number().int().min(1).optional()
       .describe("1-indexed first line of the returned content (regular reads only)"),
     error: FileError.optional(),

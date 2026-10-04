@@ -7,7 +7,8 @@ import { formatForRead } from "../lib/transforms.js";
 import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResult, Reason } from "../types.js";
 
 // order: position in the expanded request list; dedup keeps the earliest so results follow request order.
-type PlanEntry = ({ kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult }) & { order: number };
+// searches: set when req is a bundled search target (path, mode, count) for these search requests.
+type PlanEntry = ({ kind: "ok"; req: ReadRequest; searches?: ReadRequest[] } | { kind: "err"; result: ReadResult }) & { order: number };
 type OkEntry = Extract<PlanEntry, { kind: "ok" }>;
 
 export async function handleBatchRead(
@@ -24,7 +25,7 @@ export async function handleBatchRead(
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, excludedPaths, approvedPaths);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry, allowedDirectories, fileCache, excludedPaths, approvedPaths);
       await onProgress?.(++done, total);
       return result;
     })
@@ -81,19 +82,21 @@ function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
 function deduplicatePath(path: string, entries: OkEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
-  // search: group by (search, count), coalesce mode (same→same, mixed→verbatim)
+  // search: bundle all searches with the same context size into one result; mixed modes coalesce to verbatim
   const searchGroups = new Map<string, OkEntry[]>();
   for (const entry of entries) {
-    const search = searchKey(entry.req);
-    if (search === undefined) continue;
-    const key = `${search}|${entry.req.count ?? ""}`;
+    if (searchKey(entry.req) === undefined) continue;
+    const key = `${entry.req.count ?? ""}`;
     if (!searchGroups.has(key)) searchGroups.set(key, []);
     searchGroups.get(key)!.push(entry);
   }
   for (const group of searchGroups.values()) {
     const modes = new Set(group.map(e => e.req.mode));
-    const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
-    result.push({ kind: "ok", req: { ...group[0]!.req, mode: coalescedMode }, order: group[0]!.order });
+    const target: ReadRequest = { path, mode: modes.size === 1 ? [...modes][0]! : "verbatim" };
+    const count = group[0]!.req.count;
+    if (count !== undefined) target.count = count;
+    const searches = [...new Map(group.map(e => [searchKey(e.req), e.req])).values()];
+    result.push({ kind: "ok", req: target, searches, order: group[0]!.order });
   }
 
   // range/full: coalesce mode, merge overlapping ranges
@@ -204,7 +207,8 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+async function readOne(entry: OkEntry, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+  const req = entry.req;
   if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
     return errResult(req, 'not_authorized', "");
   }
@@ -213,7 +217,7 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     return errResult(req, file.reason, file.message);
   }
 
-  if (searchKey(req) !== undefined) return searchFile(req, file.content);
+  if (entry.searches !== undefined) return searchFile(req, entry.searches, file.content);
 
   // normal read
   const formatted = formatForRead({

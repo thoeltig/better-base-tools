@@ -1,7 +1,7 @@
 import { splitLines } from "./lines.js";
 import type { SplitResult } from "./lines.js";
 import { formatSplitRange } from "./transforms.js";
-import type { ReadRequest, ReadResult } from "../types.js";
+import type { ReadRequest, ReadResult, SearchCount } from "../types.js";
 
 /** Context windows closer than this many lines are merged into one block. */
 const SEARCH_MERGE_GAP = 3;
@@ -20,30 +20,38 @@ export function searchKey(req: ReadRequest): string | undefined {
 }
 
 /**
- * Searches one file. count=0 yields one "N:\t" unit per match ("M-N:\t" for multi-line
- * matches); count>0 yields merged context windows as "M-N:\t" blocks.
+ * Runs all bundled searches on one file (target supplies path, mode and count) and merges
+ * their matches in line order. count=0 yields one "N:\t" unit per matched line ("M-N:\t"
+ * for multi-line matches); count>0 yields merged context windows as "M-N:\t" blocks.
  */
-export function searchFile(req: ReadRequest, content: string): ReadResult {
+export function searchFile(target: ReadRequest, searches: readonly ReadRequest[], content: string): ReadResult {
   const split = splitLines(content);
-  const ranges = findMatchRanges(req, split, content);
-  const units = req.count ? contextWindows(ranges, req.count, split.lines.length - 1) : ranges;
+  const perSearch = searches.map(search => findMatchRanges(search, split, content));
+  const ranges = uniqueSortedRanges(perSearch.flat());
+  const units = target.count ? contextWindows(ranges, target.count, split.lines.length - 1) : ranges;
   const blocks = units.map(({ start, end }) => {
-    const formatted = formatSplitRange(split, req.mode, req.path, start, end + 1);
+    const formatted = formatSplitRange(split, target.mode, target.path, start, end + 1);
     return `${lineLabel(start, end)}:\t${formatted.replace(/\r?\n$/, "")}`;
   });
   return {
-    path: req.path,
-    mode_applied: req.mode,
+    path: target.path,
+    mode_applied: target.mode,
     lines: split.lines.length,
     returned_lines: units.reduce((sum, unit) => sum + unit.end - unit.start + 1, 0),
     truncated: false,
     content: blocks.join("\n"),
     match_count: ranges.length,
-    ...searchFields(req),
+    searches: searches.map((search, i) => ({ ...searchFields(search), match_count: perSearch[i]!.length })),
   };
 }
 
-function searchFields(req: ReadRequest): Pick<ReadResult, "search_term" | "search_regex"> {
+// A line matched by several searches is reported once.
+function uniqueSortedRanges(ranges: readonly LineRange[]): LineRange[] {
+  const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
+  return sorted.filter((range, i) => i === 0 || range.start !== sorted[i - 1]!.start || range.end !== sorted[i - 1]!.end);
+}
+
+function searchFields(req: ReadRequest): Pick<SearchCount, "search_term" | "search_regex"> {
   if (req.searchTerm !== undefined) return { search_term: req.searchTerm };
   return req.searchRegex !== undefined ? { search_regex: req.searchRegex } : {};
 }
