@@ -319,16 +319,7 @@ Read and edit approvals are tracked separately: approving a path for reading doe
 
 ## Requirements
 
-This project requires **Node.js >= v22** and the following dependencies:
-
-### Production Dependencies
-* `@modelcontextprotocol/sdk` (`1.29.0`) — Model Context Protocol SDK
-* `zod` (`3.25.76`) — Schema validation
-
-### Development Dependencies
-* `typescript` (`5.9.3`) — Static typing
-* `vitest` (`4.1.5`) — Testing framework
-* `@types/node` (`25.0.1`) — Type definitions for Node
+Node.js >= v20
 
 ---
 

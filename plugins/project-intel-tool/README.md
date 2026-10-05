@@ -299,18 +299,7 @@ When querying, combine conceptual terms ("authentication session management") wi
 
 ## Requirements
 
-This project requires **Node.js >= v22** and the following dependencies:
-
-### Production Dependencies
-* `@modelcontextprotocol/sdk` (`1.29.0`) — Model Context Protocol SDK
-* `zod` (`4.4.3`) — Schema validation
-
-### Development Dependencies
-* `typescript` (`5.9.3`) — Static typing
-* `@types/node` (`25.0.1`) — Type definitions for Node
-* `tsx` (`4.22.4`) / `esbuild` (`0.28.0`) — TypeScript execution for the test runner
-
-Tests run on the Node.js built-in `node:test` runner (`npm test`); no external test framework is required.
+Node.js >= v20
 
 ---
 

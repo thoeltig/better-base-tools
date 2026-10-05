@@ -51,7 +51,7 @@ See [project-intel-tool README](./plugins/project-intel-tool/README.md) for deta
 
 ## Requirements
 
-Node.js >= v22
+Node.js >= v20
 
 ## Installation
 
