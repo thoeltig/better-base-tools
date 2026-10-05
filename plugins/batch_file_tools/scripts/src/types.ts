@@ -37,9 +37,9 @@ export const ReadRequest = z.object({
     count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count adds that many context lines around each match. verbatim prints ripgrep-style lines, 'N:content' for matched lines and 'N-content' for context; compact collapses each run of consecutive lines into one 'N..M:content' line. All searches on one file are bundled into one result (verbatim if any of them asks for it), each with its own count and match count."),
+      .describe("If set: search file(s) for this literal text (case-sensitive, like batch_edit anchors; use searchRegex to ignore case; text with line breaks matches across lines); count adds that many context lines around each match. verbatim prints ripgrep-style lines, 'N:content' for matched lines and 'N-content' for context; compact collapses each run of consecutive lines into one 'N..M:content' line. All searches on one file are bundled into one result (verbatim if any of them asks for it), each with its own count and match count."),
     searchRegex: z.string().min(1).optional()
-      .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive; a pattern containing \\n matches across lines, ^ and $ still mean line start and end); mutually exclusive with searchTerm."),
+      .describe("Like searchTerm, but a JavaScript regular expression and case-insensitive (a pattern containing \\n matches across lines, ^ and $ still mean line start and end); mutually exclusive with searchTerm."),
   })
   .strict()
   .refine(r => r.searchTerm === undefined || r.searchRegex === undefined, {

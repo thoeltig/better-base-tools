@@ -118,8 +118,8 @@ function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
     const re = new RegExp(req.searchRegex, "i");
     return line => re.test(line);
   }
-  const needle = (req.searchTerm ?? "").toLowerCase();
-  return line => line.toLowerCase().includes(needle);
+  const needle = req.searchTerm ?? "";
+  return line => line.includes(needle);
 }
 
 // Searches that can only match across a line break run on the whole text (line endings
@@ -127,7 +127,7 @@ function buildLineMatcher(req: ReadRequest): (line: string) => boolean {
 function wholeTextPattern(req: ReadRequest): RegExp | undefined {
   if (req.searchTerm !== undefined) {
     const term = req.searchTerm.replace(/\r\n/g, "\n");
-    return term.includes("\n") ? new RegExp(escapeRegExp(term), "gi") : undefined;
+    return term.includes("\n") ? new RegExp(escapeRegExp(term), "g") : undefined;
   }
   if (req.searchRegex !== undefined && spansLines(req.searchRegex)) return new RegExp(req.searchRegex, "gim");
   return undefined;
