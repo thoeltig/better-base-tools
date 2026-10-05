@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { BufferLoadError, loadBuffer, writeBuffer } from "../lib/buffer.js";
 import { applyOp, preview, toOpResult } from "../lib/edit-ops.js";
-import { isAccessible, safeRealpath } from "../lib/fs.js";
+import { canonicalRequestPath, isAccessible, safeRealpath } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { joinLines } from "../lib/lines.js";
 import type {
@@ -113,7 +113,7 @@ async function planEntries(
   };
 
   for (const file of files) {
-    file.path = await safeRealpath(resolve(file.path));
+    file.path = await canonicalRequestPath(resolve(file.path));
     if (!(await needsExpansion(file.path))) {
       if (!isAccessible(file.path, allowedDirectories, excludedPaths, approvedPaths)) {
         entries.push({ kind: "error", result: buildFileError(file, "not_authorized", "") });

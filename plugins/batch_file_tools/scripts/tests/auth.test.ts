@@ -1,11 +1,12 @@
-import { access, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { access, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { handleBatchEdit } from "../src/tools/edit.js";
 import { handleBatchRead } from "../src/tools/read.js";
-import { isAccessible, resolveExcludePaths } from "../src/lib/fs.js";
+import { isAccessible, isPathAllowed, resolveExcludePaths } from "../src/lib/fs.js";
 
 let allowedDir: string;
 let outsideDir: string;
@@ -27,6 +28,15 @@ async function exists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function overwrite(p: string, excludedPaths: readonly string[] = []) {
+  return handleBatchEdit(
+    { files: [{ path: p, ops: [{ type: "write", mode: "overwrite", content: "owned\n" }] }] },
+    [allowedDir],
+    false,
+    excludedPaths,
+  );
 }
 
 describe("auth — read", () => {
@@ -275,5 +285,113 @@ describe("resolveExcludePaths", () => {
   it("keeps a not-yet-existing relative exclude as a literal anchored path", async () => {
     const out = await resolveExcludePaths(["ghost.env"], [allowedDir]);
     expect(out.some(p => p.endsWith("ghost.env"))).toBe(true);
+  });
+});
+
+describe("auth — dangling links", () => {
+  it("rejects write through a dangling file symlink and does not create its target", async (t) => {
+    const target = join(outsideDir, "escaped.txt");
+    const link = join(allowedDir, "dangle.txt");
+    try {
+      await symlink(target, link, "file");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EPERM") return t.skip("file symlinks need admin or developer mode");
+      throw err;
+    }
+    const out = await overwrite(link);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+    expect(await exists(target)).toBe(false);
+  });
+
+  it("rejects write below a dangling junction and does not create its target", async () => {
+    const target = join(outsideDir, "missing-dir");
+    const link = join(allowedDir, "dangle-junction");
+    await symlink(target, link, "junction");
+    const out = await overwrite(join(link, "escaped.txt"));
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+    expect(await exists(target)).toBe(false);
+  });
+
+  it("rejects read below a dangling junction", async () => {
+    const link = join(allowedDir, "dangle-junction-read");
+    await symlink(join(outsideDir, "missing-read-dir"), link, "junction");
+    const out = await handleBatchRead({ requests: [{ path: join(link, "x.txt"), mode: "compact" }] }, [allowedDir]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+  });
+});
+
+describe("auth — excludes on not-yet-existing files", () => {
+  it("blocks creating a file in an excluded dir through a junction", async () => {
+    const secrets = join(allowedDir, "junction-secrets");
+    await mkdir(secrets, { recursive: true });
+    const link = join(allowedDir, "jl");
+    await symlink(secrets, link, "junction");
+    const out = await overwrite(join(link, "new.txt"), [secrets]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+    expect(await exists(join(secrets, "new.txt"))).toBe(false);
+  });
+
+  it("blocks reading a missing file in an excluded dir through a junction", async () => {
+    const secrets = join(allowedDir, "junction-secrets-read");
+    await mkdir(secrets, { recursive: true });
+    const link = join(allowedDir, "jl-read");
+    await symlink(secrets, link, "junction");
+    const out = await handleBatchRead(
+      { requests: [{ path: join(link, "ghost.txt"), mode: "compact" }] },
+      [allowedDir],
+      [secrets],
+    );
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+  });
+
+  it("blocks creating a file in an excluded dir via its 8.3 short name", async (t) => {
+    if (process.platform !== "win32") return t.skip("8.3 short names are Windows-only");
+    const secrets = join(allowedDir, "secretstuff");
+    await mkdir(secrets, { recursive: true });
+    const shortName = execFileSync("cmd", ["/d", "/c", "for %I in (secretstuff) do @echo %~snxI"], {
+      cwd: allowedDir,
+      encoding: "utf8",
+    }).trim();
+    if (shortName.toLowerCase() === "secretstuff") return t.skip("8.3 short names disabled on this volume");
+    const out = await overwrite(join(allowedDir, shortName, "new.txt"), [secrets]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+    expect(await exists(join(secrets, "new.txt"))).toBe(false);
+  });
+});
+
+describe("auth — '..'-prefixed names", () => {
+  it("treats a '..'-prefixed child as inside the directory", () => {
+    expect(isPathAllowed(join(allowedDir, "..ok.txt"), [allowedDir])).toBe(true);
+  });
+
+  it("treats the parent directory and its other children as outside", () => {
+    expect(isPathAllowed(join(allowedDir, ".."), [allowedDir])).toBe(false);
+    expect(isPathAllowed(join(allowedDir, "..", "sibling.txt"), [allowedDir])).toBe(false);
+  });
+
+  it("allows read of a '..'-prefixed file inside an allowed dir", async () => {
+    const p = join(allowedDir, "..ok.txt");
+    await writeFile(p, "ok\n");
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir]);
+    expect(out.results[0]!.error).toBeUndefined();
+  });
+
+  it("blocks read of a '..'-prefixed file inside an excluded dir", async () => {
+    const secrets = join(allowedDir, "dot-secrets");
+    await mkdir(secrets, { recursive: true });
+    const p = join(secrets, "..env");
+    await writeFile(p, "SECRET=1\n");
+    const out = await handleBatchRead({ requests: [{ path: p, mode: "compact" }] }, [allowedDir], [secrets]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
+    expect(out.results[0]!.content).toBe("");
+  });
+
+  it("blocks edit below a '..'-prefixed subdir of an excluded dir", async () => {
+    const secrets = join(allowedDir, "dot-secrets-edit");
+    const p = join(secrets, "..x", "key.txt");
+    await mkdir(join(secrets, "..x"), { recursive: true });
+    await writeFile(p, "key\n");
+    const out = await overwrite(p, [secrets]);
+    expect(out.results[0]!.error?.reason).toBe("not_authorized");
   });
 });
