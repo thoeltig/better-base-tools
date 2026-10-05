@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-05
+
+### Changed
+
+- **`searchTerm` is case-sensitive**. It matched case-insensitively while `batch_edit` anchors match case-sensitively, so a search used to confirm a `replace_all` count could report hits the edit would not touch. `searchRegex` stays case-insensitive.
+
 ## [1.4.1] - 2026-10-04
 
 ### Fixed
@@ -393,7 +399,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.1...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.2...HEAD
+[1.4.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.1...BatchFileTools_v1.4.2
 [1.4.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.0...BatchFileTools_v1.4.1
 [1.4.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.2...BatchFileTools_v1.4.0
 [1.3.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...BatchFileTools_v1.3.2
