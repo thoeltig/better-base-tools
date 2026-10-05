@@ -1,9 +1,12 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, join, sep } from "node:path";
 import { homedir } from "node:os";
 import { Reason } from "../types.js";
 import { fileURLToPath } from "node:url";
 import type { Root, LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
+import { looksLikeGlob } from "./glob.js";
+
+const DANGLING_LINK = "EDANGLINGLINK";
 
 /** Display form of a path: forward slashes on Windows, unchanged on POSIX where `\` is a valid filename character. */
 export function forwardSlashes(p: string): string {
@@ -25,6 +28,19 @@ export interface ReadFileError {
 export async function safeRealpath(p: string): Promise<string> {
   try {
     return await realpath(p);
+  } catch {
+    return p;
+  }
+}
+
+/**
+ * Canonical path for exclude/allow checks, including not-yet-existing files.
+ * Glob patterns and unresolvable paths are returned unchanged; guardPath re-resolves the latter and rejects them.
+ */
+export async function canonicalRequestPath(p: string): Promise<string> {
+  if (looksLikeGlob(p)) return safeRealpath(p);
+  try {
+    return await realpathOfNearestExisting(p);
   } catch {
     return p;
   }
@@ -172,7 +188,7 @@ async function guardPath(
 export function isPathAllowed(realPath: string, allowedDirectories: readonly string[]): boolean {
   return allowedDirectories.some((dir) => {
     const rel = relative(dir, realPath);
-    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+    return rel === "" || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel));
   });
 }
 
@@ -191,6 +207,7 @@ export function isAccessible(
   return isPathAllowed(realPath, allowedDirectories);
 }
 
+/** Realpath of the nearest existing ancestor with the missing tail re-appended. Throws on a dangling link so it cannot authorize its target. */
 export async function realpathOfNearestExisting(absolute: string): Promise<string> {
   let current = absolute;
   const missing: string[] = [];
@@ -201,6 +218,9 @@ export async function realpathOfNearestExisting(absolute: string): Promise<strin
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException;
       if (e.code !== "ENOENT") throw err;
+      if (await lstat(current).then(() => true, () => false)) {
+        throw Object.assign(new Error(`dangling link: ${current}`), { code: DANGLING_LINK });
+      }
       const parent = dirname(current);
       if (parent === current) throw err;
       missing.unshift(basename(current));
@@ -217,7 +237,7 @@ function mapFsError(err: unknown): ReadFileError {
   if (e.code === "EISDIR") {
     return { ok: false, reason: "is_directory", message: "" };
   }
-  if (e.code === "EACCES" || e.code === "EPERM") {
+  if (e.code === "EACCES" || e.code === "EPERM" || e.code === DANGLING_LINK) {
     return { ok: false, reason: "not_authorized", message: "" };
   }
   return { ok: false, reason: "io_error", message: e.message ?? String(err) };

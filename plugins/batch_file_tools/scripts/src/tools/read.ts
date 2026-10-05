@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
+import { readFileUtf8, isAccessible, canonicalRequestPath, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
 import { searchFile, searchKey } from "../lib/search.js";
@@ -150,7 +150,7 @@ async function expandReadRequests(
   const entries: PlanEntry[] = [];
 
   for (const req of requests) {
-    req.path = await safeRealpath(resolve(req.path));
+    req.path = await canonicalRequestPath(resolve(req.path));
     if (req.searchRegex !== undefined) {
       try {
         new RegExp(req.searchRegex, "i");
