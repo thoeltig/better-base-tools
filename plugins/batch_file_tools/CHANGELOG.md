@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-04
+
+### Fixed
+
+- **Writes through a dangling symlink escaped the allowed directories** — a link inside an allowed folder whose target did not exist was authorized under its own name, and the write then followed it and created the target outside. Dangling links (file or junction) are now rejected with `not_authorized`.
+- **New files could be created inside an excluded folder** — for a path that did not exist yet, the exclude check compared the unresolved path, so a junction or an 8.3 short name (`SECRET~1`) pointing into an excluded folder passed it. The check now resolves the nearest existing ancestor first.
+- **Names starting with `..` bypassed excludes** — `secrets/..env` was treated as outside `secrets/` because the containment check tested the text prefix `..` instead of a path segment. The same bug denied `allowed/..ok.txt`.
+
 ## [1.4.0] - 2026-10-04
 
 ### Changed
@@ -385,7 +393,8 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.1...HEAD
+[1.4.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.0...BatchFileTools_v1.4.1
 [1.4.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.2...BatchFileTools_v1.4.0
 [1.3.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...BatchFileTools_v1.3.2
 [1.3.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...BatchFileTools_v1.3.1
