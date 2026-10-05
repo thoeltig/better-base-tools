@@ -92,6 +92,34 @@ describe('calculateConfidence', () => {
     expect(freshScore).toBeGreaterThan(staleScore);
   });
 
+  it('path matches rank: exact path > path end on segment boundary > folder subpath > substring', () => {
+    const p = 'plugins/x/src/lib/search.ts';
+    const exact = calculateConfidence([p], p, {});
+    const suffix = calculateConfidence(['lib/search.ts'], p, {});
+    const fileName = calculateConfidence(['search.ts'], p, {});
+    const folder = calculateConfidence(['src/lib'], p, {});
+    const substring = calculateConfidence(['sear'], p, {});
+    expect(exact).toBeGreaterThan(suffix);
+    expect(suffix).toBe(fileName);
+    expect(fileName).toBeGreaterThan(folder);
+    expect(folder).toBeGreaterThan(substring);
+    expect(substring).toBeGreaterThan(0);
+  });
+
+  it('a file name match outranks a file that references the name in every field', () => {
+    const target = calculateConfidence(['search.ts'], 'src/lib/search.ts', {});
+    const referencing = calculateConfidence(['search.ts'], 'src/search.ts.bak/other.ts', {
+      summary: 'uses search.ts', searchTags: ['search.ts'], exports: ['search.ts'],
+      imports: { './search.ts': ['search.ts'] }, refs: ['src/lib/search.ts'],
+      technologies: ['search.ts'], role: 'search.ts',
+    });
+    expect(target).toBeGreaterThan(referencing);
+  });
+
+  it('a bare word without slash gets no folder bonus', () => {
+    expect(calculateConfidence(['lib'], 'src/lib/a.ts', {})).toBe(calculateConfidence(['li'], 'src/lib/a.ts', {}));
+  });
+
   it('matching is case-insensitive', () => {
     const lower = calculateConfidence(['auth'], 'src/foo.ts', { summary: 'AUTH module' });
     expect(lower).toBeGreaterThan(0);

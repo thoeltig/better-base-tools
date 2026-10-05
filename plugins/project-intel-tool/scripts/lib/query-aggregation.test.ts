@@ -70,6 +70,36 @@ describe('query — recursive sub-knowledge aggregation', () => {
     expect(sortedPaths(results)).toEqual(['subA/b.ts', 'subA/subA1/c.ts', 'subB/d.ts']);
   });
 
+  it('an absolute backslash path into a sub-knowledge base finds that file first', () => {
+    const topKdir = writeKB(root, { files: { 'b.ts': file('mentions subA/b.ts') }, subKnowledge: [ref('subA')] });
+    writeKB(path.join(root, 'subA'), { files: { 'b.ts': file('widget') } });
+
+    const absolute = path.join(root, 'subA', 'b.ts').replace(/\//g, '\\');
+    const results = query(topKdir, [absolute.toLowerCase()], undefined, 50, undefined);
+    expect(results[0]?.path).toBe('subA/b.ts');
+  });
+
+  it('content fields match the raw keyword, path normalization does not touch them', () => {
+    const topKdir = writeKB(root, { files: { 'a.ts': file('wraps system\\io streams'), 'b.ts': file('other') } });
+
+    const results = query(topKdir, ['system\\io'], undefined, 50, undefined);
+    expect(sortedPaths(results)).toEqual(['a.ts']);
+  });
+
+  it('a keyword equal to the project root gives no path score to every file', () => {
+    const topKdir = writeKB(root, { files: { 'a.ts': file('x'), 'b.ts': file('y') } });
+
+    expect(query(topKdir, [root.toLowerCase()], undefined, 50, undefined)).toHaveLength(0);
+  });
+
+  it('scope accepts an absolute path and only returns files under it', () => {
+    const topKdir = writeKB(root, { files: { 'a.ts': file('widget') }, subKnowledge: [ref('subA')] });
+    writeKB(path.join(root, 'subA'), { files: { 'b.ts': file('widget') } });
+
+    const results = query(topKdir, ['widget'], path.join(root, 'SUBA'), 50, undefined);
+    expect(sortedPaths(results)).toEqual(['subA/b.ts']);
+  });
+
   it('does not loop or double-count on cyclic sub-knowledge refs', () => {
     const topKdir = writeKB(root, { files: { 'a.ts': file('widget') }, subKnowledge: [ref('subA')] });
     // subA points back up to the top knowledge base — must be skipped, not re-scored.
