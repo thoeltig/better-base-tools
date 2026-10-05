@@ -1,8 +1,10 @@
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 
 const LOCK_FILE = 'summaries.lock';
 const LOCK_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+// An unparsable lock may be mid-write by its creator; only an older one counts as abandoned.
+const CORRUPT_LOCK_GRACE_MS = 5_000;
 
 let activeLockPath: string | null = null;
 function isLockStale(lock: { pid: number; startedAt: string }): boolean {
@@ -14,18 +16,24 @@ function isLockStale(lock: { pid: number; startedAt: string }): boolean {
   }
 }
 
+function isLockFileStale(lockPath: string): boolean {
+  try {
+    return isLockStale(JSON.parse(readFileSync(lockPath, 'utf-8')));
+  } catch {
+    try { return Date.now() - statSync(lockPath).mtimeMs > CORRUPT_LOCK_GRACE_MS; }
+    catch { return true; }
+  }
+}
+
 export function acquireLock(knowledgeDir: string): boolean {
   const lockPath = join(knowledgeDir, LOCK_FILE);
   if (existsSync(lockPath)) {
-    try {
-      const lock = JSON.parse(readFileSync(lockPath, 'utf-8'));
-      if (!isLockStale(lock)) return false;
-    } catch { /* corrupt lock — treat as stale */ }
+    if (!isLockFileStale(lockPath)) return false;
+    try { unlinkSync(lockPath); } catch { /* already removed by another process */ }
   }
   try {
-    const tmpPath = lockPath + '.tmp';
-    writeFileSync(tmpPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-    renameSync(tmpPath, lockPath);
+    // 'wx' fails when another process created the lock since the check above
+    writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
     activeLockPath = lockPath;
     return true;
   } catch {
@@ -39,7 +47,7 @@ export function releaseLock(): void {
   activeLockPath = null;
 }
 
-export async function acquireSubmitLock(knowledgeDir: string, timeoutMs = 30_000, intervalMs = 200): Promise<boolean> {
+export async function acquireLockWithWait(knowledgeDir: string, timeoutMs = 10_000, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (acquireLock(knowledgeDir)) return true;

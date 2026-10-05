@@ -27,7 +27,8 @@
   "include": [
     "lib/**/*",
     "index.ts",
-    "sessionstart-knowledge-check.ts"
+    "sessionstart-knowledge-check.ts",
+    "stop-structure-refresh.ts"
   ],
   "exclude": [
     "node_modules",

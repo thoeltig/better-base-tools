@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, it, before, after } from "node:test";
 import { expect } from "./helpers/expect.js";
 import { handleBatchRead } from "../src/tools/read.js";
+import { ReadRequest } from "../src/types.js";
 import type { ReadInput } from "../src/types.js";
 
 let workDir: string;
@@ -38,6 +39,7 @@ describe("handleBatchRead", () => {
     expect(r.returned_lines).toBe(3);
     expect(r.truncated).toBe(false);
     expect(r.content).toBe("one\ntwo\nthree\n");
+    expect(out.sources.get(p)).toBe("one\ntwo\nthree\n");
     expect(r.error).toBeUndefined();
   });
 
@@ -53,6 +55,35 @@ describe("handleBatchRead", () => {
     expect(out.results.map((r) => r.path)).toEqual([a, b]);
     expect(out.results[0]!.content).toBe("A1\nA2\n");
     expect(out.results[1]!.content).toBe("B1\n");
+  });
+
+  it("results follow request order across searches, slices and files", async () => {
+    const a = await fixture("order_a.ts", "a1\na2\na3\na4\na5\na6\n");
+    const b = await fixture("order_b.ts", "b1\n");
+    const out = await read({
+      requests: [
+        { path: a, mode: "verbatim", offset: 2, count: 1 },
+        { path: a, mode: "verbatim", searchTerm: "a4" },
+        { path: join(workDir, "missing-order.ts"), mode: "verbatim" },
+        { path: b, mode: "verbatim" },
+        { path: a, mode: "verbatim", offset: 6, count: 1 },
+      ],
+    });
+    expect(out.results.map(r => r.content || r.error?.reason)).toEqual(["a2\n", "4:a4", "not_found", "b1\n", "a6\n"]);
+  });
+
+  it("merged ranges take the position of their earliest request", async () => {
+    const a = await fixture("order_merge_a.ts", "a1\na2\na3\na4\n");
+    const b = await fixture("order_merge_b.ts", "b1\n");
+    const out = await read({
+      requests: [
+        { path: b, mode: "verbatim" },
+        { path: a, mode: "verbatim", offset: 1, count: 2 },
+        { path: b, mode: "verbatim", searchTerm: "b1" },
+        { path: a, mode: "verbatim", offset: 2, count: 3 },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual(["b1\n", "a1\na2\na3\na4\n", "1:b1"]);
   });
 
   it("raw mode preserves CRLF byte-exactly", async () => {
@@ -74,6 +105,15 @@ describe("handleBatchRead", () => {
     expect(r.truncated).toBe(true);
   });
 
+  it("offset past EOF: start_line reports the clamped start", async () => {
+    const p = await fixture("clamp.txt", "L1\nL2\nL3\nL4\nL5\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", offset: 300, count: 3 }] });
+    const r = out.results[0]!;
+    expect(r.content).toBe("L3\nL4\nL5\n");
+    expect(r.start_line).toBe(3);
+    expect(r.returned_lines).toBe(3);
+  });
+
   it("missing file returns an error entry, not a throw", async () => {
     const missing = join(workDir, "does_not_exist.txt");
     const out = await read({
@@ -82,6 +122,7 @@ describe("handleBatchRead", () => {
     const r = out.results[0]!;
     expect(r.content).toBeDefined();
     expect(r.error?.reason).toBe("not_found");
+    expect(r.error?.message).toBe("");
     expect(r.lines).toBe(0);
   });
 
@@ -108,7 +149,7 @@ describe("handleBatchRead", () => {
     expect(r.mode_applied).toBe("compact");
     expect(r.content).toBe("const a = 1; const b = 2;");
     expect(r.lines).toBe(4);
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(4);
   });
 
   it("relative paths resolve from cwd, not_authorized when outside allowed dirs", async () => {
@@ -123,7 +164,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("2\tconst b = 2;");
+    expect(r.content).toContain("2:const b = 2;");
   });
 
   it("search: multiple matches", async () => {
@@ -131,8 +172,8 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("1\tfoo();");
-    expect(r.content).toContain("3\tfoo();");
+    expect(r.content).toContain("1:foo();");
+    expect(r.content).toContain("3:foo();");
   });
 
   it("search: multiple matches on the same line returns that line once", async () => {
@@ -140,13 +181,14 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("1\tfoo foo foo");
+    expect(r.content).toContain("1:foo foo foo");
   });
 
   it("search: no match returns match_count=0 and empty content", async () => {
     const p = await fixture("no-match.ts", "const x = 1;\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "zzznomatch" }] });
     const r = out.results[0]!;
+    expect(r.searches).toEqual([{ search_term: "zzznomatch", match_count: 0 }]);
     expect(r.match_count).toBe(0);
     expect(r.content).toBe("");
   });
@@ -162,64 +204,149 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("line1");
   });
 
-  it("search: overlapping context blocks are merged into one block", async () => {
-    // matches at lines 2 and 4, count=2 → windows [1-4] and [2-6] overlap → merged [1-6]
-    const content = "a\nb\nc\nd\ne\nf\n";
-    const p = await fixture("merge-overlap.ts", content);
+  it("schema: accepts count=0", () => {
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchTerm: "a", count: 0 }).success).toBe(true);
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", count: -1 }).success).toBe(false);
+  });
+
+  it("search: count=0 returns inline matches like unset count", async () => {
+    const p = await fixture("ctx0.ts", "line1\ntarget\nline3\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "target", count: 0 }] });
+    const r = out.results[0]!;
+    expect(r.searches).toEqual([{ search_term: "target", match_count: 1 }]);
+    expect(r.match_count).toBe(1);
+    expect(r.content).toBe("2:target");
+  });
+
+  it("read: count=0 reads to end of file", async () => {
+    const p = await fixture("read-count0.ts", "L1\nL2\nL3\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", offset: 2, count: 0 }] });
+    const r = out.results[0]!;
+    expect(r.returned_lines).toBe(2);
+    expect(r.content).toBe("L2\nL3\n");
+  });
+
+  it("search: verbatim labels every line, overlapping windows show each line once", async () => {
+    const p = await fixture("merge-overlap.ts", "a\nb\nc\nd\ne\nf\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "b", count: 2 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 1 to 4, match at line 2 -->");
+    expect(r.returned_lines).toBe(4);
+    expect(r.content).toBe("1-a\n2:b\n3-c\n4-d");
   });
 
-  it("search: nearby context blocks within gap are merged", async () => {
-    // 20-line file, matches at lines 1 and 8, count=2 → windows [1-3] and [6-10], gap=2 ≤ 3 → merged
+  it("search: gaps between context windows are not filled", async () => {
+    // matches at lines 1 and 8, count=2 → lines 1-3 and 6-10; lines 4-5 stay out
     const lines = Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join("\n") + "\n";
-    const p = await fixture("merge-gap.ts", lines.replace("line1", "TARGET").replace("line8", "TARGET"));
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
+    const p = await fixture("merge-gap.ts", lines.replace("line1\n", "TARGET\n").replace("line8\n", "TARGET\n"));
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 },
+        { path: p, mode: "compact", searchTerm: "TARGET", count: 2 },
+      ],
+    });
     const r = out.results[0]!;
     expect(r.match_count).toBe(2);
-    expect(r.content).toContain("<!-- Line 1 to 10 -->");
-    expect(r.content).not.toContain("match at");
+    expect(r.content).toBe("1:TARGET\n2-line2\n3-line3\n6-line6\n7-line7\n8:TARGET\n9-line9\n10-line10");
   });
 
-  it("search: blocks with gap > SEARCH_MERGE_GAP stay separate", async () => {
-    // 20-line file, matches at lines 1 and 10, count=2 → windows [1-3] and [8-12], gap=4 > 3 → not merged
-    const lines = Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join("\n") + "\n";
-    const p = await fixture("no-merge-gap.ts", lines.replace("line1", "TARGET").replace("line10", "TARGET"));
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 2 }] });
-    const r = out.results[0]!;
-    expect(r.match_count).toBe(2);
-    expect(r.content).toContain("match at line 1");
-    expect(r.content).toContain("match at line 10");
-    expect(r.content).not.toContain("match at lines");
+  it("search: compact prints each run of consecutive lines as one line, adjacent matches included", async () => {
+    const p = await fixture("compact-runs.ts", "x = 1;\nhit();\nhit();\ny = 2;\nz = 3;\nhit();\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "hit" }] });
+    expect(out.results[0]!.content).toBe("2..3:hit(); hit();\n6:hit();");
+    expect(out.results[0]!.match_count).toBe(3);
   });
 
-  it("search: regex pattern matches lines", async () => {
+  it("search: compact runs in indent-sensitive files stay one labelled line per source line", async () => {
+    const p = await fixture("compact-runs.py", "def f():\n    x  =  1\n    return   x\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "x  =", count: 1 }] });
+    expect(out.results[0]!.content).toBe("1-def f():\n2:    x = 1\n3-    return x");
+  });
+
+  it("search: each bundled search applies its own count; any verbatim search makes the file verbatim", async () => {
+    const p = await fixture("own-count.ts", "a\nalpha\nb\nc\nd\nbeta\ne\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "compact", searchTerm: "alpha", count: 1 },
+        { path: p, mode: "verbatim", searchTerm: "beta" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.mode_applied).toBe("verbatim");
+    expect(out.results[0]!.content).toBe("1-a\n2:alpha\n3-b\n6:beta");
+  });
+
+  it("search: the same search with different counts is kept once with the larger count", async () => {
+    const p = await fixture("dup-count.ts", "a\ntarget\nb\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "target" },
+        { path: p, mode: "verbatim", searchTerm: "target", count: 1 },
+      ],
+    });
+    expect(out.results[0]!.searches).toEqual([{ search_term: "target", match_count: 1 }]);
+    expect(out.results[0]!.content).toBe("1-a\n2:target\n3-b");
+  });
+
+  it("searchRegex: pattern matches lines", async () => {
     const p = await fixture("regex-match.ts", "const foo = 1;\nconst bar = 2;\nlet baz = 3;\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "^const" }] });
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "^const" }] });
     const r = out.results[0]!;
+    expect(r.searches).toEqual([{ search_regex: "^const", match_count: 2 }]);
     expect(r.match_count).toBe(2);
     expect(r.content).toContain("const foo");
     expect(r.content).toContain("const bar");
     expect(r.content).not.toContain("let baz");
   });
 
-  it("search: regex metacharacters work (word boundary, groups)", async () => {
-    const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "foo\\b" }] });
+  it("searchRegex: metacharacters work (word boundary, alternation), case-insensitive", async () => {
+    const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\nBAR\n");
+    const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "foo\\b|^bar$" }] });
     const r = out.results[0]!;
-    expect(r.match_count).toBe(1);
-    expect(r.content).toContain("foo");
-    expect(r.content).not.toContain("fooBar");
+    expect(r.match_count).toBe(2);
+    expect(r.content).toBe("2:foo\n4:BAR");
   });
 
-  it("search: invalid regex falls back to literal string match", async () => {
-    const p = await fixture("regex-invalid.ts", "fn(arg)\nno match\n");
-    const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "fn(" }] });
-    const r = out.results[0]!;
-    expect(r.match_count).toBe(1);
-    expect(r.content).toContain("fn(arg)");
+  it("searchTerm is literal: regex metacharacters match themselves", async () => {
+    const p = await fixture("literal.ts", "fn(arg)\na.b\naxb\nblocks.push(`${idx + 1}`)\nconst $env = 1;\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "a.b" },
+        { path: p, mode: "verbatim", searchTerm: "fn(" },
+        { path: p, mode: "verbatim", searchTerm: "${idx + 1}" },
+        { path: p, mode: "verbatim", searchTerm: "$ENV" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.content).toBe("1:fn(arg)\n2:a.b\n4:blocks.push(`${idx + 1}`)\n5:const $env = 1;");
+    expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([1, 1, 1, 1]);
+  });
+
+  it("searchRegex: invalid pattern yields one unparseable error per request", async () => {
+    await fixture("rx_a.ts", "fn(a)\n");
+    await fixture("rx_b.ts", "fn(b)\n");
+    const out = await read({ requests: [{ path: join(workDir, "rx_*.ts"), mode: "verbatim", searchRegex: "fn(" }] });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.error?.reason).toBe("unparseable");
+    expect(out.results[0]!.error?.message).toContain("Invalid regular expression");
+  });
+
+  it("same text as searchTerm and searchRegex on one file stays two searches", async () => {
+    const p = await fixture("term-vs-regex.ts", "a.b\naxb\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "a.b" },
+        { path: p, mode: "verbatim", searchRegex: "a.b" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.searches).toEqual([{ search_term: "a.b", match_count: 1 }, { search_regex: "a.b", match_count: 2 }]);
+    expect(out.results[0]!.content).toBe("1:a.b\n2:axb");
+  });
+
+  it("schema: searchTerm and searchRegex are mutually exclusive", () => {
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchTerm: "a", searchRegex: "a" }).success).toBe(false);
+    expect(ReadRequest.safeParse({ path: "x.ts", mode: "compact", searchRegex: "a" }).success).toBe(true);
   });
 
   it("glob read: expands to one result per matched file", async () => {
@@ -265,15 +392,104 @@ describe("handleBatchRead", () => {
     expect(paths).toContain(b);
   });
 
+  it("search: CRLF line endings are not part of search output", async () => {
+    const p = await fixture("search-crlf.ts", "l1\r\nTARGET\r\nl3\r\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "target", count: 1 },
+        { path: p, mode: "compact", searchTerm: "target", count: 1 },
+      ],
+    });
+    expect(out.results.map(r => r.content)).toEqual(["1-l1\n2:TARGET\n3-l3"]);
+    expect(out.results[0]!.lines).toBe(3);
+  });
+
+  describe("multi-line search", () => {
+    const content = "start\nfoo bar\nbaz qux\nmiddle\nfoo bar\nbaz end\nlast\n";
+
+    it("searchTerm with a line break matches across lines and reports the line range", async () => {
+      const p = await fixture("ml-term.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "BAR\nbaz" }] });
+      const r = out.results[0]!;
+      expect(r.match_count).toBe(2);
+      expect(r.returned_lines).toBe(4);
+      expect(r.content).toBe("2:foo bar\n3:baz qux\n5:foo bar\n6:baz end");
+    });
+
+    it("searchTerm with a line break matches CRLF files, with either line ending in the term", async () => {
+      const p = await fixture("ml-crlf.ts", "x\r\nFoo\r\nBar\r\n");
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchTerm: "foo\nbar" },
+          { path: p, mode: "verbatim", searchTerm: "foo\r\nbar" },
+        ],
+      });
+      expect(out.results).toHaveLength(1);
+      expect(out.results[0]!.content).toBe("2:Foo\n3:Bar");
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([1, 1]);
+    });
+
+    it("multi-line matches get context like single-line ones", async () => {
+      const p = await fixture("ml-ctx.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "bar\nbaz", count: 1 }] });
+      expect(out.results[0]!.content).toBe("1..7:start foo bar baz qux middle foo bar baz end last");
+    });
+
+    it("compact multi-line match is one line labelled with its range", async () => {
+      const p = await fixture("ml-compact.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "middle\nfoo" }] });
+      expect(out.results[0]!.content).toBe("4..5:middle foo bar");
+    });
+
+    it("multi-line searchTerm without a match reports zero matches", async () => {
+      const p = await fixture("ml-none.ts", content);
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "qux\nlast" }] });
+      expect(out.results[0]!.match_count).toBe(0);
+    });
+
+    it("searchRegex with \\n matches across lines; ^ and $ keep their line meaning", async () => {
+      const p = await fixture("ml-regex.ts", content);
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchRegex: "bar\\nbaz" },
+          { path: p, mode: "verbatim", searchRegex: "^middle$\\n^foo" },
+        ],
+      });
+      expect(out.results[0]!.content).toBe("2:foo bar\n3:baz qux\n4:middle\n5:foo bar\n6:baz end");
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([2, 1]);
+    });
+
+    it("searchRegex without \\n stays line-based; an escaped backslash before n is not a line break", async () => {
+      const p = await fixture("ml-regex-line.ts", "foo bar\nbaz\npath a\\nb\n");
+      const out = await read({
+        requests: [
+          { path: p, mode: "verbatim", searchRegex: "bar\\sbaz" },
+          { path: p, mode: "verbatim", searchRegex: "a\\\\nb" },
+        ],
+      });
+      expect(out.results[0]!.searches!.map(s => s.match_count)).toEqual([0, 1]);
+      expect(out.results[0]!.content).toBe("3:path a\\nb");
+    });
+  });
+
+  it("search: a one-line compact window uses the single-line label", async () => {
+    const p = await fixture("one-line.ts", "only TARGET\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "target", count: 2 }] });
+    expect(out.results[0]!.content).toBe("1:only TARGET");
+  });
+
+  it("search: compact context block is one line with its source range", async () => {
+    const p = await fixture("compact-ctx.ts", "const a = 1;\nconst target = 2;\nconst c = 3;\n");
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "target", count: 1 }] });
+    expect(out.results[0]!.content).toBe("1..3:const a = 1; const target = 2; const c = 3;");
+  });
+
   it("search: match blocks use absolute file line numbers", async () => {
     const p = await fixture("search-numbered.ts", "line1\nline2\nline3\nTARGET\nline5\nline6\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("<!-- Line 3 to 5, match at line 4 -->");
-    expect(r.content).toContain("line3");
-    expect(r.content).toContain("TARGET");
-    expect(r.content).toContain("line5");
+    expect(r.content).toBe("3-line3\n4:TARGET\n5-line5");
   });
 
   it("search: compact mode collapses content in match blocks", async () => {
@@ -281,7 +497,7 @@ describe("handleBatchRead", () => {
     const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "const b" }] });
     const r = out.results[0]!;
     expect(r.match_count).toBe(1);
-    expect(r.content).toContain("2\t");
+    expect(r.content).toContain("2:const b");
     expect(r.content).toContain("const b = 2;");
   });
 
@@ -308,16 +524,23 @@ describe("deduplication", () => {
     expect(out.results[0]!.match_count).toBe(1);
   });
 
-  it("search: same file different searchTerm keeps both", async () => {
-    const p = await fixture("dedup_search_terms.ts", "foo\nbar\n");
+  it("search: different searches on one file bundle into one result in line order", async () => {
+    const p = await fixture("dedup_search_terms.ts", "bar\nfoo\nfoo bar\n");
     const out = await read({
       requests: [
         { path: p, mode: "verbatim", searchTerm: "foo" },
-        { path: p, mode: "verbatim", searchTerm: "bar" },
+        { path: p, mode: "compact", searchTerm: "bar" },
+        { path: p, mode: "verbatim", searchTerm: "foo" },
       ],
     });
-    expect(out.results).toHaveLength(2);
+    expect(out.results).toHaveLength(1);
+    const r = out.results[0]!;
+    expect(r.mode_applied).toBe("verbatim");
+    expect(r.content).toBe("1:bar\n2:foo\n3:foo bar");
+    expect(r.match_count).toBe(3);
+    expect(r.searches).toEqual([{ search_term: "foo", match_count: 2 }, { search_term: "bar", match_count: 2 }]);
   });
+
 
   it("search: same file same searchTerm different mode coalesces to verbatim", async () => {
     const p = await fixture("dedup_search_mode.ts", "foo\nbar\n");
@@ -353,6 +576,29 @@ describe("deduplication", () => {
     });
     expect(out.results).toHaveLength(1);
     expect(out.results[0]!.returned_lines).toBe(5);
+  });
+
+  it("range: count=0 slice is subsumed like a full read", async () => {
+    const p = await fixture("dedup_range_count0.ts", "L1\nL2\nL3\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", count: 0 },
+        { path: p, mode: "verbatim", offset: 2, count: 1 },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0]!.returned_lines).toBe(3);
+  });
+
+  it("search: count=0 and unset count deduplicate", async () => {
+    const p = await fixture("dedup_search_count0.ts", "a\ntarget\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "target", count: 0 },
+        { path: p, mode: "verbatim", searchTerm: "target" },
+      ],
+    });
+    expect(out.results).toHaveLength(1);
   });
 
   it("range: overlapping slices merge to union range", async () => {

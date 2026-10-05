@@ -1,4 +1,4 @@
-import { ARG_INCLUDE_PATHS, ENV_INCLUDE_PATHS, ARG_EXCLUDE_PATHS, ENV_EXCLUDE_PATHS } from "../types.js";
+import { ARG_INCLUDE_PATHS, ENV_INCLUDE_PATHS, ARG_EXCLUDE_PATHS, ENV_EXCLUDE_PATHS, DEFAULT_SCAN_CONFIG, ScanConfig } from "../types.js";
 
 export function parseConfigArg(argName: string, envName: string, defaultVal: string): string {
   const envVal = process.env[envName];
@@ -33,4 +33,8 @@ export function getIncludePaths(): string[] {
 
 export function getExcludePaths(): string[] { 
   return parseConfigArg(ARG_EXCLUDE_PATHS, ENV_EXCLUDE_PATHS, '').split(',').filter(Boolean);
+}
+
+export function getHookScanConfig(): ScanConfig {
+  return { ...DEFAULT_SCAN_CONFIG, includePaths: getIncludePaths(), excludePaths: getExcludePaths() };
 }

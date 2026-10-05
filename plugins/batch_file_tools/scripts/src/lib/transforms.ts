@@ -1,5 +1,6 @@
 import type { ReadMode } from "../types.js";
 import { splitLines } from "./lines.js";
+import type { SplitResult } from "./lines.js";
 import { basename, extname } from "node:path";
 
 export interface FormatInput {
@@ -13,6 +14,8 @@ export interface FormatInput {
 export interface FormatOutput {
   readonly content: string;
   readonly total_lines: number;
+  /** 1-indexed first source line of content; differs from offset when the offset was past EOF. */
+  readonly start_line: number;
   readonly returned_lines: number;
   readonly truncated: boolean;
   readonly mode_applied: ReadMode;
@@ -53,7 +56,11 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const split = splitLines(input.content);
   const totalLines = split.lines.length;
 
-  const startIdx = input.offset ? input.offset - 1 : 0;
+  let startIdx = input.offset ? input.offset - 1 : 0;
+  if (startIdx >= totalLines && totalLines > 0) {
+    // Offset past EOF: serve the requested count (or the last line) from the file tail.
+    startIdx = Math.max(0, totalLines - (input.limit ?? 1));
+  }
   const endIdx =
     input.limit !== undefined
       ? Math.min(startIdx + input.limit, totalLines)
@@ -63,33 +70,27 @@ export function formatForRead(input: FormatInput): FormatOutput {
   const clampedEnd = Math.max(clampedStart, Math.min(endIdx, totalLines));
   const returnedLines = clampedEnd - clampedStart;
 
-  let content: string;
-  let emittedLines = returnedLines;
-  if (input.mode === "compact") {
-    const compact = formatCompact(
-      split.lines,
-      split.endings,
-      clampedStart,
-      clampedEnd,
-      { path: input.path, stripIndent: !isIndentSensitive(input.path) },
-    );
-    content = compact.content;
-    emittedLines = compact.line_count;
-  } else {
-    content = formatRaw(split.lines, split.endings, clampedStart, clampedEnd);
-  }
+  const content = formatSplitRange(split, input.mode, input.path, clampedStart, clampedEnd);
 
   const truncated = returnedLines < totalLines - clampedStart;
 
   return {
     content,
     total_lines: totalLines,
-    returned_lines: emittedLines,
+    start_line: clampedStart + 1,
+    returned_lines: returnedLines,
     truncated,
     mode_applied: input.mode,
   };
 }
 
+
+/** Formats the 0-based line range [start, end) of an already split file; lets callers split once for many ranges. */
+export function formatSplitRange(split: SplitResult, mode: ReadMode, path: string | undefined, start: number, end: number): string {
+  return mode === "compact"
+    ? formatCompact(split.lines, split.endings, start, end, { path, stripIndent: !isIndentSensitive(path) })
+    : formatRaw(split.lines, split.endings, start, end);
+}
 
 function formatRaw(
   lines: readonly string[],
@@ -119,12 +120,12 @@ function formatCompact(
   start: number,
   end: number,
   opts: { path: string | undefined; stripIndent: boolean },
-): { content: string; line_count: number } {
+): string {
   if (isJsonPath(opts.path)) {
     const raw = formatRaw(lines, endings, start, end);
     try {
       const minified = JSON.stringify(JSON.parse(raw));
-      return { content: minified, line_count: 1 };
+      return minified;
     } catch {
       // fall through to line-based compact
     }
@@ -138,12 +139,11 @@ function formatCompact(
       if (line !== "") tokens.push(line);
     }
     const out = tokens.join(" ").replace(/ {2,}/g, " ");
-    return { content: out, line_count: out.length > 0 ? 1 : 0 };
+    return out;
   }
 
   // Indent-sensitive: preserve newlines, collapse consecutive blank lines.
   let out = "";
-  let count = 0;
   let prevBlank = false;
   for (let i = start; i < end; i++) {
     let line = lines[i] ?? "";
@@ -157,8 +157,7 @@ function formatCompact(
     if (isBlank && prevBlank) continue;
     out += line;
     out += endings[i] ?? "";
-    count++;
     prevBlank = isBlank;
   }
-  return { content: out, line_count: count };
+  return out;
 }

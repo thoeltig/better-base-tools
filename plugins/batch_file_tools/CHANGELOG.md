@@ -7,6 +7,44 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-04
+
+### Changed
+
+- **`searchTerm` is literal; regex search moved to the new `searchRegex`** — _breaking_. Terms were compiled as a regex first and fell back to literal only when the regex was invalid, so code searches silently missed (`${idx` never matched because `$` anchored the line end) or overcounted (`a.b` also matched `axb`). That also broke the advice to confirm a `replace_all` count with a search, since `old` matches literally. The fields are mutually exclusive; an invalid `searchRegex` returns one `unparseable` error per request.
+- **Read headers lead with the line range** — `<!-- Read line 8 to 12 of file 'x' as 'compact' (5 of 288 lines total) -->` became `<!-- Line 8 to 12 of 288 lines in 'x' as compact -->`; full reads show `<!-- 288 lines in 'x' as compact -->`. Search headers list each search that matched with its count: `<!-- 'x' (254 lines) as compact — 'term': 2, /re/: 1 -->`.
+- **`returned_lines` counts source lines in every mode** — compact mode reported output lines, so a 5-line compact slice of a `.ts` file was announced as `line 8 (1 of 288)`, breaking the `replace_range`/`insert_at_line` anchoring contract.
+- **Files without search matches are no longer listed** — the `<!-- No match(es) found -->` block listed every non-matching file (thousands for a broad glob) without saying which term missed. A search that matched in no file now returns one `<!-- No matches for 'term' -->` line, emitted outside the output budget.
+- **Search output uses ripgrep's `-n -C` line format** — `verbatim` prints matched lines as `N:content` and context lines as `N-content`; matches used to be `N<tab>content` and context lines sat unlabelled under a `<!-- Line M to N, match at line K -->` header. `compact` collapses each run of consecutive lines into one `N..M:content` line (`..` so a range cannot be read as a ripgrep context line). Context windows are no longer gap-filled (windows within 3 lines used to be merged together with the lines between), and line endings are not part of search output.
+- **Error output unified across read and edit** — `<!-- Error <reason>: 'path' — detail -->`. Messages that only repeated the path and reason (`File not found: …`, `Access denied: …`, `Path is a directory: …`) are now empty; `not_found` shows the absolute path so a wrong resolution base (server cwd) is visible.
+- **`batch_edit` on a missing file reports one file-level `not_found`** — every op previously failed with `target file does not exist; use write(mode: 'overwrite') … first`, which after a wrong relative path invited creating the file in the wrong place. When a later `write` in the same request creates the file, earlier ops keep an op-level `file did not exist when this op ran`.
+- **Paths are displayed with forward slashes** on Windows.
+- **Tool descriptions point search anchors at the line labels** — both said a search read carries its line numbers in the output header; they are now on each line (`N:` for matches, `N-` for context), and the label has to be stripped when a search line is reused as a `replace` anchor.
+
+### Added
+
+- **`searchRegex`** read request field, see above.
+- **`count: 0`** — accepted on search (no context lines) and plain reads (no limit).
+- **`searchRegex` hint on literal terms that look like a regex** — a `searchTerm` without matches that contains `|`, `\b`/`\d`/`\s`/`\w`, `.*`/`.+` or `^`/`$` anchors gets `(searchTerm is literal; use searchRegex for patterns)` on its no-match line. Grep-style alternation in `searchTerm` is an easy habit to carry over.
+- **`offset` past the end of the file returns the file tail** — the last `count` lines, or the last line without `count`, instead of an empty result.
+- **Searches on one file are bundled into one result** — all searches on a file share one header and one set of lines in file order (a line matched by several searches appears once), with a count per search in the header. Each search keeps its own `count`; the result is `verbatim` if any of them asks for it. Separate searches cost a repeated header each and a regex alternation loses per-term counts and silently hides terms that matched nothing; bundling keeps both. `ReadResult.searches` carries the per-search counts.
+
+### Fixed
+
+- **Multi-line searches never matched** — search ran line by line, so a `searchTerm` containing a line break (e.g. checking that a multi-line `old` anchor is unique) or a `searchRegex` containing `\n` silently returned no matches. Such searches now run on the whole text with line endings normalized; each match covers its whole line range, and line breaks in headers are shown as `\n`.
+- **`count: 0` was rejected although the schema description advertised it** — the description documented `count=0` for inline search output while the schema enforced `min(1)`.
+- **Output blocks ran into each other** — blocks without a trailing newline (compact output, search results) had the next block's header glued onto their last line. Every block now ends with `\n`.
+- **Compact output could not be truncated correctly** — single-line compact output was emitted whole over budget or dropped, and indent-sensitive files with collapsed blank lines got wrong header ranges and re-read hints. Truncation now re-slices and re-formats the source to the largest line count that fits.
+- **Results did not follow request order** — results were grouped per file with searches before ranges.
+- **Search re-split the whole file for every match** — cost grew with matches × file size; 2,000 matches in a 20k-line file took ~4 s, now ~10–40 ms with byte-identical output.
+- **Pluralization** — `match(es)`, `match block(s)`, `1 ops`, `error(s)` and `file(s)` labels.
+
+## [1.3.2] - 2026-10-03
+
+### Fixed
+
+- A failed MCP `sendLoggingMessage` falls back to `console.error` correctly.
+
 ## [1.3.1] - 2026-09-15
 
 ### Changed
@@ -347,7 +385,9 @@ _First release._
 - Add `output: minimal | summary | diff` verbosity at root/file/op level
 - Register via project-scope `.mcp.json`
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.4.0...HEAD
+[1.4.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.2...BatchFileTools_v1.4.0
+[1.3.2]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.1...BatchFileTools_v1.3.2
 [1.3.1]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.3.0...BatchFileTools_v1.3.1
 [1.3.0]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.6...BatchFileTools_v1.3.0
 [1.2.6]: https://github.com/thoeltig/better-base-tools/compare/BatchFileTools_v1.2.5...BatchFileTools_v1.2.6

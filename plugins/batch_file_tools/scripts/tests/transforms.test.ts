@@ -64,7 +64,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/a.ts",
     });
     expect(r.content).toBe("function foo() { return 1; }");
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("collapses multi-whitespace runs inside a line", () => {
@@ -91,7 +91,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/data.json",
     });
     expect(r.content).toBe('{"a":1,"b":[2,3]}');
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(4);
   });
 
   it("falls back to single-line compact on invalid JSON", () => {
@@ -120,13 +120,14 @@ describe("formatForRead — compact mode", () => {
     expect(r.content).toBe("a\r\nb\r\n\r\nc\r\n");
   });
 
-  it("returned_lines reflects post-compact line count", () => {
+  it("returned_lines counts source lines, not compacted output lines", () => {
     const r = formatForRead({
       content: "a\n\n\n\nb\n",
       mode: "compact",
     });
-    expect(r.total_lines).toBe(5); // source has 5 lines (a, 3 blanks, b)
-    expect(r.returned_lines).toBe(3); // compacted: a, 1 blank, b
+    expect(r.content).toBe("a\n\nb\n");
+    expect(r.total_lines).toBe(5);
+    expect(r.returned_lines).toBe(5);
   });
 
   it("slices source by offset/limit BEFORE compacting", () => {
@@ -141,9 +142,49 @@ describe("formatForRead — compact mode", () => {
     });
     expect(r.content).toBe("b\n\n");
     expect(r.total_lines).toBe(7);
+    expect(r.returned_lines).toBe(4);
     expect(r.truncated).toBe(true);
   });
 
+  describe("offset clamping", () => {
+    const content = "L1\nL2\nL3\nL4\nL5\n";
+
+    it("offset past EOF with limit returns the last `limit` lines", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10, limit: 2 });
+      expect(r.content).toBe("L4\nL5\n");
+      expect(r.start_line).toBe(4);
+      expect(r.returned_lines).toBe(2);
+      expect(r.truncated).toBe(false);
+    });
+
+    it("offset past EOF without limit returns the last line", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10 });
+      expect(r.content).toBe("L5\n");
+      expect(r.start_line).toBe(5);
+      expect(r.returned_lines).toBe(1);
+    });
+
+    it("offset past EOF with limit larger than the file returns the whole file", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 10, limit: 99 });
+      expect(r.content).toBe(content);
+      expect(r.start_line).toBe(1);
+      expect(r.returned_lines).toBe(5);
+    });
+
+    it("in-range offset with limit past EOF is capped at EOF", () => {
+      const r = formatForRead({ content, mode: "verbatim", offset: 4, limit: 10 });
+      expect(r.content).toBe("L4\nL5\n");
+      expect(r.start_line).toBe(4);
+      expect(r.returned_lines).toBe(2);
+    });
+
+    it("empty file with offset returns zero lines from line 1", () => {
+      const r = formatForRead({ content: "", mode: "verbatim", offset: 3, limit: 2 });
+      expect(r.content).toBe("");
+      expect(r.start_line).toBe(1);
+      expect(r.returned_lines).toBe(0);
+    });
+  });
   it("collapses trailing blank-line runs that touch EOF", () => {
     const r = formatForRead({
       content: "x\n\n\n\n",
@@ -159,7 +200,7 @@ describe("formatForRead — compact mode", () => {
       path: "/x/a.js",
     });
     expect(r.content).toBe("const x = 1; const y = 2;");
-    expect(r.returned_lines).toBe(1);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("non-indent-sensitive: empty file produces empty string", () => {
@@ -171,7 +212,7 @@ describe("formatForRead — compact mode", () => {
   it("non-indent-sensitive: all-blank lines produces empty string", () => {
     const r = formatForRead({ content: "\n\n\n", mode: "compact", path: "/x/a.ts" });
     expect(r.content).toBe("");
-    expect(r.returned_lines).toBe(0);
+    expect(r.returned_lines).toBe(3);
   });
 
   it("non-indent-sensitive: tabs and mixed indent collapsed", () => {

@@ -4,6 +4,9 @@ import { execSync } from 'child_process';
 import { getOrCreateSummaries, writeSummaries, markFilesAsDeleted, isSummariesFile, toAbsReal } from './summary-merger.js';
 import { FileSummary, KNOWLEDGE_DIRECTORY, SUMMARIES_FILE, ScanConfig, SubKnowledgeRef, SummariesData } from '../types.js';
 import { buildFileMap } from './file-map.js';
+import { acquireLockWithWait, releaseLock } from './lock.js';
+
+const SCAN_LOCK_TIMEOUT_MS = 10_000;
 
 export interface ScanResult {
   filesToScan: string[];
@@ -258,7 +261,26 @@ export function aggregateSubKnowledgeStats(refs: SubKnowledgeRef[], projectRoot:
   return { knowledgeBaseCount, totalEntries };
 }
 
-export async function scanProject(location: string, knowledgeDir: string, scanConfig: ScanConfig): Promise<ScanResult> {
+// Holds the summaries lock across the whole read-modify-write so parallel sessions, hooks and
+// submit_analysis cannot overwrite each other's changes. Rejects when the lock is not free in time.
+export async function scanProject(
+  location: string,
+  knowledgeDir: string,
+  scanConfig: ScanConfig,
+  lockTimeoutMs: number = SCAN_LOCK_TIMEOUT_MS
+): Promise<ScanResult> {
+  if (!fs.existsSync(knowledgeDir)) return scanProjectUnlocked(location, knowledgeDir, scanConfig);
+  if (!await acquireLockWithWait(knowledgeDir, lockTimeoutMs)) {
+    throw new Error(`Summaries lock in ${knowledgeDir} not released within ${lockTimeoutMs}ms`);
+  }
+  try {
+    return scanProjectUnlocked(location, knowledgeDir, scanConfig);
+  } finally {
+    releaseLock();
+  }
+}
+
+function scanProjectUnlocked(location: string, knowledgeDir: string, scanConfig: ScanConfig): ScanResult {
   const projectRoot = toAbsReal(path.dirname(knowledgeDir), '.');
   const summaries = getOrCreateSummaries(knowledgeDir, projectRoot);
   const resolvedLocation = toAbsReal(location, '.');
@@ -343,27 +365,28 @@ export async function scanProject(location: string, knowledgeDir: string, scanCo
       const hasChanged = changedSet.has(absPath);
       const hasPriorMetrics = existing.sizeCharsWhenAnalysed !== undefined && existing.lineCountWhenAnalysed !== undefined;
       const shouldComputeDelta = wasAnalyzed && hasChanged && hasPriorMetrics;
-      let analysisDelta: string | undefined;
-      if (shouldComputeDelta) {
-        const deltaLines = fm.lineCount - existing.lineCountWhenAnalysed!;
-        const deltaChars = fm.sizeChars - existing.sizeCharsWhenAnalysed!;
-        if (deltaLines !== 0 || deltaChars !== 0) {
-          analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
-        }
-      }
       const fileEntry: FileSummary = {
         ...existing,
         sizeChars: fm.sizeChars,
         lineCount: fm.lineCount,
         deleted: false,
       };
+      // Structural fields describe the current content only; never keep values from an older version
+      delete fileEntry.exports;
+      delete fileEntry.imports;
+      delete fileEntry.refs;
       if (fm.exports.length > 0) fileEntry.exports = fm.exports;
       if (Object.keys(fm.imports).length > 0) fileEntry.imports = fm.imports;
       if (refs.length > 0) fileEntry.refs = refs;
-      summaries.files.set(absPath, {
-        ...fileEntry,
-        ...(analysisDelta !== undefined ? { analysisDelta } : {}),
-      });
+      if (shouldComputeDelta) {
+        delete fileEntry.analysisDelta;
+        const deltaLines = fm.lineCount - existing.lineCountWhenAnalysed!;
+        const deltaChars = fm.sizeChars - existing.sizeCharsWhenAnalysed!;
+        if (deltaLines !== 0 || deltaChars !== 0) {
+          fileEntry.analysisDelta = `${deltaLines >= 0 ? '+' : ''}${deltaLines} lines ${deltaChars >= 0 ? '+' : ''}${deltaChars} chars`;
+        }
+      }
+      summaries.files.set(absPath, fileEntry);
     }
     writeSummaries(knowledgeDir, summaries, projectRoot);
   }

@@ -2,8 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { scanProject, findKnowledgeDir, aggregateSubKnowledgeStats } from './lib/project-scanner.js';
-import { HookResponse, KNOWLEDGE_DIRECTORY, DEFAULT_SCAN_CONFIG, ScanConfig } from './types.js';
-import { getExcludePaths, getIncludePaths } from './lib/config.js';
+import { HookResponse, KNOWLEDGE_DIRECTORY } from './types.js';
+import { getHookScanConfig } from './lib/config.js';
 import { checkReadCapacity } from './lib/config-check.js';
 
 const CONFIG_WARNING = checkReadCapacity(process.env);
@@ -24,11 +24,7 @@ function outputHookResponse(systemMessage: string, additionalContext: string): v
 async function main(): Promise<void> {
   const cwd = process.cwd();
 
-  const config: ScanConfig = {
-    ...DEFAULT_SCAN_CONFIG,
-    includePaths: getIncludePaths(),
-    excludePaths: getExcludePaths(),
-  };
+  const config = getHookScanConfig();
 
   const knowledgeDir = findKnowledgeDir(cwd);
 
@@ -74,16 +70,16 @@ async function main(): Promise<void> {
   if (changedFilesCount > 0) statusMessage += `, ${changedFilesCount} file(s) changed`;
   if (unanalyzedFilesCount > 0) statusMessage += `, ${unanalyzedFilesCount} file(s) without AI analysis`;
 
-  const additionaContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +
-  `The result will also provide you a quick overview of the used technologies, imports and exports, role and description of each file.` +
-  `The tool is designed to provide you an efficent way to know what files you need for a task without reading the full files.` +
-  `\nFile map and structural information are always up to date, descriptions might need a reevaluation after file changes to check if the content still matches the summaries: ${statusMessage}`;
-  outputHookResponse(statusMessage, additionaContext);
+  const additionalContext = `You should always use the 'query' MCP tool to explore the project because it will provide you a token efficient overview of the project structure, file sizes and interconnection between the files. ` +
+  `The result will also provide you a quick overview of the used technologies, imports and exports, role and description of each file. ` +
+  `The tool is designed to provide you an efficient way to know what files you need for a task without reading the full files.` +
+  `\nFile map and structural information are automatically updated, descriptions might need a reevaluation after file changes to check if the content still matches the summaries: ${statusMessage}`;
+  outputHookResponse(statusMessage, additionalContext);
 }
 
 main()
   .then(() => process.exit(0))
   .catch(() => {
-    outputHookResponse('Knowledge check failed', 'Could not check project knowledge status. Most likely an issue with the MCP sever.');
+    outputHookResponse('Knowledge check failed', 'Could not check project knowledge status. Most likely an issue with the MCP server.');
     process.exit(0);
   });

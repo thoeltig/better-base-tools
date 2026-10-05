@@ -34,12 +34,17 @@ export const ReadRequest = z.object({
       .describe("'compact' (DEFAULT) — cheapest read; collapses lines and strips indent/whitespace runs, yet still a valid replace/replace_all anchor because batch_edit falls back to whitespace-normalized matching. 'verbatim' — the file's exact bytes, indentation and line endings included."),
     offset: z.number().int().min(1).optional()
       .describe("1-indexed start line (ignored for search)"),
-    count: z.number().int().min(1).optional()
+    count: z.number().int().min(0).optional()
       .describe("read: max lines to return; search: context lines around each match (default 0)"),
     searchTerm: z.string().min(1).optional()
-      .describe("If set: search file(s) for this string (case-insensitive); count=0 returns inline lineNum\\tContent per match; count>0 returns blocks with <!-- Line M to N, match at line K --> headers."),
+      .describe("If set: search file(s) for this literal text (case-insensitive; text with line breaks matches across lines); count adds that many context lines around each match. verbatim prints ripgrep-style lines, 'N:content' for matched lines and 'N-content' for context; compact collapses each run of consecutive lines into one 'N..M:content' line. All searches on one file are bundled into one result (verbatim if any of them asks for it), each with its own count and match count."),
+    searchRegex: z.string().min(1).optional()
+      .describe("Like searchTerm, but a JavaScript regular expression (case-insensitive; a pattern containing \\n matches across lines, ^ and $ still mean line start and end); mutually exclusive with searchTerm."),
   })
-  .strict();
+  .strict()
+  .refine(r => r.searchTerm === undefined || r.searchRegex === undefined, {
+    message: "searchTerm and searchRegex are mutually exclusive",
+  });
 export type ReadRequest = z.infer<typeof ReadRequest>;
 
 export const ReadInput = z.object({
@@ -48,6 +53,14 @@ export const ReadInput = z.object({
   .strict();
 export type ReadInput = z.infer<typeof ReadInput>;
 
+export const SearchCount = z.object({
+    search_term: z.string().optional(),
+    search_regex: z.string().optional(),
+    match_count: z.number().int().min(0),
+  })
+  .strict();
+export type SearchCount = z.infer<typeof SearchCount>;
+
 export const ReadResult = z.object({
     path: z.string().min(1).max(260)
       .describe("Absolute path"),
@@ -55,12 +68,14 @@ export const ReadResult = z.object({
     lines: z.number().int().min(0)
       .describe("Total line count (0 on error)"),
     returned_lines: z.number().int().min(0)
-      .describe("Returned line count; less than total for partial reads or search results"),
+      .describe("Source lines covered by content; compact output may span fewer physical lines"),
     truncated: z.boolean()
       .describe("True if count limited the output"),
     content: z.string(),
     match_count: z.number().int().min(0).optional()
-      .describe("Number of matches found (search mode only)"),
+      .describe("Distinct matched lines or multi-line ranges across all bundled searches (search mode only)"),
+    searches: z.array(SearchCount).optional()
+      .describe("Searches bundled into this result — all searches on one file with the same count — with their own match counts (search mode only)"),
     start_line: z.number().int().min(1).optional()
       .describe("1-indexed first line of the returned content (regular reads only)"),
     error: FileError.optional(),
@@ -73,6 +88,9 @@ export const ReadOutput = z.object({
   })
   .strict();
 export type ReadOutput = z.infer<typeof ReadOutput>;
+
+/** ReadOutput plus raw file text per resolved path, for re-slicing on truncation. Internal; never sent to the client. */
+export type ReadOutputWithSources = ReadOutput & { readonly sources: ReadonlyMap<string, string> };
 
 export const OpType = z.enum([
     "replace",

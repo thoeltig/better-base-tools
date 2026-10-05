@@ -3,7 +3,7 @@ import { expect } from '../tests/helpers/expect.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { acquireLock, releaseLock, acquireSubmitLock } from './lock.js';
+import { acquireLock, releaseLock, acquireLockWithWait } from './lock.js';
 
 const LOCK_FILE = 'summaries.lock';
 
@@ -46,9 +46,17 @@ describe('acquireLock', () => {
     expect(acquireLock(tmpDir)).toBe(true);
   });
 
-  it('takes over a lock with a corrupt file', () => {
-    fs.writeFileSync(path.join(tmpDir, LOCK_FILE), 'not valid json{{{');
+  it('takes over a corrupt lock file older than the grace period', () => {
+    const lockPath = path.join(tmpDir, LOCK_FILE);
+    fs.writeFileSync(lockPath, 'not valid json{{{');
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(lockPath, old, old);
     expect(acquireLock(tmpDir)).toBe(true);
+  });
+
+  it('does not take over a fresh corrupt lock file, its creator may still be writing it', () => {
+    fs.writeFileSync(path.join(tmpDir, LOCK_FILE), '');
+    expect(acquireLock(tmpDir)).toBe(false);
   });
 
   it('takes over a lock that has exceeded the max age (1 hour)', () => {
@@ -78,9 +86,9 @@ describe('releaseLock', () => {
   });
 });
 
-describe('acquireSubmitLock', () => {
+describe('acquireLockWithWait', () => {
   it('returns true when the directory is free', async () => {
-    const result = await acquireSubmitLock(tmpDir, 1000, 50);
+    const result = await acquireLockWithWait(tmpDir, 1000, 50);
     expect(result).toBe(true);
   });
 
@@ -88,17 +96,17 @@ describe('acquireSubmitLock', () => {
     // Write a live lock so acquireLock always returns false
     const lockPath = path.join(tmpDir, LOCK_FILE);
     fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-    const result = await acquireSubmitLock(tmpDir, 150, 50);
+    const result = await acquireLockWithWait(tmpDir, 150, 50);
     expect(result).toBe(false);
     fs.unlinkSync(lockPath);
   });
 
   it('returns true if lock is released mid-wait', { timeout: 2000 }, async () => {
-    // Hold the lock for 100ms then release it; acquireSubmitLock should succeed
+    // Hold the lock for 100ms then release it; acquireLockWithWait should succeed
     const lockPath = path.join(tmpDir, LOCK_FILE);
     fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
     setTimeout(() => fs.unlinkSync(lockPath), 100);
-    const result = await acquireSubmitLock(tmpDir, 1000, 60);
+    const result = await acquireLockWithWait(tmpDir, 1000, 60);
     expect(result).toBe(true);
   });
 });

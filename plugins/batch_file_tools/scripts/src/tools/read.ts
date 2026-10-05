@@ -2,12 +2,14 @@ import { resolve } from "node:path";
 import { readFileUtf8, isAccessible, safeRealpath } from "../lib/fs.js";
 import type { ReadFileResult, ReadFileError } from "../lib/fs.js";
 import { expandToFiles, needsExpansion } from "../lib/glob.js";
+import { searchFile, searchKey } from "../lib/search.js";
 import { formatForRead } from "../lib/transforms.js";
-import type { ReadInput, ReadMode, ReadOutput, ReadRequest, ReadResult, Reason } from "../types.js";
+import type { ReadInput, ReadMode, ReadOutputWithSources, ReadRequest, ReadResult, Reason } from "../types.js";
 
-const SEARCH_MERGE_GAP = 3;
-
-type PlanEntry = { kind: "ok"; req: ReadRequest } | { kind: "err"; result: ReadResult };
+// order: position in the expanded request list; dedup keeps the earliest so results follow request order.
+// searches: set when req is a bundled search target (path, mode, count) for these search requests.
+type PlanEntry = ({ kind: "ok"; req: ReadRequest; searches?: ReadRequest[] } | { kind: "err"; result: ReadResult }) & { order: number };
+type OkEntry = Extract<PlanEntry, { kind: "ok" }>;
 
 export async function handleBatchRead(
   input: ReadInput,
@@ -15,20 +17,32 @@ export async function handleBatchRead(
   excludedPaths: readonly string[] = [],
   approvedPaths: readonly string[] = [],
   onProgress?: (done: number, total: number) => Promise<void>
-): Promise<ReadOutput> {
-  const expanded = await expandReadRequests(input.requests, allowedDirectories, excludedPaths, approvedPaths);
+): Promise<ReadOutputWithSources> {
+  const expanded = await expandReadRequests(input.requests.map(normalizeCount), allowedDirectories, excludedPaths, approvedPaths);
   const plan = deduplicateEntries(expanded);
   const fileCache = await buildFileCache(plan, allowedDirectories, excludedPaths, approvedPaths);
   const total = plan.length;
   let done = 0;
   const results = await Promise.all(
     plan.map(async entry => {
-      const result = entry.kind === "err" ? entry.result : await readOne(entry.req, allowedDirectories, fileCache, excludedPaths, approvedPaths);
+      const result = entry.kind === "err" ? entry.result : await readOne(entry, allowedDirectories, fileCache, excludedPaths, approvedPaths);
       await onProgress?.(++done, total);
       return result;
     })
   );
-  return { results };
+  const sources = new Map<string, string>();
+  for (const [path, file] of fileCache) {
+    if (file.ok) sources.set(path, file.content);
+  }
+  return { results, sources };
+}
+
+// count=0 means "no context" for search and "no limit" for reads; both equal an unset count.
+function normalizeCount(req: ReadRequest): ReadRequest {
+  if (req.count !== 0) return req;
+  const normalized = { ...req };
+  delete normalized.count;
+  return normalized;
 }
 
 type FileCache = Map<string, ReadFileResult | ReadFileError>;
@@ -47,57 +61,54 @@ async function buildFileCache(plan: PlanEntry[], allowedDirectories: string[], e
 
 function deduplicateEntries(entries: PlanEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
-  const pathOrder: string[] = [];
-  const byPath = new Map<string, ReadRequest[]>();
+  const byPath = new Map<string, OkEntry[]>();
 
   for (const entry of entries) {
     if (entry.kind === "err") {
       result.push(entry);
       continue;
     }
-    if (!byPath.has(entry.req.path)) {
-      pathOrder.push(entry.req.path);
-      byPath.set(entry.req.path, []);
-    }
-    byPath.get(entry.req.path)!.push(entry.req);
+    if (!byPath.has(entry.req.path)) byPath.set(entry.req.path, []);
+    byPath.get(entry.req.path)!.push(entry);
   }
 
-  for (const path of pathOrder) {
-    result.push(...deduplicatePath(path, byPath.get(path)!));
+  for (const [path, pathEntries] of byPath) {
+    result.push(...deduplicatePath(path, pathEntries));
   }
 
-  return result;
+  return result.sort((a, b) => a.order - b.order);
 }
 
-function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
+function deduplicatePath(path: string, entries: OkEntry[]): PlanEntry[] {
   const result: PlanEntry[] = [];
 
-  // search: group by (searchTerm, count), coalesce mode (same→same, mixed→verbatim)
-  const searchGroups = new Map<string, ReadRequest[]>();
-  for (const req of reqs) {
-    if (req.searchTerm === undefined) continue;
-    const key = `${req.searchTerm}|${req.count ?? ""}`;
-    if (!searchGroups.has(key)) searchGroups.set(key, []);
-    searchGroups.get(key)!.push(req);
-  }
-  for (const group of searchGroups.values()) {
-    const modes = new Set(group.map(r => r.mode));
-    const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
-    result.push({ kind: "ok", req: { ...group[0]!, mode: coalescedMode } });
+  // search: bundle every search on this file into one result; any verbatim search makes it verbatim.
+  // A search requested twice is kept once, with the larger count.
+  const searchEntries = entries.filter(e => searchKey(e.req) !== undefined);
+  if (searchEntries.length > 0) {
+    const mode: ReadMode = searchEntries.some(e => e.req.mode === "verbatim") ? "verbatim" : "compact";
+    const searches = new Map<string, ReadRequest>();
+    for (const { req } of searchEntries) {
+      const key = searchKey(req)!;
+      const existing = searches.get(key);
+      if (!existing || (req.count ?? 0) > (existing.count ?? 0)) searches.set(key, req);
+    }
+    result.push({ kind: "ok", req: { path, mode }, searches: [...searches.values()], order: searchEntries[0]!.order });
   }
 
   // range/full: coalesce mode, merge overlapping ranges
-  const rangeReqs = reqs.filter(r => r.searchTerm === undefined);
-  if (rangeReqs.length === 0) return result;
+  const rangeEntries = entries.filter(e => searchKey(e.req) === undefined);
+  if (rangeEntries.length === 0) return result;
 
-  const modes = new Set(rangeReqs.map(r => r.mode));
+  const modes = new Set(rangeEntries.map(e => e.req.mode));
   const coalescedMode: ReadMode = modes.size === 1 ? [...modes][0]! : "verbatim";
 
-  type RangeEntry = { start: number; end: number; sources: number; originalReq: ReadRequest | undefined };
-  const ranges: RangeEntry[] = rangeReqs.map(req => ({
+  type RangeEntry = { start: number; end: number; sources: number; order: number; originalReq: ReadRequest | undefined };
+  const ranges: RangeEntry[] = rangeEntries.map(({ req, order }) => ({
     start: req.offset ?? 1,
     end: req.count !== undefined ? (req.offset ?? 1) + req.count - 1 : Infinity,
     sources: 1,
+    order,
     originalReq: req,
   }));
   ranges.sort((a, b) => a.start - b.start);
@@ -109,6 +120,7 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
       merged.push({ ...r });
     } else {
       last.sources += r.sources;
+      last.order = Math.min(last.order, r.order);
       last.originalReq = undefined;
       last.end = last.end === Infinity || r.end === Infinity ? Infinity : Math.max(last.end, r.end);
     }
@@ -117,14 +129,13 @@ function deduplicatePath(path: string, reqs: ReadRequest[]): PlanEntry[] {
   for (const range of merged) {
     // Single source with no merging: pass through the original request unchanged
     if (range.sources === 1 && range.originalReq) {
-      result.push({ kind: "ok", req: range.originalReq });
+      result.push({ kind: "ok", req: range.originalReq, order: range.order });
       continue;
     }
-    const finalMode = coalescedMode;
-    const req: ReadRequest = { path, mode: finalMode };
+    const req: ReadRequest = { path, mode: coalescedMode };
     if (range.start > 1) req.offset = range.start;
     if (range.end !== Infinity) req.count = range.end - range.start + 1;
-    result.push({ kind: "ok", req });
+    result.push({ kind: "ok", req, order: range.order });
   }
 
   return result;
@@ -140,34 +151,41 @@ async function expandReadRequests(
 
   for (const req of requests) {
     req.path = await safeRealpath(resolve(req.path));
+    if (req.searchRegex !== undefined) {
+      try {
+        new RegExp(req.searchRegex, "i");
+      } catch (err) {
+        entries.push({ kind: "err", result: errResult(req, "unparseable", err instanceof Error ? err.message : String(err)), order: entries.length });
+        continue;
+      }
+    }
     if (!(await needsExpansion(req.path))) {
-      entries.push({ kind: "ok", req });
+      entries.push({ kind: "ok", req, order: entries.length });
       continue;
     }
-
 
     let candidates: string[];
     try {
       candidates = await expandToFiles(req.path);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      entries.push({ kind: "err", result: errResult(req, "io_error", `glob expansion failed: ${msg}`) });
+      entries.push({ kind: "err", result: errResult(req, "io_error", `glob expansion failed: ${msg}`), order: entries.length });
       continue;
     }
 
     if (candidates.length === 0) {
-      entries.push({ kind: "err", result: errResult(req, "not_found", `no files matched: ${req.path}`) });
+      entries.push({ kind: "err", result: errResult(req, "not_found", "no files matched"), order: entries.length });
       continue;
     }
 
     const allowed = candidates.filter(p => isAccessible(p, allowedDirs, excludedPaths, approvedPaths));
     if (allowed.length === 0) {
-      entries.push({ kind: "err", result: errResult(req, "not_authorized", "no matched files are within allowed directories") });
+      entries.push({ kind: "err", result: errResult(req, "not_authorized", "no matched files are within allowed directories"), order: entries.length });
       continue;
     }
 
     for (const resolvedPath of allowed) {
-      entries.push({ kind: "ok", req: { ...req, path: await safeRealpath(resolvedPath) } });
+      entries.push({ kind: "ok", req: { ...req, path: await safeRealpath(resolvedPath) }, order: entries.length });
     }
   }
 
@@ -186,86 +204,17 @@ function errResult(req: ReadRequest, reason: Reason, message: string): ReadResul
   };
 }
 
-async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+async function readOne(entry: OkEntry, allowedDirectories: string[], fileCache: FileCache, excludedPaths: readonly string[], approvedPaths: readonly string[]): Promise<ReadResult> {
+  const req = entry.req;
   if (!isAccessible(req.path, allowedDirectories, excludedPaths, approvedPaths)) {
-    return errResult(req, 'not_authorized', `Access denied: ${req.path}`);
+    return errResult(req, 'not_authorized', "");
   }
   const file = fileCache.get(req.path) ?? await readFileUtf8(req.path, allowedDirectories);
   if (!file.ok) {
     return errResult(req, file.reason, file.message);
   }
 
-  // search: grep with context lines
-  if (req.searchTerm !== undefined) {
-    const rawLines = file.content.replace(/\r\n/g, "\n").split("\n");
-    if (rawLines[rawLines.length - 1] === "") rawLines.pop();
-
-    const ctx = req.count ?? 0;
-    let matchLine: (line: string) => boolean;
-    try {
-      const re = new RegExp(req.searchTerm, "i");
-      matchLine = line => re.test(line);
-    } catch {
-      const needle = req.searchTerm.toLowerCase();
-      matchLine = line => line.toLowerCase().includes(needle);
-    }
-    const matchIdxs: number[] = [];
-    for (let i = 0; i < rawLines.length; i++) {
-      if (matchLine(rawLines[i] ?? "")) matchIdxs.push(i);
-    }
-
-    if (matchIdxs.length === 0) {
-      return {
-        path: req.path,
-        mode_applied: req.mode,
-        lines: rawLines.length,
-        returned_lines: 0,
-        truncated: false,
-        content: "",
-        match_count: 0,
-      };
-    }
-
-    let returnedLines = 0;
-    const blocks: string[] = [];
-    if (ctx === 0) {
-      for (const idx of matchIdxs) {
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: idx + 1, limit: 1 });
-        blocks.push(`${idx + 1}\t${formatted.content.replace(/\r?\n$/, "")}`);
-        returnedLines += 1;
-      }
-    } else {
-      type MatchBlock = { s: number; e: number; matchLines: number[] };
-      const intervals: MatchBlock[] = [];
-      for (const idx of matchIdxs) {
-        const s = Math.max(0, idx - ctx);
-        const e = Math.min(rawLines.length - 1, idx + ctx);
-        const last = intervals.at(-1);
-        if (last && s - last.e - 1 <= SEARCH_MERGE_GAP) {
-          last.e = Math.max(last.e, e);
-          last.matchLines.push(idx);
-        } else {
-          intervals.push({ s, e, matchLines: [idx] });
-        }
-      }
-      for (const { s, e, matchLines } of intervals) {
-        returnedLines += e - s + 1;
-        const formatted = formatForRead({ content: file.content, mode: req.mode, path: req.path, offset: s + 1, limit: e - s + 1 });
-        const matchSuffix = matchLines.length === 1 ? `, match at line ${matchLines[0]! + 1}` : "";
-        blocks.push(`<!-- Line ${s + 1} to ${e + 1}${matchSuffix} -->\n${formatted.content}`);
-      }
-    }
-
-    return {
-      path: req.path,
-      mode_applied: req.mode,
-      lines: rawLines.length,
-      returned_lines: returnedLines,
-      truncated: false,
-      content: blocks.join("\n"),
-      match_count: matchIdxs.length,
-    };
-  }
+  if (entry.searches !== undefined) return searchFile(req, entry.searches, file.content);
 
   // normal read
   const formatted = formatForRead({
@@ -283,6 +232,6 @@ async function readOne(req: ReadRequest, allowedDirectories: string[], fileCache
     returned_lines: formatted.returned_lines,
     truncated: formatted.truncated,
     content: formatted.content,
-    start_line: req.offset ?? 1,
+    start_line: formatted.start_line,
   };
 }

@@ -33,13 +33,13 @@ import {
 } from './types.js';
 import { generateQueryOutput, outputToFluentText, query } from './lib/query-engine.js';
 import { prepareAnalysisBatches } from './lib/analysis-batch.js';
-import { acquireLock, acquireSubmitLock, releaseLock } from './lib/lock.js';
+import { acquireLock, acquireLockWithWait, releaseLock } from './lib/lock.js';
 import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord } from './lib/config.js';
 
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.5.2' 
+    version: '1.6.0' 
   },
   { 
     capabilities: { 
@@ -122,11 +122,9 @@ function createOutputMessage(msg: string, isError?: boolean | undefined): {
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
-    try {
-      server.sendLoggingMessage({ level, data, logger });
-    } catch {
+    server.sendLoggingMessage({ level, data, logger }).catch(() => {
       console.error(`[${logger ?? 'server'}] ${data}`);
-    }
+    });
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
@@ -341,7 +339,7 @@ if (!USE_MCP_SAMPLING) {
       }
       const knowledgeDir = findKnowledgeDir(root) || path.join(root, KNOWLEDGE_DIRECTORY);
 
-      if (!await acquireSubmitLock(knowledgeDir)) {
+      if (!await acquireLockWithWait(knowledgeDir)) {
         return createOutputMessage('Wait for write timed out, try again in 10s', true);
       }
       try {

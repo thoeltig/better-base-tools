@@ -61,7 +61,7 @@ function parseConfigArgRecord(argName: string, envName: string): Record<string, 
 const server = new McpServer(
   {
     name: "batch-tools-mcp-server",
-    version: "1.3.1",
+    version: "1.4.0",
   },
   {
     capabilities: {
@@ -74,11 +74,9 @@ const server = new McpServer(
 
 function writeMcpLogLine(level: LoggingLevel, data: string, logger?: string): void {
   if (USE_MCP_LOGGING) {
-    try {
-      server.sendLoggingMessage({ level, data, logger });
-    } catch {
+    server.sendLoggingMessage({ level, data, logger }).catch(() => {
       console.error(`[${logger ?? 'server'}] ${data}`);
-    }
+    });
   } else if (level === 'error') {
     console.error(`[${logger ?? 'server'}] ${data}`);
   }
@@ -127,7 +125,7 @@ server.registerTool(
   "batch_read",
   {
     title: "Batch read files",
-    description: "Batch-read N files in one call — bundle every file a task needs into one request instead of reading them one at a time. Anchoring contract with batch_edit: a full read (either mode) anchors replace/replace_all with the text it returned; a sliced read (offset/count) or a searchTerm read anchors replace_range/insert_at_line with the line numbers in its output header. Strategy: to locate code, prefer a searchTerm read across a glob over reading whole files; before a replace_all, run the same search to confirm how many occurrences exist.",
+    description: "Batch-read N files in one call — bundle every file a task needs into one request instead of reading them one at a time. Anchoring contract with batch_edit: a full read (either mode) anchors replace/replace_all with the text it returned; a sliced read (offset/count) anchors replace_range/insert_at_line with the line range in its header, a search with the N: (match) or N- (context) label on each line (strip the label when reusing a line as a replace anchor). Strategy: to locate code, prefer a searchTerm read across a glob over reading whole files; before a replace_all, run the same search to confirm how many occurrences exist.",
     inputSchema: ReadInput,
     annotations: {
       title: 'Batch read files',
@@ -147,6 +145,7 @@ server.registerTool(
       const pathInfos = parsed.requests.map(r => {
         const parts = [`mode: ${r.mode}`];
         if (r.searchTerm) parts.push(`search: "${r.searchTerm}"`);
+        if (r.searchRegex) parts.push(`search: /${r.searchRegex}/`);
         return { path: isAbsolute(r.path) ? r.path : resolve(r.path), detail: parts.join(", ") };
       });
       const sessionAllowed = await elicitPaths(pathInfos, allowedDirectories, "batch_read", "read", resolvedExcludePaths);
@@ -161,7 +160,7 @@ server.registerTool(
       const toolOutput: CallToolResult = {
         content: formatReadContent(result, parsed.requests, USE_USER_AUDIENCE, MAX_OUTPUT_CHARS),
       };
-      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = result;
+      if(USE_STRUCTURED_CONTENT) toolOutput.structuredContent = { results: result.results };
       return toolOutput;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -175,7 +174,7 @@ server.registerTool(
   "batch_edit",
   {
     title: "Batch edit files",
-    description: "Multi-file, multi-op edit in one call — bundle every change a task needs into one request. Execution order per file: line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line, so every line number refers to the ORIGINAL file and never to a post-edit offset; overlapping ranges error. Content-addressed ops (replace, replace_all, write) then run in the order given. Anchoring contract with batch_read: a full read anchors replace/replace_all with the text it returned; a sliced or searchTerm read anchors replace_range/insert_at_line with the line numbers in its output header — do not fall back to replace there, it discards line anchors already paid for. A failed anchor returns a nearest_anchor hint pasteable directly as the next 'old'. Strategy: replace_all over a glob or directory path renames a term across a whole tree in one op — confirm the occurrence count with a batch_read searchTerm over the same glob first; for multi-line content prefer replace_range/insert_at_line over escaping newlines into old/new.",
+    description: "Multi-file, multi-op edit in one call — bundle every change a task needs into one request. Execution order per file: line-addressed ops (insert_at_line, replace_range) run first, sorted DESC by anchor line, so every line number refers to the ORIGINAL file and never to a post-edit offset; overlapping ranges error. Content-addressed ops (replace, replace_all, write) then run in the order given. Anchoring contract with batch_read: a full read anchors replace/replace_all with the text it returned; a sliced read anchors replace_range/insert_at_line with the line range in its header, a search with the N: (match) or N- (context) label on each line (strip the label when reusing a line as a replace anchor) — do not fall back to replace there, it discards line anchors already paid for. A failed anchor returns a nearest_anchor hint pasteable directly as the next 'old'. Strategy: replace_all over a glob or directory path renames a term across a whole tree in one op — confirm the occurrence count with a batch_read searchTerm over the same glob first; for multi-line content prefer replace_range/insert_at_line over escaping newlines into old/new.",
     inputSchema: EditInput,
     annotations: {
       title: 'Batch edit files',

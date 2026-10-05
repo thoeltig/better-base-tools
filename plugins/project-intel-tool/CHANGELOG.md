@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-03
+
+### Added
+
+- **Stop hook refreshes structural data after every turn** (`scripts/stop-structure-refresh.ts`) — runs the same structural `scanProject` pass as SessionStart (imports, exports, refs, sizes of changed files), registered with `async: true` so it never blocks the turn. It reports nothing to the model; failures go to stderr. Skipped when the project has no knowledge directory.
+  - In git repositories a file only counts as changed once a commit after its last analysis touches it (`getFilesFromGit` uses `git log --since`), so uncommitted edits are picked up after the next commit.
+
+### Changed
+
+- **`scanProject` holds the summaries lock for its whole read-modify-write** — SessionStart, the Stop hook and `scan` previously wrote `summaries.json` unlocked, so parallel sessions or a concurrent `submit_analysis` could lose each other's updates. It now waits up to 10 s for the lock and rejects when it stays held (e.g. by a running sampling scan).
+- **Lock creation is atomic** — `acquireLock` creates the lock file with the `wx` flag instead of writing a temp file and renaming it over any existing lock, so two processes can no longer both acquire it. An unparsable lock file is only treated as abandoned once it is older than 5 s, since its creator may still be writing it.
+- `acquireSubmitLock` renamed to `acquireLockWithWait` now that scans use it too; default wait lowered from 30 s to 10 s.
+- **One hook runner** — `hooks/run-script.js <script> [<HookEventName>]` replaces `hooks/sessionstart.js`. With an event name, setup problems (missing build, missing `CLAUDE_PLUGIN_ROOT`) reach the model as that event's `additionalContext`; without, only stderr.
+- Hook scripts share `getHookScanConfig()` (`lib/config.ts`) instead of building the scan config inline.
+- **`project-intel-analyst` frontmatter** — adds `omitClaudeMd: true`, `maxTurns: 4` and `experimental.cacheTtl: 5m`; summaries must never include personal info, passwords or other secrets.
+
+### Fixed
+
+- **Stale exports, imports and refs survived file changes** — `scanProject` started each entry from the stored one and only overwrote these fields when the new list was non-empty, so a file that lost all its exports kept the old ones. They are now rebuilt from the current content every time. `analysisDelta` of a changed file is likewise recalculated instead of kept when the size matches the analysed size again.
+- A failed MCP `sendLoggingMessage` falls back to `console.error` correctly.
+
 ## [1.5.2] - 2026-09-15
 
 ### Changed
@@ -334,7 +355,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.2...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.6.0...HEAD
+[1.6.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.2...ProjectIntelTools_v1.6.0
 [1.5.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.1...ProjectIntelTools_v1.5.2
 [1.5.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...ProjectIntelTools_v1.5.1
 [1.5.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.4.9...ProjectIntelTools_v1.5.0
