@@ -32,6 +32,7 @@ import {
   AnalysisSubmission,
 } from './types.js';
 import { generateQueryOutput, outputToFluentText, query } from './lib/query-engine.js';
+import { parseKeywords } from './lib/query-keywords.js';
 import { prepareAnalysisBatches } from './lib/analysis-batch.js';
 import { acquireLock, acquireLockWithWait, releaseLock } from './lib/lock.js';
 import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord } from './lib/config.js';
@@ -39,7 +40,7 @@ import { getExcludePaths, getIncludePaths, parseConfigArg, parseConfigArgRecord 
 const server = new McpServer(
   { 
     name: 'project-intel-mcp-server', 
-    version: '1.6.0' 
+    version: '1.6.1' 
   },
   { 
     capabilities: { 
@@ -362,10 +363,10 @@ server.registerTool(
   'query',
   {
     title: 'Query project files by path, structure, or semantics',
-    description: 'Search project files by keywords matched against: file path, exports, imports, refs, searchTags, technologies, role, and semantic summary. Available immediately on session start without scanning — structural data (imports, exports, refs, lines, chars) is always current; semantic fields are confidence-weighted by changeDelta (size ratio since last scan) so stale summaries rank lower automatically. Accepts file names, folder paths, and semantic terms as keywords. Use scope to narrow to a subdirectory, role to filter by file type.',
+    description: 'Search project files by keywords matched against: file path, exports, imports, refs, searchTags, technologies, role, and semantic summary. Available immediately on session start without scanning — structural data (imports, exports, refs, lines, chars) is always current; semantic fields are confidence-weighted by changeDelta (size ratio since last scan) so stale summaries rank lower automatically. Keywords can be semantic terms, identifiers, file names, folder subpaths or relative/absolute file paths; a keyword equal to a whole path, or to its end (file name, sub/path/file.ts), ranks the file itself above files that only reference it. Use scope to narrow to a subdirectory, role to filter by file type.',
     inputSchema: z.object({
-      keywords: z.string().describe('Space-separated search terms'),
-      scope: z.string().optional().describe('Limit results to files under this directory path'),
+      keywords: z.string().describe('Space-separated search terms; wrap a term containing spaces in double quotes: "my folder/file.ts" auth'),
+      scope: z.string().optional().describe('Limit results to files under this relative/absolute directory path'),
       max: z.number().optional().default(QUERY_RESULT_MAX).describe(`Max results (default: ${QUERY_RESULT_MAX})`),
       format: z.enum(FORMAT_VALUES).optional().default(FORMAT_GROUPED).describe('Output format: grouped (default) or flat'),
       role: z.enum(ROLE_VALUES).optional().describe('Filter results to files with this role'),
@@ -398,7 +399,7 @@ server.registerTool(
         }
       }
 
-      const keywords = args.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+      const keywords = parseKeywords(args.keywords);
       const scope = args.scope;
       const maxResults = args.max || QUERY_RESULT_MAX;
       const format = args.format || FORMAT_GROUPED;

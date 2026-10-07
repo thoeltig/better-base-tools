@@ -299,6 +299,19 @@ describe("handleBatchRead", () => {
     expect(r.content).not.toContain("let baz");
   });
 
+  it("searchTerm is case-sensitive, single-line and across lines", async () => {
+    const p = await fixture("term-case.ts", "Foo\nfoo\nFOO bar\nBaz\n");
+    const out = await read({
+      requests: [
+        { path: p, mode: "verbatim", searchTerm: "foo" },
+        { path: p, mode: "verbatim", searchTerm: "FOO bar\nbaz" },
+      ],
+    });
+    const r = out.results[0]!;
+    expect(r.content).toBe("2:foo");
+    expect(r.searches!.map(s => s.match_count)).toEqual([1, 0]);
+  });
+
   it("searchRegex: metacharacters work (word boundary, alternation), case-insensitive", async () => {
     const p = await fixture("regex-meta.ts", "fooBar\nfoo\nfooBarBaz\nBAR\n");
     const out = await read({ requests: [{ path: p, mode: "verbatim", searchRegex: "foo\\b|^bar$" }] });
@@ -314,7 +327,7 @@ describe("handleBatchRead", () => {
         { path: p, mode: "verbatim", searchTerm: "a.b" },
         { path: p, mode: "verbatim", searchTerm: "fn(" },
         { path: p, mode: "verbatim", searchTerm: "${idx + 1}" },
-        { path: p, mode: "verbatim", searchTerm: "$ENV" },
+        { path: p, mode: "verbatim", searchTerm: "$env" },
       ],
     });
     expect(out.results).toHaveLength(1);
@@ -396,8 +409,8 @@ describe("handleBatchRead", () => {
     const p = await fixture("search-crlf.ts", "l1\r\nTARGET\r\nl3\r\n");
     const out = await read({
       requests: [
-        { path: p, mode: "verbatim", searchTerm: "target", count: 1 },
-        { path: p, mode: "compact", searchTerm: "target", count: 1 },
+        { path: p, mode: "verbatim", searchTerm: "TARGET", count: 1 },
+        { path: p, mode: "compact", searchTerm: "TARGET", count: 1 },
       ],
     });
     expect(out.results.map(r => r.content)).toEqual(["1-l1\n2:TARGET\n3-l3"]);
@@ -409,7 +422,7 @@ describe("handleBatchRead", () => {
 
     it("searchTerm with a line break matches across lines and reports the line range", async () => {
       const p = await fixture("ml-term.ts", content);
-      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "BAR\nbaz" }] });
+      const out = await read({ requests: [{ path: p, mode: "verbatim", searchTerm: "bar\nbaz" }] });
       const r = out.results[0]!;
       expect(r.match_count).toBe(2);
       expect(r.returned_lines).toBe(4);
@@ -420,8 +433,8 @@ describe("handleBatchRead", () => {
       const p = await fixture("ml-crlf.ts", "x\r\nFoo\r\nBar\r\n");
       const out = await read({
         requests: [
-          { path: p, mode: "verbatim", searchTerm: "foo\nbar" },
-          { path: p, mode: "verbatim", searchTerm: "foo\r\nbar" },
+          { path: p, mode: "verbatim", searchTerm: "Foo\nBar" },
+          { path: p, mode: "verbatim", searchTerm: "Foo\r\nBar" },
         ],
       });
       expect(out.results).toHaveLength(1);
@@ -474,7 +487,7 @@ describe("handleBatchRead", () => {
 
   it("search: a one-line compact window uses the single-line label", async () => {
     const p = await fixture("one-line.ts", "only TARGET\n");
-    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "target", count: 2 }] });
+    const out = await read({ requests: [{ path: p, mode: "compact", searchTerm: "TARGET", count: 2 }] });
     expect(out.results[0]!.content).toBe("1:only TARGET");
   });
 

@@ -2,6 +2,7 @@
 import { existsSync } from 'fs';
 import { basename, dirname, extname, relative, resolve } from 'path';
 import { getOrCreateSummaries } from './summary-merger.js';
+import { inScope, normalizePathTerm } from './query-keywords.js';
 import { 
   FileRole,
   FluentFile,
@@ -17,6 +18,8 @@ import {
 
 export function query(knowledgeDir: string, keywords: string[], scope: string | undefined, maxResults: number, role: FileRole | undefined, subKnowledgeOverride?: SubKnowledgeRef[]): ScoredFileSummary[] {
   const projectRoot = dirname(resolve(knowledgeDir));
+  const pathKeywords = keywords.map(k => normalizePathTerm(k, projectRoot));
+  const scopeTerm = scope ? normalizePathTerm(scope, projectRoot) : '';
   const scored: ScoredFileSummary[] = [];
   const visited = new Set<string>();
   
@@ -25,9 +28,9 @@ export function query(knowledgeDir: string, keywords: string[], scope: string | 
       if (summary.deleted) return;
       const relPath = relative(summaryProjectRoot, absPath).replace(/\\/g, '/');
       const prefixedPath = pathPrefix ? `${pathPrefix}/${relPath}`.replace(/\/\//g, '/') : relPath;
-      if (scope && !prefixedPath.startsWith(scope)) return;
+      if (!inScope(prefixedPath, scopeTerm)) return;
       if (role && summary.role !== role) return;
-      const score = calculateConfidence(keywords, prefixedPath, summary);
+      const score = calculateConfidence(keywords, prefixedPath, summary, pathKeywords);
       if (score > 0) {
         const { lastUpdated: _ld, ...summaryRest } = summary;
         scored.push({ fileScore: score, path: prefixedPath, ...summaryRest });
@@ -165,7 +168,8 @@ function createFlatOutput(items: ScoredFileSummary[], verbosity: VerbosityType =
   };
 }
 
-export function calculateConfidence(keywords: string[], itemPath: string, summary: any): number {
+/** pathKeywords holds the normalizePathTerm form of each keyword (same index) and is used for path scoring only. */
+export function calculateConfidence(keywords: string[], itemPath: string, summary: any, pathKeywords: string[] = keywords): number {
   let score = 0;
   const pathLower = itemPath.toLowerCase();
   const sumLower = (summary.summary || '').toLowerCase();
@@ -174,7 +178,7 @@ export function calculateConfidence(keywords: string[], itemPath: string, summar
   const semanticWeight = (baseline && current)
     ? Math.min(baseline, current) / Math.max(baseline, current)
     : 1;
-  keywords.forEach(k => {
+  keywords.forEach((k, i) => {
     if (sumLower.includes(k)) score += 6 * semanticWeight;
     if (summary.searchTags?.some((t: string) => t.toLowerCase().includes(k))) score += 3 * semanticWeight;
     if (summary.exports?.some((e: string) => e.toLowerCase().includes(k))) score += 4;
@@ -184,9 +188,18 @@ export function calculateConfidence(keywords: string[], itemPath: string, summar
       if (names.some((name: string) => name.toLowerCase().includes(k))) score += 3;
     }
     if (summary.refs?.some((r: string) => r.toLowerCase().includes(k))) score += 3;
-    if (pathLower.includes(k)) score += 4;
+    score += pathMatchScore(pathKeywords[i] ?? k, pathLower);
     if (summary.technologies?.some((t: string) => t.toLowerCase().includes(k))) score += 2 * semanticWeight;
     if (summary.role?.toLowerCase().includes(k)) score += 2 * semanticWeight;
   });
   return score;
+}
+// Highest tier wins, so a keyword naming the file itself outranks files that only reference it
+// (content fields sum to at most 27 per keyword, 31 with a substring path hit).
+function pathMatchScore(keyword: string, pathLower: string): number {
+  if (keyword === '') return 0;
+  if (pathLower === keyword) return 50;
+  if (pathLower.endsWith(`/${keyword}`)) return 35;
+  if (keyword.includes('/') && `/${pathLower}/`.includes(`/${keyword}/`)) return 10;
+  return pathLower.includes(keyword) ? 4 : 0;
 }

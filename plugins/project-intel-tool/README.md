@@ -87,8 +87,8 @@ Searches the knowledge base by keywords and returns a ranked list of files and d
 **Parameters:**
 | Parameter | Description | Default |
 |---|---|---|
-| `keywords` | Space-separated search terms | (required) |
-| `scope` | Limit results to files under this path | All directories |
+| `keywords` | Space-separated search terms; double quotes keep a term with spaces together (`"my folder/a.ts"`). File names and relative or absolute paths in either slash direction match the file itself above files that only reference it | (required) |
+| `scope` | Limit results to files under this directory (relative or absolute, either slash direction) | All directories |
 | `max` | Maximum number of results | 25 |
 | `format` | `grouped` or `flat` | `grouped` |
 | `role` | Filter by file role: `implementation`, `executable`, `helperScript`, `test`, `configuration`, `build`, `documentation`, `data` | All roles |
@@ -299,18 +299,7 @@ When querying, combine conceptual terms ("authentication session management") wi
 
 ## Requirements
 
-This project requires **Node.js >= v22** and the following dependencies:
-
-### Production Dependencies
-* `@modelcontextprotocol/sdk` (`1.29.0`) — Model Context Protocol SDK
-* `zod` (`4.4.3`) — Schema validation
-
-### Development Dependencies
-* `typescript` (`5.9.3`) — Static typing
-* `@types/node` (`25.0.1`) — Type definitions for Node
-* `tsx` (`4.22.4`) / `esbuild` (`0.28.0`) — TypeScript execution for the test runner
-
-Tests run on the Node.js built-in `node:test` runner (`npm test`); no external test framework is required.
+Node.js >= v20
 
 ---
 

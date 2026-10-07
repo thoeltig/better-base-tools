@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-05
+
+### Changed
+
+- **`query` path keywords are normalized for path scoring** — backslashes, duplicate slashes, `./` and trailing `/` are normalized, and absolute paths under the project root become relative; content fields still match the raw keyword. Before, a keyword with `\` or an absolute path never matched (`lib/query-keywords.ts`).
+- **Path matches are scored by exactness** — whole path 50, path end on a segment boundary (file name, `sub/path/file.ts`) 35, folder subpath containing `/` 10, plain substring 4 (unchanged). A flat +4 let files that only reference a name outrank the file itself.
+- **`scope` is normalized like keywords, case-insensitive and segment-bounded** — it was a case-sensitive text prefix, so `src` also matched `src2/` and an absolute or backslash scope excluded everything.
+
+### Added
+
+- **Quoted keywords** — `"my folder/a.ts"` stays one term; keywords were split on every whitespace.
+
 ## [1.6.0] - 2026-10-03
 
 ### Added
@@ -355,7 +367,8 @@ This version ports the project-intel tool from a slash-command CLI tool (origina
 
 - Removed hardcoded model name and summaries path from ignore patterns
 
-[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.6.0...HEAD
+[unreleased]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.6.1...HEAD
+[1.6.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.6.0...ProjectIntelTools_v1.6.1
 [1.6.0]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.2...ProjectIntelTools_v1.6.0
 [1.5.2]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.1...ProjectIntelTools_v1.5.2
 [1.5.1]: https://github.com/thoeltig/better-base-tools/compare/ProjectIntelTools_v1.5.0...ProjectIntelTools_v1.5.1
